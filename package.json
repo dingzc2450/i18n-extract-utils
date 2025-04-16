@@ -3,8 +3,11 @@
   "version": "0.0.6",
   "description": "React i18n extraction and transformation utility",
   "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
       "import": "./dist/index.js"
     }
   },
