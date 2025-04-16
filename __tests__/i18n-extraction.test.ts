@@ -56,8 +56,8 @@ test("transformCode should replace patterns with t() calls", () => {
   fs.unlinkSync(tempFile);
   
   // Check that ___Hello World___ was replaced with t function call
-  expect(result.code).toMatch(/t\(['"]Hello World['"]\)/);
-  expect(result.code).toMatch(/t\(['"]Welcome to our app['"]\)/);
+  expect(result.code).toMatch(/t\(['"]Hello World['"]\)/g);
+  expect(result.code).toMatch(/t\(['"]Welcome to our app['"]\)/g);
   expect(result.code).toContain("const { t } = useTranslation()");
   expect(result.code).toContain("import { useTranslation } from 'react-i18next'");
   

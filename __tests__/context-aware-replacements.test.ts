@@ -159,7 +159,7 @@ describe('Context-Aware Replacements', () => {
         return (
           <div>
             <p>___Hello, 'world'!___</p>
-            <button title="___Click "here" now___">Click</button>
+            <button title="___Click \"here\" now___">Click</button>
             <span>___String with \`backticks\`___</span>
           </div>
         );

@@ -4,7 +4,7 @@ import * as t from '@babel/types';
 import { ExtractedString, TransformOptions } from './types';
 import fs from 'fs';
 
-const DEFAULT_PATTERN = /___(.+)___/g;
+const DEFAULT_PATTERN = /___(.+?)___/g;
 
 export function extractStringsFromCode(code: string, filePath: string, options?: TransformOptions): ExtractedString[] {
   const extractedStrings: ExtractedString[] = [];
@@ -93,16 +93,31 @@ export function transformCode(filePath: string, options: TransformOptions): { co
       JSXAttribute(path) {
         if (path.node.value && t.isStringLiteral(path.node.value)) {
           const value = path.node.value.value;
-          const pattern = options?.pattern ? new RegExp(options.pattern) : DEFAULT_PATTERN;
+          // 每次创建一个新的RegExp实例以避免lastIndex问题
+          const pattern = options?.pattern ? new RegExp(options.pattern) : new RegExp(DEFAULT_PATTERN.source);
           const match = pattern.exec(value);
           
           if (match) {
             const textToTranslate = match[1];
+            
+            // 判断文本中的引号类型，选择合适的引号
+            const hasSingleQuote = textToTranslate.includes("'");
+            const hasDoubleQuote = textToTranslate.includes('"');
+            
+            let translatedText;
+            if (hasSingleQuote && !hasDoubleQuote) {
+              // 如果只有单引号，使用双引号包裹
+              translatedText = `${translationMethod}("${textToTranslate.replace(/"/g, '\\"')}")`;
+            } else {
+              // 默认或有双引号时，使用单引号包裹，并转义内部的单引号
+              translatedText = `${translationMethod}('${textToTranslate.replace(/'/g, "\\'")}')`; 
+            }
+            
             // JSX 属性需要使用 {t('xxx')} 形式
             replacements.push({
               start: path.node.value.start!,
               end: path.node.value.end!,
-              replacement: `{${translationMethod}('${textToTranslate}')}`
+              replacement: `{${translatedText}}`
             });
           }
         }
@@ -116,16 +131,31 @@ export function transformCode(filePath: string, options: TransformOptions): { co
         }
         
         const value = path.node.value;
-        const pattern = options?.pattern ? new RegExp(options.pattern) : DEFAULT_PATTERN;
+        // 每次创建一个新的RegExp实例
+        const pattern = options?.pattern ? new RegExp(options.pattern) : new RegExp(DEFAULT_PATTERN.source);
         const match = pattern.exec(value);
         
         if (match) {
           const textToTranslate = match[1];
+          
+          // 判断文本中的引号类型，选择合适的引号
+          const hasSingleQuote = textToTranslate.includes("'");
+          const hasDoubleQuote = textToTranslate.includes('"');
+          
+          let translatedText;
+          if (hasSingleQuote && !hasDoubleQuote) {
+            // 如果只有单引号，使用双引号包裹
+            translatedText = `${translationMethod}("${textToTranslate.replace(/"/g, '\\"')}")`;
+          } else {
+            // 默认或有双引号时，使用单引号包裹，并转义内部的单引号
+            translatedText = `${translationMethod}('${textToTranslate.replace(/'/g, "\\'")}')`; 
+          }
+          
           // 普通字符串直接替换为 t('xxx')
           replacements.push({
             start: path.node.start!,
             end: path.node.end!,
-            replacement: `${translationMethod}('${textToTranslate}')`
+            replacement: translatedText
           });
         }
       },
@@ -160,7 +190,29 @@ export function transformCode(filePath: string, options: TransformOptions): { co
             replacement: newText
           });
         }
-      }
+      },
+
+      // 在 traverse 调用内添加以下处理器，处理模板字符串中的国际化文本
+      TemplateLiteral(path) {
+        // 对于简单的模板字符串（不包含表达式）
+        if (path.node.quasis.length === 1) {
+          const value = path.node.quasis[0].value.raw;
+          // 每次创建一个新的RegExp实例
+          const pattern = options?.pattern ? new RegExp(options.pattern) : new RegExp(DEFAULT_PATTERN.source);
+          const match = pattern.exec(value);
+          
+          if (match) {
+            const textToTranslate = match[1];
+            // 模板字符串替换为 t('xxx')
+            replacements.push({
+              start: path.node.start!,
+              end: path.node.end!,
+              replacement: `${translationMethod}('${textToTranslate}')`
+            });
+          }
+        }
+        // 对于包含表达式的复杂模板字符串，可以在此处添加更复杂的处理逻辑
+      },
     });
     
     // 应用所有替换，从后往前替换，以避免位置偏移
