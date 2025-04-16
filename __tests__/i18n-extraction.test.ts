@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { extractStringsFromCode, transformCode } from "../index.js";
+import { extractStringsFromCode, transformCode } from "../src/index.js";
 import * as fs from 'fs';
 import * as path from 'path';
 import { tmpdir } from 'os';
