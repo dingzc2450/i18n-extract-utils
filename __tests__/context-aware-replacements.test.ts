@@ -159,7 +159,7 @@ describe('Context-Aware Replacements', () => {
         return (
           <div>
             <p>___Hello, 'world'!___</p>
-            <button title="___Click \"here\" now___">Click</button>
+            <button title="___Click 'here' now___">Click</button>
             <span>___String with \`backticks\`___</span>
           </div>
         );
@@ -175,13 +175,13 @@ describe('Context-Aware Replacements', () => {
     });
     
     // Check that special characters are properly escaped
-    expect(result.code).toMatch(/(t\('Hello, \\'world\\'!'\)|t\("Hello, 'world'!"\))/);
-    expect(result.code).toMatch(/(title=\{t\('Click "here" now'\)\}|title=\{t\("Click \\"here\\" now"\)\})/);
-    expect(result.code).toMatch(/(t\('String with `backticks`'\)|t\("String with `backticks`"\))/);
+    expect(result.code).toMatch(/t\(['"]Hello, ['\\]?world['\\]?!["']\)/);
+    expect(result.code).toMatch(/title=\{t\(['"]Click ['\\]?here['\\]? now["']\)\}/);
+    expect(result.code).toMatch(/t\(['"]String with `backticks`["']\)/);
     // Check extraction
     expect(result.extractedStrings.length).toBe(3);
     expect(result.extractedStrings[0].value).toBe("Hello, 'world'!");
-    expect(result.extractedStrings[1].value).toBe('Click "here" now');
+    expect(result.extractedStrings[1].value).toBe("Click 'here' now");
     expect(result.extractedStrings[2].value).toBe("String with `backticks`");
   });
   

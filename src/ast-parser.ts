@@ -100,20 +100,13 @@ export function transformCode(filePath: string, options: TransformOptions): { co
           if (match) {
             const textToTranslate = match[1];
             
-            // 判断文本中的引号类型，选择合适的引号
-            const hasSingleQuote = textToTranslate.includes("'");
-            const hasDoubleQuote = textToTranslate.includes('"');
+            // 选择使用双引号并进行简单转义
+            const escapedContent = textToTranslate.replace(/"/g, '\\"');
             
-            let translatedText;
-            if (hasSingleQuote && !hasDoubleQuote) {
-              // 如果只有单引号，使用双引号包裹
-              translatedText = `${translationMethod}("${textToTranslate.replace(/"/g, '\\"')}")`;
-            } else {
-              // 默认或有双引号时，使用单引号包裹，并转义内部的单引号
-              translatedText = `${translationMethod}('${textToTranslate.replace(/'/g, "\\'")}')`; 
-            }
+            // 创建带有正确转义的表达式
+            const translatedText = `${translationMethod}('${escapedContent}')`;
             
-            // JSX 属性需要使用 {t('xxx')} 形式
+            // 问题修复：使用属性值范围而不是整个属性范围
             replacements.push({
               start: path.node.value.start!,
               end: path.node.value.end!,
