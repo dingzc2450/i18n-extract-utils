@@ -1,18 +1,27 @@
 {
   "name": "i18n-extract-utils",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "React i18n extraction and transformation utility",
   "main": "dist/index.js",
   "bin": {
     "i18n-extract": "dist/cli.js"
   },
+  "files": [
+    "dist/**/*"
+  ],
   "scripts": {
     "build": "tsc",
     "start": "node dist/cli.js",
     "dev": "ts-node src/cli.ts",
-    "test": "jest"
+    "test": "jest",
+    "prepublishOnly": "npm run build"
   },
-  "keywords": ["i18n", "react", "internationalization", "ast"],
+  "keywords": [
+    "i18n",
+    "react",
+    "internationalization",
+    "ast"
+  ],
   "author": "",
   "license": "ISC",
   "dependencies": {
