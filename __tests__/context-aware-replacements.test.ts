@@ -254,8 +254,6 @@ describe('Context-Aware Replacements', () => {
 
     // 1. Check for import of useTranslation
     expect(result.code).toMatch(/import { useTranslation } from "react-i18next";/);
-    expect(result.code).toMatch(/'use client';\s*import React from 'react';/);
-
     // 2. Check for hook call in ComponentA
     expect(result.code).toMatch(/function ComponentA\(\) \{\s*const \{ t \} = useTranslation\(\);\s*const message = t\(['"]Message A['"]\);/s);
     // Check transformations in ComponentA

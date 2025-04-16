@@ -405,12 +405,33 @@ export function transformCode(
 
     // Generate code from the modified AST, preserving formatting where possible
     let { code: transformedCode } = generate(ast, {
-      retainLines: false, // Attempt to keep original line breaks
+      retainLines: true, // Set to true to better preserve code structure
       compact: false,
       comments: true,
       jsescOption: { minimal: true },
       shouldPrintComment: () => true, // Preserve all comments
     });
+
+    // Post-process the generated code to ensure proper formatting of inserted hooks
+    if (importAdded || hookCallAdded) {
+      // Fix potential formatting issues with hook calls and imports
+      transformedCode = transformedCode
+        // Ensure hook declarations have their own line
+        .replace(
+          /(\{|\})\s*(const\s*\{\s*[a-zA-Z0-9_]+\s*\}\s*=\s*useTranslation\(\);)/g, 
+          "$1\n  $2"
+        )
+        // Ensure closing brackets after hook declarations have proper spacing
+        .replace(
+          /(const\s*\{\s*[a-zA-Z0-9_]+\s*\}\s*=\s*useTranslation\(\);)(\S)/g,
+          "$1\n  $2"
+        )
+        // Ensure import declarations are properly spaced
+        .replace(
+          /(import\s*\{\s*[a-zA-Z0-9_]+\s*\}\s*from\s*['"][^'"]+['"];)(\S)/g,
+          "$1\n$2"
+        );
+    }
 
     return { code: transformedCode, extractedStrings };
   } catch (error) {
