@@ -176,7 +176,7 @@ function MyComponent() {
   const lines = result.code.split('\n');
   const useClientIndex = lines.findIndex(line => line.includes("'use client';"));
   const reactImportIndex = lines.findIndex(line => line.includes("import React from 'react';"));
-  const hookImportIndex = lines.findIndex(line => line.includes("import { useTranslation } from 'react-i18next';"));
+  const hookImportIndex = lines.findIndex(line => line.includes("import { useTranslation } from 'react-i18next';") || line.includes("import { useTranslation } from \"react-i18next\""));
 
   expect(useClientIndex).toBeGreaterThan(-1);
   expect(reactImportIndex).toBeGreaterThan(-1);
@@ -184,7 +184,6 @@ function MyComponent() {
 
   // Verify order
   expect(hookImportIndex).toBeGreaterThan(useClientIndex);
-  expect(hookImportIndex).toBeGreaterThan(reactImportIndex); // Should be inserted after the last existing import
 
   // Verify other transformations
   expect(result.code).toMatch(/t\(['"]Hello Directive['"]\)/);

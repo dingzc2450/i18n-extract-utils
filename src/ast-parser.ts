@@ -1,16 +1,22 @@
-import { parse } from '@babel/parser';
-import traverse from '@babel/traverse';
-import * as t from '@babel/types';
-import generate from '@babel/generator'; // <-- Import generator
-import { ExtractedString, TransformOptions } from './types';
-import fs from 'fs';
+import { parse } from "@babel/parser";
+import traverse from "@babel/traverse";
+import * as t from "@babel/types";
+import generate from "@babel/generator"; // <-- Import generator
+import { ExtractedString, TransformOptions } from "./types";
+import fs from "fs";
 
 const DEFAULT_PATTERN = /___(.+?)___/g;
 
-export function extractStringsFromCode(code: string, filePath: string, options?: TransformOptions): ExtractedString[] {
+export function extractStringsFromCode(
+  code: string,
+  filePath: string,
+  options?: TransformOptions
+): ExtractedString[] {
   const extractedStrings: ExtractedString[] = [];
   // Ensure pattern is created correctly for the loop
-  const pattern = options?.pattern ? new RegExp(options.pattern, 'g') : new RegExp(DEFAULT_PATTERN.source, 'g');
+  const pattern = options?.pattern
+    ? new RegExp(options.pattern, "g")
+    : new RegExp(DEFAULT_PATTERN.source, "g");
 
   let match;
   while ((match = pattern.exec(code)) !== null) {
@@ -19,7 +25,7 @@ export function extractStringsFromCode(code: string, filePath: string, options?:
 
     // 计算行和列
     const upToMatch = code.slice(0, startIndex);
-    const lines = upToMatch.split('\n');
+    const lines = upToMatch.split("\n");
     const line = lines.length;
     const column = lines[lines.length - 1].length + 1;
 
@@ -27,29 +33,35 @@ export function extractStringsFromCode(code: string, filePath: string, options?:
       value,
       filePath,
       line,
-      column
+      column,
     });
   }
 
   return extractedStrings;
 }
 
-export function hasTranslationHook(code: string, hookName: string = 'useTranslation'): boolean {
+export function hasTranslationHook(
+  code: string,
+  hookName: string = "useTranslation"
+): boolean {
   try {
     const ast = parse(code, {
-      sourceType: 'module',
-      plugins: ['jsx', 'typescript']
+      sourceType: "module",
+      plugins: ["jsx", "typescript"],
     });
 
     let hasHook = false;
 
     traverse(ast, {
       CallExpression(path) {
-        if (t.isIdentifier(path.node.callee) && path.node.callee.name === hookName) {
+        if (
+          t.isIdentifier(path.node.callee) &&
+          path.node.callee.name === hookName
+        ) {
           hasHook = true;
           path.stop();
         }
-      }
+      },
     });
 
     return hasHook;
@@ -62,14 +74,17 @@ export function hasTranslationHook(code: string, hookName: string = 'useTranslat
 // ReplacementInfo is no longer needed
 // interface ReplacementInfo { ... }
 
-export function transformCode(filePath: string, options: TransformOptions): { code: string, extractedStrings: ExtractedString[] } {
-  const code = fs.readFileSync(filePath, 'utf8');
+export function transformCode(
+  filePath: string,
+  options: TransformOptions
+): { code: string; extractedStrings: ExtractedString[] } {
+  const code = fs.readFileSync(filePath, "utf8");
   // Extract strings first, as the AST modification will change the code structure
   const extractedStrings = extractStringsFromCode(code, filePath, options);
 
-  const translationMethod = options.translationMethod || 't';
-  const hookName = options.hookName || 'useTranslation';
-  const hookImport = options.hookImport || 'react-i18next';
+  const translationMethod = options.translationMethod || "t";
+  const hookName = options.hookName || "useTranslation";
+  const hookImport = options.hookImport || "react-i18next";
 
   // 如果没有需要翻译的字符串，直接返回原代码
   if (extractedStrings.length === 0) {
@@ -79,8 +94,8 @@ export function transformCode(filePath: string, options: TransformOptions): { co
   // 使用 AST 来进行更精确的替换
   try {
     const ast = parse(code, {
-      sourceType: 'module',
-      plugins: ['jsx', 'typescript'],
+      sourceType: "module",
+      plugins: ["jsx", "typescript"],
       // tokens and ranges might not be strictly necessary for direct modification + generation
       // tokens: true,
       // ranges: true,
@@ -97,7 +112,9 @@ export function transformCode(filePath: string, options: TransformOptions): { co
         if (path.node.value && t.isStringLiteral(path.node.value)) {
           const value = path.node.value.value;
           // Create a new RegExp instance each time
-          const pattern = options?.pattern ? new RegExp(options.pattern) : new RegExp(DEFAULT_PATTERN.source);
+          const pattern = options?.pattern
+            ? new RegExp(options.pattern)
+            : new RegExp(DEFAULT_PATTERN.source);
           const match = pattern.exec(value);
 
           if (match) {
@@ -118,13 +135,18 @@ export function transformCode(filePath: string, options: TransformOptions): { co
       // 处理字符串字面量中的国际化文本
       StringLiteral(path) {
         // Skip if it's part of a JSXAttribute (already handled) or ImportDeclaration
-        if (path.parentPath.isJSXAttribute() || path.parentPath.isImportDeclaration()) {
+        if (
+          path.parentPath.isJSXAttribute() ||
+          path.parentPath.isImportDeclaration()
+        ) {
           return;
         }
 
         const value = path.node.value;
         // Create a new RegExp instance each time
-        const pattern = options?.pattern ? new RegExp(options.pattern) : new RegExp(DEFAULT_PATTERN.source);
+        const pattern = options?.pattern
+          ? new RegExp(options.pattern)
+          : new RegExp(DEFAULT_PATTERN.source);
         const match = pattern.exec(value);
 
         if (match) {
@@ -145,7 +167,9 @@ export function transformCode(filePath: string, options: TransformOptions): { co
       JSXText(path) {
         const value = path.node.value;
         // Use the global pattern for multiple matches
-        const pattern = options?.pattern ? new RegExp(options.pattern, 'g') : new RegExp(DEFAULT_PATTERN.source, 'g');
+        const pattern = options?.pattern
+          ? new RegExp(options.pattern, "g")
+          : new RegExp(DEFAULT_PATTERN.source, "g");
         let match;
         let lastIndex = 0;
         const newNodes: (t.JSXText | t.JSXExpressionContainer)[] = [];
@@ -176,30 +200,40 @@ export function transformCode(filePath: string, options: TransformOptions): { co
 
         // Add remaining text if any
         if (lastIndex < value.length) {
-           const textNode = t.jsxText(value.substring(lastIndex));
-           if (textNode.value.trim()) newNodes.push(textNode); // Avoid empty text nodes
+          const textNode = t.jsxText(value.substring(lastIndex));
+          if (textNode.value.trim()) newNodes.push(textNode); // Avoid empty text nodes
         }
 
         // Replace the original JSXText node if modifications were made
-        if (newNodes.length > 0 && (newNodes.length > 1 || !t.isJSXText(newNodes[0]) || newNodes[0].value !== value)) {
-           // Only replace if there's actually a change
-           path.replaceWithMultiple(newNodes);
-           modified = true;
+        if (
+          newNodes.length > 0 &&
+          (newNodes.length > 1 ||
+            !t.isJSXText(newNodes[0]) ||
+            newNodes[0].value !== value)
+        ) {
+          // Only replace if there's actually a change
+          path.replaceWithMultiple(newNodes);
+          modified = true;
         }
         // No need to push to replacements
       },
 
       // 处理模板字符串中的国际化文本
       TemplateLiteral(path) {
-         // Skip if it's part of a TaggedTemplateExpression (like styled-components)
-         if (path.parentPath.isTaggedTemplateExpression()) {
-             return;
-         }
+        // Skip if it's part of a TaggedTemplateExpression (like styled-components)
+        if (path.parentPath.isTaggedTemplateExpression()) {
+          return;
+        }
         // For simple template literals (no expressions)
-        if (path.node.quasis.length === 1 && path.node.expressions.length === 0) {
+        if (
+          path.node.quasis.length === 1 &&
+          path.node.expressions.length === 0
+        ) {
           const value = path.node.quasis[0].value.raw;
           // Create a new RegExp instance each time
-          const pattern = options?.pattern ? new RegExp(options.pattern) : new RegExp(DEFAULT_PATTERN.source);
+          const pattern = options?.pattern
+            ? new RegExp(options.pattern)
+            : new RegExp(DEFAULT_PATTERN.source);
           const match = pattern.exec(value);
 
           if (match) {
@@ -222,7 +256,7 @@ export function transformCode(filePath: string, options: TransformOptions): { co
 
     // If no modifications were made to the AST, return original code
     if (!modified) {
-        return { code, extractedStrings };
+      return { code, extractedStrings };
     }
 
     // --- AST-based Hook Insertion ---
@@ -232,112 +266,188 @@ export function transformCode(filePath: string, options: TransformOptions): { co
     let hookCallAdded = false;
 
     if (needsHook) {
-        traverse(ast, {
-            Program: {
-                enter(path) {
-                    // Check for existing import
-                    let importExists = false;
-                    path.node.body.forEach(node => {
-                        if (t.isImportDeclaration(node) && node.source.value === hookImport) {
-                            node.specifiers.forEach(spec => {
-                                if (t.isImportSpecifier(spec) && t.isIdentifier(spec.imported) && spec.imported.name === hookName) {
-                                    importExists = true;
-                                }
-                            });
-                        }
-                    });
+      traverse(ast, {
+        Program: {
+          enter(path) {
+            // Check for existing import
+            let importExists = false;
+            path.node.body.forEach((node) => {
+              if (
+                t.isImportDeclaration(node) &&
+                node.source.value === hookImport
+              ) {
+                node.specifiers.forEach((spec) => {
+                  if (
+                    t.isImportSpecifier(spec) &&
+                    t.isIdentifier(spec.imported) &&
+                    spec.imported.name === hookName
+                  ) {
+                    importExists = true;
+                  }
+                });
+              }
+            });
 
-                    // Add import if it doesn't exist
-                    if (!importExists) {
-                        const importSpecifier = t.importSpecifier(t.identifier(hookName), t.identifier(hookName));
-                        const importDeclaration = t.importDeclaration([importSpecifier], t.stringLiteral(hookImport));
-                        // Add import to the top
-                        path.unshiftContainer('body', importDeclaration);
-                        importAdded = true;
-                    }
+            // Add import if it doesn't exist
+            if (!importExists) {
+              const importSpecifier = t.importSpecifier(
+                t.identifier(hookName),
+                t.identifier(hookName)
+              );
+              const importDeclaration = t.importDeclaration(
+                [importSpecifier],
+                t.stringLiteral(hookImport)
+              );
+
+              // Find the correct insertion point after directives like 'use client' or comments
+              let insertIndex = 0;
+              for (let i = 0; i < path.node.body.length; i++) {
+                const node = path.node.body[i];
+                // Check for directives ('use client', 'use server', etc.)
+                if (
+                  t.isExpressionStatement(node) &&
+                  t.isStringLiteral(node.expression)
+                ) {
+                  insertIndex = i + 1;
+                  continue; // Keep checking after the directive
                 }
-            },
-            // Find the first suitable function body to insert the hook call
-            'FunctionDeclaration|FunctionExpression|ArrowFunctionExpression': (path) => {
-                // Only add hook call once, and only if needed
-                if (!needsHook || hookCallAdded) return;
-
-                // Basic check: assume the first function is the component
-                // More robust checks could verify if it returns JSX, etc.
-                if (path.node.body && t.isBlockStatement(path.node.body)) {
-                    // Check if hook call already exists in this scope (less likely if hasTranslationHook was false, but good practice)
-                    let callExists = false;
-                    path.node.body.body.forEach(stmt => {
-                        if (t.isVariableDeclaration(stmt)) {
-                            stmt.declarations.forEach(decl => {
-                                if (t.isVariableDeclarator(decl) &&
-                                    t.isObjectPattern(decl.id) && // Check for const { t }
-                                    t.isCallExpression(decl.init) &&
-                                    t.isIdentifier(decl.init.callee) &&
-                                    decl.init.callee.name === hookName) {
-                                    callExists = true;
-                                }
-                            });
-                        }
-                    });
-
-                    if (!callExists) {
-                        // Create const { t } = useTranslation();
-                        const hookIdentifier = t.identifier(translationMethod);
-                        const objectPattern = t.objectPattern([
-                            t.objectProperty(hookIdentifier, hookIdentifier, false, true) // { t } or { translationMethod }
-                        ]);
-                        const callExpression = t.callExpression(t.identifier(hookName), []);
-                        const variableDeclarator = t.variableDeclarator(objectPattern, callExpression);
-                        const variableDeclaration = t.variableDeclaration('const', [variableDeclarator]);
-
-                        // Add hook call to the beginning of the function body
-                        path.get('body').unshiftContainer('body', variableDeclaration);
-                        hookCallAdded = true; // Mark as added
-                    }
+                // Check for top-level comments attached to the first non-directive node
+                if (
+                  i === 0 &&
+                  node.leadingComments &&
+                  node.leadingComments.length > 0
+                ) {
+                  // If the first node has leading comments, insert after it.
+                  // This assumes comments belong logically before the first statement.
+                  // A more robust check might involve comment ranges, but this is simpler.
+                  insertIndex = i + 1;
+                  // If the first node is already an import, we still want to insert after potential comments/directives
+                  // but before other code, so we might break here or continue depending on desired placement relative to other imports.
+                  // For simplicity, let's place it after the first block of directives/comments.
                 }
-                // Stop searching for function bodies after adding the hook once
-                if (hookCallAdded) {
-                    path.stop(); // Optional: Stop traversal early if hook is added
+
+                // Stop searching for insertion point if we hit a non-directive/non-comment node
+                // or an import declaration (we want to group imports, typically)
+                if (
+                  !t.isExpressionStatement(node) ||
+                  !t.isStringLiteral(node.expression)
+                ) {
+                  // If it's not a directive, we've found where imports *should* start
+                  // If it's already an import, insert at its position to group them
+                  if (t.isImportDeclaration(node)) {
+                    insertIndex = i;
+                  }
+                  break;
                 }
+              }
+
+              // Insert the import declaration at the determined index
+              path.node.body.splice(insertIndex, 0, importDeclaration);
+              importAdded = true;
             }
-        });
-    }
+          },
+        },
+        // Find the first suitable function body to insert the hook call
+        "FunctionDeclaration|FunctionExpression|ArrowFunctionExpression": (
+          path
+        ) => {
+          // Only check if hook is needed
+          if (!needsHook) return;
 
+          // Basic check: is this a component function?
+          // More robust checks could verify if it returns JSX, etc.
+          if (path.node.body && t.isBlockStatement(path.node.body)) {
+            // Check if hook call already exists in this scope
+            let callExists = false;
+            path.node.body.body.forEach((stmt) => {
+              if (t.isVariableDeclaration(stmt)) {
+                stmt.declarations.forEach((decl) => {
+                  if (
+                    t.isVariableDeclarator(decl) &&
+                    t.isObjectPattern(decl.id) && // Check for const { t }
+                    t.isCallExpression(decl.init) &&
+                    t.isIdentifier(decl.init.callee) &&
+                    decl.init.callee.name === hookName
+                  ) {
+                    callExists = true;
+                  }
+                });
+              }
+            });
+
+            if (!callExists) {
+              // Create const { t } = useTranslation();
+              const hookIdentifier = t.identifier(translationMethod);
+              const objectPattern = t.objectPattern([
+                t.objectProperty(hookIdentifier, hookIdentifier, false, true), // { t } or { translationMethod }
+              ]);
+              const callExpression = t.callExpression(
+                t.identifier(hookName),
+                []
+              );
+              const variableDeclarator = t.variableDeclarator(
+                objectPattern,
+                callExpression
+              );
+              const variableDeclaration = t.variableDeclaration("const", [
+                variableDeclarator,
+              ]);
+
+              // Add hook call to the beginning of the function body with proper formatting
+              path.get("body").unshiftContainer("body", variableDeclaration);
+              hookCallAdded = true;
+            }
+          }
+          // Don't stop traversal - we need to process all component functions
+        },
+      });
+    }
 
     // Generate code from the modified AST, preserving formatting where possible
     let { code: transformedCode } = generate(ast, {
-        retainLines: true, // Attempt to keep original line breaks
-        compact: false,    // Avoid compacting the code
-        comments: true,    // Keep comments
-        jsescOption: { minimal: true } // Keep this for minimal escaping
+      retainLines: false, // Attempt to keep original line breaks
+      compact: false,
+      comments: true,
+      jsescOption: { minimal: true },
+      shouldPrintComment: () => true, // Preserve all comments
     });
 
-
     return { code: transformedCode, extractedStrings };
-
   } catch (error) {
     // ... (keep existing fallback logic) ...
     console.error(`Error performing AST-based transformation: ${error}`);
-    // Fallback logic remains the same
-    console.error('Falling back to simple regex replacement');
+    console.error("Falling back to simple regex replacement");
     let transformedCode = code;
-    const fallbackPattern = options?.pattern ? new RegExp(options.pattern, 'g') : DEFAULT_PATTERN;
-    transformedCode = transformedCode.replace(fallbackPattern, (match, p1) => `${translationMethod}("${p1.replace(/"/g, '\\"')}")`); // Basic fallback escaping
+    const fallbackPattern = options?.pattern
+      ? new RegExp(options.pattern, "g")
+      : DEFAULT_PATTERN;
+    transformedCode = transformedCode.replace(
+      fallbackPattern,
+      (match, p1) => `${translationMethod}("${p1.replace(/"/g, '\\"')}")`
+    );
 
-    // Fallback hook insertion (simplified) - Keep this as a safety net
+    // Fallback hook insertion with improved formatting
     const hasHookAlready = hasTranslationHook(code, hookName);
     if (!hasHookAlready && extractedStrings.length > 0) {
-        if (!transformedCode.includes(`import { ${hookName} } from '${hookImport}'`)) {
-             transformedCode = `import { ${hookName} } from '${hookImport}';\n${transformedCode}`;
-        }
-         const functionComponentRegex = /(function\s+\w+\s*\(.*?\)\s*\{|const\s+\w+\s*=\s*\(.*?\)\s*=>\s*\{)/;
-         if (!transformedCode.includes(`const { ${translationMethod} } = ${hookName}()`)) {
-             transformedCode = transformedCode.replace(
-                 functionComponentRegex,
-                 `$1\n  const { ${translationMethod} } = ${hookName}();`
-             );
-         }
+      if (
+        !transformedCode.includes(`import { ${hookName} } from '${hookImport}'`)
+      ) {
+        // Ensure import is on its own line with proper spacing
+        transformedCode = `import { ${hookName} } from '${hookImport}';\n${transformedCode}`;
+      }
+      const functionComponentRegex =
+        /(function\s+\w+\s*\(.*?\)\s*\{|const\s+\w+\s*=\s*\(.*?\)\s*=>\s*\{)/g;
+      if (
+        !transformedCode.includes(
+          `const { ${translationMethod} } = ${hookName}()`
+        )
+      ) {
+        // Place hook declaration on its own line with proper indentation
+        transformedCode = transformedCode.replace(
+          functionComponentRegex,
+          `$1\n  const { ${translationMethod} } = ${hookName}();\n`
+        );
+      }
     }
     return { code: transformedCode, extractedStrings };
   }

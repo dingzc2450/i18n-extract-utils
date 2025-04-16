@@ -215,4 +215,64 @@ describe('Context-Aware Replacements', () => {
     expect(result.extractedStrings[0].value).toBe("Hello World");
     expect(result.extractedStrings[1].value).toBe("Welcome to our app");
   });
+
+  test("should handle multiple components in one file correctly", () => {
+    const code = `
+      'use client'; // Directive
+      import React from 'react';
+      // Some comment
+      function ComponentA() {
+        const message = "___Message A___";
+        return (
+          <div title="___Title A___">
+            <h1>___Header A___</h1>
+            <p>{message}</p>
+          </div>
+        );
+      }
+
+      const ComponentB = () => {
+        return (
+          <section aria-label="___Label B___">
+            <h2>___Header B___</h2>
+            <span>___Text B___</span>
+          </section>
+        );
+      };
+
+      export default ComponentA; // Or both, doesn't matter for the test
+    `;
+
+    const tempFile = createTempFile(code);
+    tempFiles.push(tempFile);
+
+    const result = transformCode(tempFile, {
+      translationMethod: 't',
+      hookName: 'useTranslation',
+      hookImport: 'react-i18next' // Explicitly define for clarity
+    });
+
+    // 1. Check for import of useTranslation
+    expect(result.code).toMatch(/import { useTranslation } from "react-i18next";/);
+    expect(result.code).toMatch(/'use client';\s*import React from 'react';/);
+
+    // 2. Check for hook call in ComponentA
+    expect(result.code).toMatch(/function ComponentA\(\) \{\s*const \{ t \} = useTranslation\(\);\s*const message = t\(['"]Message A['"]\);/s);
+    // Check transformations in ComponentA
+    expect(result.code).toMatch(/title=\{t\(['"]Title A['"]\)\}/);
+    expect(result.code).toMatch(/<h1>\{t\(['"]Header A['"]\)\}<\/h1>/);
+
+    // 3. Check for hook call in ComponentB
+    expect(result.code).toMatch(/const ComponentB = \(\) => \{\s*const \{ t \} = useTranslation\(\);\s*return \(/s);
+    // Check transformations in ComponentB
+    expect(result.code).toMatch(/aria-label=\{t\(['"]Label B['"]\)\}/);
+    expect(result.code).toMatch(/<h2>\{t\(['"]Header B['"]\)\}<\/h2>/);
+    expect(result.code).toMatch(/<span>\{t\(['"]Text B['"]\)\}<\/span>/);
+
+    // 4. Check extraction
+    expect(result.extractedStrings.length).toBe(6);
+    expect(result.extractedStrings.map(s => s.value)).toEqual(
+      expect.arrayContaining(["Message A", "Title A", "Header A", "Label B", "Header B", "Text B"])
+    );
+  });
 });
