@@ -252,6 +252,7 @@ export function transformCode(
         // Complex template literals with expressions are harder to handle reliably without potentially breaking logic.
         // Could add logic here to split them if needed, similar to JSXText.
       },
+
     });
 
     // If no modifications were made to the AST, return original code
@@ -347,61 +348,67 @@ export function transformCode(
             }
           },
         },
-        // Find the first suitable function body to insert the hook call
-        "FunctionDeclaration|FunctionExpression|ArrowFunctionExpression": (
-          path
-        ) => {
-          // Only check if hook is needed
-          if (!needsHook) return;
+       
+      // Find the first suitable function body to insert the hook call
+      "FunctionDeclaration|FunctionExpression|ArrowFunctionExpression": (
+        path
+      ) => {
+        // Only check if hook is needed
+        if (!needsHook) return;
 
-          // Basic check: is this a component function?
-          // More robust checks could verify if it returns JSX, etc.
-          if (t.isFunction(path.node) && path.node.body && t.isBlockStatement(path.node.body)) {
-            // Check if hook call already exists in this scope
-            let callExists = false;
-            path.node.body.body.forEach((stmt) => {
-              if (t.isVariableDeclaration(stmt)) {
-                stmt.declarations.forEach((decl) => {
-                  if (
-                    t.isVariableDeclarator(decl) &&
-                    t.isObjectPattern(decl.id) && // Check for const { t }
-                    t.isCallExpression(decl.init) &&
-                    t.isIdentifier(decl.init.callee) &&
-                    decl.init.callee.name === hookName
-                  ) {
-                    callExists = true;
-                  }
-                });
-              }
-            });
+        // 检查是否是嵌套函数，如果是嵌套在另一个函数内部，则不添加hook
+        if (path.findParent(p => t.isFunction(p.node))) {
+          return; // 这是嵌套函数，不应该添加hook
+        }
 
-            if (!callExists) {
-              // Create const { t } = useTranslation();
-              const hookIdentifier = t.identifier(translationMethod);
-              const objectPattern = t.objectPattern([
-                t.objectProperty(hookIdentifier, hookIdentifier, false, true), // { t } or { translationMethod }
-              ]);
-              const callExpression = t.callExpression(
-                t.identifier(hookName),
-                []
-              );
-              const variableDeclarator = t.variableDeclarator(
-                objectPattern,
-                callExpression
-              );
-              const variableDeclaration = t.variableDeclaration("const", [
-                variableDeclarator,
-              ]);
+        // Basic check: is this a component function?
+        // More robust checks could verify if it returns JSX, etc.
+        if (t.isFunction(path.node) && path.node.body && t.isBlockStatement(path.node.body)) {
+          // 其余代码保持不变...
+          let callExists = false;
+          path.node.body.body.forEach((stmt) => {
+            if (t.isVariableDeclaration(stmt)) {
+              stmt.declarations.forEach((decl) => {
+                if (
+                  t.isVariableDeclarator(decl) &&
+                  t.isObjectPattern(decl.id) && // Check for const { t }
+                  t.isCallExpression(decl.init) &&
+                  t.isIdentifier(decl.init.callee) &&
+                  decl.init.callee.name === hookName
+                ) {
+                  callExists = true;
+                }
+              });
+            }
+          });
 
-              // Add hook call to the beginning of the function body with proper formatting
-              if (t.isBlockStatement(path.node.body)) {
-                path.node.body.body.unshift(variableDeclaration);
-                hookCallAdded = true;
-              }
+          if (!callExists) {
+            // Create const { t } = useTranslation();
+            const hookIdentifier = t.identifier(translationMethod);
+            const objectPattern = t.objectPattern([
+              t.objectProperty(hookIdentifier, hookIdentifier, false, true), // { t } or { translationMethod }
+            ]);
+            const callExpression = t.callExpression(
+              t.identifier(hookName),
+              []
+            );
+            const variableDeclarator = t.variableDeclarator(
+              objectPattern,
+              callExpression
+            );
+            const variableDeclaration = t.variableDeclaration("const", [
+              variableDeclarator,
+            ]);
+
+            // Add hook call to the beginning of the function body with proper formatting
+            if (t.isBlockStatement(path.node.body)) {
+              path.node.body.body.unshift(variableDeclaration);
+              hookCallAdded = true;
             }
           }
-          // Don't stop traversal - we need to process all component functions
-        },
+        }
+        // Don't stop traversal - we need to process all component functions
+      },
       });
     }
 

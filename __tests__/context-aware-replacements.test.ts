@@ -273,4 +273,47 @@ describe('Context-Aware Replacements', () => {
       expect.arrayContaining(["Message A", "Title A", "Header A", "Label B", "Header B", "Text B"])
     );
   });
+
+  test("should add hooks only to component functions, not to nested functions", () => {
+    const code = `
+      function MyComponent() {
+        // This is the component function, hooks should be added here
+        
+        // Define an internal helper function
+        function formatMessage(msg) {
+          // This is an internal function, hooks should NOT be added here
+          return msg;
+        }
+        
+        const message = "___Hello World___";
+        return (
+          <div>
+            <h1>{formatMessage(message)}</h1>
+          </div>
+        );
+      }
+    `;
+    
+    const tempFile = createTempFile(code);
+    tempFiles.push(tempFile);
+    
+    const result = transformCode(tempFile, {
+      translationMethod: 't',
+      hookName: 'useTranslation'
+    });
+    
+    // Import and hook should be added to component
+    expect(result.code).toContain("import { useTranslation } from");
+    expect(result.code).toMatch(/function MyComponent\(\) \{\s*const \{ t \} = useTranslation\(\);/);
+    
+    // Hook should NOT be added to the internal formatMessage function
+    expect(result.code).not.toMatch(/function formatMessage\(msg\) \{\s*const \{ t \} = useTranslation\(\);/);
+    
+    // The translations should be properly applied
+    expect(result.code).toContain('t("Hello World")');
+    
+    // Check extraction still works
+    expect(result.extractedStrings.length).toBe(1);
+    expect(result.extractedStrings[0].value).toBe("Hello World");
+  });
 });
