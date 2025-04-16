@@ -311,7 +311,7 @@ export function transformCode(
                 if (
                   t.isExpressionStatement(node) &&
                   t.isStringLiteral(node.expression) &&
-                  path.node.directives?.some(dir => dir.value.value === node.expression.value) // Check if it's in Program.directives
+                  path.node.directives?.some(dir => dir.value.value === (t.isStringLiteral(node.expression) ? node.expression.value : null)) // Check if it's in Program.directives
                 ) {
                   lastDirectiveIndex = i;
                 } else if (t.isImportDeclaration(node)) {
