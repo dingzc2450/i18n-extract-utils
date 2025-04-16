@@ -7,7 +7,8 @@ import { tmpdir } from 'os';
 // Helper to create temporary test files
 function createTempFile(content: string): string {
   const tempDir = tmpdir();
-  const tempFile = path.join(tempDir, `test-${Date.now()}.tsx`);
+  const uniqueId = `${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
+  const tempFile = path.join(tempDir, `test-${uniqueId}.tsx`);
   fs.writeFileSync(tempFile, content);
   return tempFile;
 }
@@ -15,12 +16,12 @@ function createTempFile(content: string): string {
 // Clean up temp files (ensure it exists or copy)
 const tempFiles: string[] = [];
 afterEach(() => {
-  tempFiles.forEach(file => {
-    if (fs.existsSync(file)) {
+  while (tempFiles.length > 0) {
+    const file = tempFiles.pop();
+    if (file && fs.existsSync(file)) {
       fs.unlinkSync(file);
     }
-  });
-  tempFiles.length = 0;
+  }
 });
 
 test("extractStringsFromCode should extract strings with ___pattern___", () => {
@@ -54,26 +55,21 @@ test("transformCode should replace patterns with t() calls", () => {
       );
     }
   `;
-  
+
   const tempFile = createTempFile(code);
-  tempFiles.push(tempFile); // Add to cleanup list
-  
+  tempFiles.push(tempFile);
+
   const result = transformCode(tempFile, {
     translationMethod: 't',
     hookName: 'useTranslation',
     hookImport: 'react-i18next'
   });
-  
-  // Clean up the temp file
-  fs.unlinkSync(tempFile);
-  
-  // Check that ___Hello World___ was replaced with t function call
+
   expect(result.code).toMatch(/t\(['"]Hello World['"]\)/g);
   expect(result.code).toMatch(/t\(['"]Welcome to our app['"]\)/g);
   expect(result.code).toContain("const { t } = useTranslation()");
   expect(result.code).toMatch(/import { useTranslation } from ['"]react-i18next['"]/);
-  
-  // Check that the strings were extracted properly
+
   expect(result.extractedStrings.length).toBe(2);
   expect(result.extractedStrings[0].value).toBe("Hello World");
   expect(result.extractedStrings[1].value).toBe("Welcome to our app");
