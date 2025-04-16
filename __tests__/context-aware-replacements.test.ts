@@ -3,11 +3,14 @@ import { transformCode } from "../src/index.js";
 import * as fs from 'fs';
 import * as path from 'path';
 import { tmpdir } from 'os';
+import crypto from 'crypto'; // Import crypto for key generation example
 
 // Helper to create temporary test files
 function createTempFile(content: string): string {
   const tempDir = tmpdir();
-  const tempFile = path.join(tempDir, `test-${Date.now()}.tsx`);
+  // Use a more unique ID to avoid potential collisions in rapid test runs
+  const uniqueId = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}`;
+  const tempFile = path.join(tempDir, `test-${uniqueId}.tsx`);
   fs.writeFileSync(tempFile, content);
   return tempFile;
 }
@@ -17,7 +20,11 @@ const tempFiles: string[] = [];
 afterEach(() => {
   tempFiles.forEach(file => {
     if (fs.existsSync(file)) {
-      fs.unlinkSync(file);
+      try {
+        fs.unlinkSync(file);
+      } catch (err) {
+        console.error(`Error removing temp file ${file}:`, err);
+      }
     }
   });
   tempFiles.length = 0;
@@ -376,6 +383,63 @@ describe('Context-Aware Replacements', () => {
     expect(result.code).toContain('t("Page Title")');
     
     // 验证添加的hook调用格式正确
+    expect(result.code).toMatch(/function MyComponent\(\) \{\s*const \{ t \} = useTranslation\(\);/);
+  });
+
+  test("should reuse the same generated key for identical strings", () => {
+    const code = `
+      function MyComponent() {
+        const message = "___Duplicate Text___"; // String literal
+        return (
+          <div>
+            <h1>___Duplicate Text___</h1> {/* JSX Text */}
+            <p title="___Duplicate Text___">{message}</p> {/* JSX Attribute */}
+          </div>
+        );
+      }
+    `;
+
+    const tempFile = createTempFile(code);
+    tempFiles.push(tempFile);
+
+    // Define a simple key generator for this test
+    const generateTestKey = (value: string, filePath: string): string => {
+      // Example: prefix + hash of the value
+      const hash = crypto.createHash('sha1').update(value).digest('hex').substring(0, 6);
+      return `test_${hash}`;
+    };
+
+    const result = transformCode(tempFile, {
+      translationMethod: 't',
+      hookName: 'useTranslation',
+      generateKey: generateTestKey // Pass the custom key generator
+    });
+
+    const expectedKey = generateTestKey("Duplicate Text", tempFile); // Calculate the expected key
+
+    // 1. Check Extracted Strings
+    expect(result.extractedStrings.length).toBe(3); // Should find 3 occurrences
+    // Verify all extracted strings have the SAME key
+    result.extractedStrings.forEach(item => {
+      expect(item.value).toBe("Duplicate Text");
+      expect(item.key).toBe(expectedKey);
+    });
+
+    // 2. Check Transformed Code
+    // Ensure the generated key is used in all replacement locations
+    const expectedReplacement = `t("${expectedKey}")`;
+    const occurrencesInCode = (result.code.match(new RegExp(expectedReplacement.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length; // Count occurrences of t("test_...")
+
+    // Expect the key to be used in the string literal, JSX text, and JSX attribute replacements
+    expect(occurrencesInCode).toBe(3);
+
+    // Optionally, check specific replacements more precisely
+    expect(result.code).toMatch(new RegExp(`const message = ${expectedReplacement.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')};`));
+    expect(result.code).toMatch(new RegExp(`<h1>\\{${expectedReplacement.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\}</h1>`));
+    expect(result.code).toMatch(new RegExp(`title=\\{${expectedReplacement.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\}`));
+
+    // 3. Check Hook/Import (should still be added correctly)
+    expect(result.code).toContain("import { useTranslation } from");
     expect(result.code).toMatch(/function MyComponent\(\) \{\s*const \{ t \} = useTranslation\(\);/);
   });
 });

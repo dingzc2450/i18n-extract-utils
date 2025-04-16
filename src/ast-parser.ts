@@ -21,7 +21,7 @@ export function transformCode(
 ): { code: string; extractedStrings: ExtractedString[] } {
   const code = fs.readFileSync(filePath, "utf8");
 
-  // 1. Extract strings using the dedicated function
+  // 1. Extract strings AND generate keys first
   const extractedStrings = extractStringsFromCode(code, filePath, options);
 
   const translationMethod = options.translationMethod || "t";
@@ -33,6 +33,9 @@ export function transformCode(
   if (extractedStrings.length === 0) {
     return { code, extractedStrings };
   }
+
+  // Create a map for quick lookup of key by value during traversal
+  const valueToKeyMap = new Map(extractedStrings.map(s => [s.value, s.key]));
 
   // 2. Perform AST-based transformations
   try {
@@ -57,9 +60,10 @@ export function transformCode(
 
           if (match) {
             const textToTranslate = match[1];
+            const translationKey = valueToKeyMap.get(textToTranslate) ?? textToTranslate;
             path.node.value = t.jsxExpressionContainer(
               t.callExpression(t.identifier(translationMethod), [
-                t.stringLiteral(textToTranslate),
+                t.stringLiteral(translationKey),
               ])
             );
             modified = true;
@@ -80,9 +84,10 @@ export function transformCode(
         const match = pattern.exec(value);
         if (match) {
           const textToTranslate = match[1];
+          const translationKey = valueToKeyMap.get(textToTranslate) ?? textToTranslate;
           path.replaceWith(
             t.callExpression(t.identifier(translationMethod), [
-              t.stringLiteral(textToTranslate),
+              t.stringLiteral(translationKey),
             ])
           );
           modified = true;
@@ -99,6 +104,7 @@ export function transformCode(
 
         while ((match = pattern.exec(value)) !== null) {
           const textToTranslate = match[1];
+          const translationKey = valueToKeyMap.get(textToTranslate) ?? textToTranslate;
           const matchStart = match.index;
           const matchEnd = matchStart + match[0].length;
 
@@ -110,7 +116,7 @@ export function transformCode(
           newNodes.push(
             t.jsxExpressionContainer(
               t.callExpression(t.identifier(translationMethod), [
-                t.stringLiteral(textToTranslate),
+                t.stringLiteral(translationKey),
               ])
             )
           );
@@ -147,9 +153,10 @@ export function transformCode(
           const match = pattern.exec(value);
           if (match) {
             const textToTranslate = match[1];
+            const translationKey = valueToKeyMap.get(textToTranslate) ?? textToTranslate;
             path.replaceWith(
               t.callExpression(t.identifier(translationMethod), [
-                t.stringLiteral(textToTranslate),
+                t.stringLiteral(translationKey),
               ])
             );
             modified = true;
