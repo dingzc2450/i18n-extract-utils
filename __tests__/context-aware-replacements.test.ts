@@ -24,6 +24,24 @@ afterEach(() => {
 });
 
 describe('Context-Aware Replacements', () => {
+  test("should process file correctly", () => {
+    // 读取文件内容作为测试用例
+    const filePath = path.resolve(__dirname, '../samples/example-component.tsx');
+    const codeContent = fs.readFileSync(filePath, 'utf8');
+    
+    // 使用该内容作为测试
+    const tempFile = createTempFile(codeContent);
+    tempFiles.push(tempFile);
+    
+    const result = transformCode(tempFile, {
+      translationMethod: 't',
+      hookName: 'useTranslation'
+    });
+    
+    // 断言验证
+    expect(result.code).toBeDefined();
+    expect(result.extractedStrings.length).toBeGreaterThan(0);
+  });
   test("should handle JSX attributes correctly", () => {
     const code = `
       function MyComponent() {
@@ -315,5 +333,49 @@ describe('Context-Aware Replacements', () => {
     // Check extraction still works
     expect(result.extractedStrings.length).toBe(1);
     expect(result.extractedStrings[0].value).toBe("Hello World");
+  });
+
+  test("should format import statements correctly when they are not on separate lines", () => {
+    const code = `
+      // 这段代码故意不包含导入语句，且让语句连在一起
+      const statement1 = true;const statement2 = "___Test String___";
+      
+      function MyComponent() {
+        return (
+          <div>
+            <h1>___Page Title___</h1>
+          </div>
+        );
+      }
+    `;
+    
+    const tempFile = createTempFile(code);
+    tempFiles.push(tempFile);
+    
+    const result = transformCode(tempFile, {
+      translationMethod: 't',
+      hookName: 'useTranslation'
+    });
+    
+    // 检查导入语句是否独立成行
+    const lines = result.code.split('\n');
+    const importLineIndex = lines.findIndex(line => 
+      line.trim().startsWith('import') && line.includes('useTranslation')
+    );
+    
+    expect(importLineIndex).toBeGreaterThan(-1); // 导入语句应该存在
+    
+    // 检查格式是否正确（导入语句前的行不应该包含statement1或statement2）
+    if (importLineIndex > 0) {
+      const lineBeforeImport = lines[importLineIndex - 1];
+      expect(lineBeforeImport).not.toContain('true;const');
+    }
+    
+    // 检查翻译是否正常工作
+    expect(result.code).toContain('t("Test String")');
+    expect(result.code).toContain('t("Page Title")');
+    
+    // 验证添加的hook调用格式正确
+    expect(result.code).toMatch(/function MyComponent\(\) \{\s*const \{ t \} = useTranslation\(\);/);
   });
 });

@@ -300,47 +300,38 @@ export function transformCode(
                 t.stringLiteral(hookImport)
               );
 
-              // Find the correct insertion point after directives like 'use client' or comments
-              let insertIndex = 0;
+              // Find the correct insertion point: after the last directive or last import.
+              let lastDirectiveIndex = -1;
+              let lastImportIndex = -1;
+
               for (let i = 0; i < path.node.body.length; i++) {
                 const node = path.node.body[i];
                 // Check for directives ('use client', 'use server', etc.)
+                // More robust check for directives
                 if (
                   t.isExpressionStatement(node) &&
-                  t.isStringLiteral(node.expression)
+                  t.isStringLiteral(node.expression) &&
+                  path.node.directives?.some(dir => dir.value.value === node.expression.value) // Check if it's in Program.directives
                 ) {
-                  insertIndex = i + 1;
-                  continue; // Keep checking after the directive
+                  lastDirectiveIndex = i;
+                } else if (t.isImportDeclaration(node)) {
+                  lastImportIndex = i;
                 }
-                // Check for top-level comments attached to the first non-directive node
-                if (
-                  i === 0 &&
-                  node.leadingComments &&
-                  node.leadingComments.length > 0
-                ) {
-                  // If the first node has leading comments, insert after it.
-                  // This assumes comments belong logically before the first statement.
-                  // A more robust check might involve comment ranges, but this is simpler.
-                  insertIndex = i + 1;
-                  // If the first node is already an import, we still want to insert after potential comments/directives
-                  // but before other code, so we might break here or continue depending on desired placement relative to other imports.
-                  // For simplicity, let's place it after the first block of directives/comments.
-                }
-
-                // Stop searching for insertion point if we hit a non-directive/non-comment node
-                // or an import declaration (we want to group imports, typically)
-                if (
-                  !t.isExpressionStatement(node) ||
-                  !t.isStringLiteral(node.expression)
-                ) {
-                  // If it's not a directive, we've found where imports *should* start
-                  // If it's already an import, insert at its position to group them
-                  if (t.isImportDeclaration(node)) {
-                    insertIndex = i;
-                  }
-                  break;
-                }
+                // Optimization: If we encounter something that's definitely not a directive or import,
+                // and we've already passed potential directives/imports, we could potentially break early.
+                // However, iterating through the whole body guarantees finding the *last* import.
               }
+
+              // Determine the insertion index
+              let insertIndex = 0;
+              if (lastImportIndex !== -1) {
+                // Insert after the last import
+                insertIndex = lastImportIndex + 1;
+              } else if (lastDirectiveIndex !== -1) {
+                // Insert after the last directive if no imports exist
+                insertIndex = lastDirectiveIndex + 1;
+              }
+              // Otherwise, insert at the beginning (index 0) which is the default
 
               // Insert the import declaration at the determined index
               path.node.body.splice(insertIndex, 0, importDeclaration);
@@ -417,7 +408,7 @@ export function transformCode(
       retainLines: true, // Set to true to better preserve code structure
       compact: false,
       comments: true,
-      jsescOption: { minimal: true },
+      // jsescOption: { minimal: true },
       shouldPrintComment: () => true, // Preserve all comments
     });
 
@@ -425,6 +416,20 @@ export function transformCode(
     if (importAdded || hookCallAdded) {
       // Fix potential formatting issues with hook calls and imports
       transformedCode = transformedCode
+        // Ensure import declarations have their own line (both before and after)
+        .replace(
+          /(\S)(\nimport\s*\{\s*[a-zA-Z0-9_]+\s*\}\s*from\s*['"][^'"]+['"];)/g,
+          "$1\n$2"
+        )
+        .replace(
+          /(import\s*\{\s*[a-zA-Z0-9_]+\s*\}\s*from\s*['"][^'"]+['"];)(\S)/g,
+          "$1\n$2"
+        )
+        // 确保import语句之间总是有一个空行
+        .replace(
+          /(import\s*[^;]+;)(\s*)(import)/g,
+          "$1\n$3"
+        )
         // Ensure hook declarations have their own line
         .replace(
           /(\{|\})\s*(const\s*\{\s*[a-zA-Z0-9_]+\s*\}\s*=\s*useTranslation\(\);)/g, 
@@ -434,11 +439,6 @@ export function transformCode(
         .replace(
           /(const\s*\{\s*[a-zA-Z0-9_]+\s*\}\s*=\s*useTranslation\(\);)(\S)/g,
           "$1\n  $2"
-        )
-        // Ensure import declarations are properly spaced
-        .replace(
-          /(import\s*\{\s*[a-zA-Z0-9_]+\s*\}\s*from\s*['"][^'"]+['"];)(\S)/g,
-          "$1\n$2"
         );
     }
 
