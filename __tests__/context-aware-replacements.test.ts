@@ -46,8 +46,8 @@ describe('Context-Aware Replacements', () => {
     });
     
     // Check that JSX attributes are properly transformed with curly braces
-    expect(result.code).toContain('title={t(\'Click me\')}');
-    expect(result.code).toContain('aria-label={t(\'Press button\')}');
+    expect(result.code).toMatch(/title=\{t\(['"]Click me['"]\)\}/);
+    expect(result.code).toMatch(/aria-label=\{t\(['"]Press button['"]\)\}/);
     
     // Check extraction
     expect(result.extractedStrings.length).toBe(2);
@@ -76,8 +76,8 @@ describe('Context-Aware Replacements', () => {
     });
     
     // Check that string literals are properly transformed without curly braces
-    expect(result.code).toContain('const message = t(\'Welcome message\');');
-    expect(result.code).toContain('const errorText = t(\'Error occurred\');');
+    expect(result.code).toMatch(/const message = t\(['"]Welcome message['"]\);/);
+    expect(result.code).toMatch(/const errorText = t\(['"]Error occurred['"]\);/);
     
     // Check extraction
     expect(result.extractedStrings.length).toBe(2);
@@ -107,10 +107,9 @@ describe('Context-Aware Replacements', () => {
     });
     
     // Check that JSX text is properly transformed with curly braces
-    expect(result.code).toContain('<h1>{t(\'Page Title\')}</h1>');
-    expect(result.code).toContain('<p>{t(\'This is a paragraph\')} with some regular text.</p>');
-    expect(result.code).toContain('<span>Regular text {t(\'with translation\')} in the middle</span>');
-    
+    expect(result.code).toMatch(/<h1>\{t\(['"]Page Title['"]\)\}<\/h1>/);
+    expect(result.code).toMatch(/<p>\{t\(['"]This is a paragraph['"]\)\} with some regular text\.<\/p>/);
+    expect(result.code).toMatch(/<span>Regular text \{t\(['"]with translation['"]\)\} in the middle<\/span>/);
     // Check extraction
     expect(result.extractedStrings.length).toBe(3);
     expect(result.extractedStrings[0].value).toBe("Page Title");
@@ -141,9 +140,9 @@ describe('Context-Aware Replacements', () => {
     });
     
     // Check different contexts
-    expect(result.code).toContain('const title = t(\'Component Title\');');
-    expect(result.code).toContain('title={t(\'Tooltip text\')}');
-    expect(result.code).toContain('<p>{t(\'Welcome\')} to our <strong>{t(\'Amazing\')} app</strong></p>');
+    expect(result.code).toMatch(/const title = t\(['"]Component Title['"]\);/);
+    expect(result.code).toMatch(/title=\{t\(['"]Tooltip text['"]\)\}/);
+    expect(result.code).toMatch(/<p>\{t\(['"]Welcome['"]\)\} to our <strong>\{t\(['"]Amazing['"]\)\} app<\/strong><\/p>/);
     
     // Check extraction
     expect(result.extractedStrings.length).toBe(4);

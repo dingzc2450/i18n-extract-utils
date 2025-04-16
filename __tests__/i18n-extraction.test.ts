@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test, describe, afterEach } from "vitest"; // Ensure describe and afterEach are imported if not already
 import { extractStringsFromCode, transformCode } from "../src/index.js";
 import * as fs from 'fs';
 import * as path from 'path';
@@ -11,6 +11,17 @@ function createTempFile(content: string): string {
   fs.writeFileSync(tempFile, content);
   return tempFile;
 }
+
+// Clean up temp files (ensure it exists or copy)
+const tempFiles: string[] = [];
+afterEach(() => {
+  tempFiles.forEach(file => {
+    if (fs.existsSync(file)) {
+      fs.unlinkSync(file);
+    }
+  });
+  tempFiles.length = 0;
+});
 
 test("extractStringsFromCode should extract strings with ___pattern___", () => {
   const code = `
@@ -45,6 +56,7 @@ test("transformCode should replace patterns with t() calls", () => {
   `;
   
   const tempFile = createTempFile(code);
+  tempFiles.push(tempFile); // Add to cleanup list
   
   const result = transformCode(tempFile, {
     translationMethod: 't',
@@ -59,7 +71,7 @@ test("transformCode should replace patterns with t() calls", () => {
   expect(result.code).toMatch(/t\(['"]Hello World['"]\)/g);
   expect(result.code).toMatch(/t\(['"]Welcome to our app['"]\)/g);
   expect(result.code).toContain("const { t } = useTranslation()");
-  expect(result.code).toContain("import { useTranslation } from 'react-i18next'");
+  expect(result.code).toMatch(/import { useTranslation } from ['"]react-i18next['"]/);
   
   // Check that the strings were extracted properly
   expect(result.extractedStrings.length).toBe(2);
@@ -80,6 +92,7 @@ test("transformCode should not add hooks when no translations found", () => {
   `;
   
   const tempFile = createTempFile(code);
+  tempFiles.push(tempFile); // Add to cleanup list
   
   const result = transformCode(tempFile, {
     translationMethod: 't',
@@ -113,6 +126,7 @@ test("transformCode should handle existing translation hooks", () => {
   `;
   
   const tempFile = createTempFile(code);
+  tempFiles.push(tempFile); // Add to cleanup list
   
   const result = transformCode(tempFile, {
     translationMethod: 't',
@@ -131,4 +145,56 @@ test("transformCode should handle existing translation hooks", () => {
   
   expect(importCount).toBe(1);
   expect(hookCount).toBe(1);
+});
+
+test("transformCode should insert import after directives and comments", () => {
+  const code = `
+'use client';
+
+// This is a top-level comment
+
+import React from 'react'; // Existing import
+
+/**
+ * Another comment block
+ */
+function MyComponent() {
+  return (
+    <div>
+      <h1>___Hello Directive___</h1>
+    </div>
+  );
+}
+`;
+
+  const tempFile = createTempFile(code);
+  tempFiles.push(tempFile); // Add to cleanup list
+
+  const result = transformCode(tempFile, {
+    translationMethod: 't',
+    hookName: 'useTranslation',
+    hookImport: 'react-i18next'
+  });
+
+  // Check that the import is added AFTER 'use client' and existing import
+  const lines = result.code.split('\n');
+  const useClientIndex = lines.findIndex(line => line.includes("'use client';"));
+  const reactImportIndex = lines.findIndex(line => line.includes("import React from 'react';"));
+  const hookImportIndex = lines.findIndex(line => line.includes("import { useTranslation } from 'react-i18next';"));
+
+  expect(useClientIndex).toBeGreaterThan(-1);
+  expect(reactImportIndex).toBeGreaterThan(-1);
+  expect(hookImportIndex).toBeGreaterThan(-1);
+
+  // Verify order
+  expect(hookImportIndex).toBeGreaterThan(useClientIndex);
+  expect(hookImportIndex).toBeGreaterThan(reactImportIndex); // Should be inserted after the last existing import
+
+  // Verify other transformations
+  expect(result.code).toMatch(/t\(['"]Hello Directive['"]\)/);
+  expect(result.code).toContain("const { t } = useTranslation()");
+
+  // Check extraction
+  expect(result.extractedStrings.length).toBe(1);
+  expect(result.extractedStrings[0].value).toBe("Hello Directive");
 });
