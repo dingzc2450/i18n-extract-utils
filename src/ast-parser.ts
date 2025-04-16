@@ -356,7 +356,7 @@ export function transformCode(
 
           // Basic check: is this a component function?
           // More robust checks could verify if it returns JSX, etc.
-          if (path.node.body && t.isBlockStatement(path.node.body)) {
+          if (t.isFunction(path.node) && path.node.body && t.isBlockStatement(path.node.body)) {
             // Check if hook call already exists in this scope
             let callExists = false;
             path.node.body.body.forEach((stmt) => {
@@ -394,8 +394,10 @@ export function transformCode(
               ]);
 
               // Add hook call to the beginning of the function body with proper formatting
-              path.get("body").unshiftContainer("body", variableDeclaration);
-              hookCallAdded = true;
+              if (t.isBlockStatement(path.node.body)) {
+                path.node.body.body.unshift(variableDeclaration);
+                hookCallAdded = true;
+              }
             }
           }
           // Don't stop traversal - we need to process all component functions

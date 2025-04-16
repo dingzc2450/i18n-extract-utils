@@ -1,6 +1,6 @@
 {
   "name": "i18n-extract-utils",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "React i18n extraction and transformation utility",
   "main": "dist/index.js",
   "exports": {
@@ -41,6 +41,7 @@
     "glob": "^10.3.10"
   },
   "devDependencies": {
+    "@types/babel__generator": "^7.27.0",
     "@types/babel__traverse": "^7.20.4",
     "@types/node": "^20.10.0",
     "ts-node": "^10.9.1",
