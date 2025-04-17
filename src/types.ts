@@ -44,24 +44,26 @@ export interface TransformOptions {
   /**
    * A function to generate a unique key for a given string value.
    * If not provided, the string value itself is used as the key.
-   * 
+   *
    * 用于为给定字符串值生成唯一键的函数。
    * 如果未提供，则使用字符串值本身作为键。
-   * 
+   *
    * @param value - The extracted string value that needs a key.
    * @param filePath - The path of the file where the string was found.
    * @returns - The generated key (string or number) to use in the translation file.
    */
   generateKey?: (value: string, filePath: string) => string | number;
+  
   /**
-   * The path to the existing JSON file where translations are stored.
-   * This is used to check for existing translations and avoid duplicates.
-   * 
-   * 现有JSON文件的路径，用于存储翻译。
-   * 用于检查现有翻译并避免重复。
+   * Existing translations, either as a path to a JSON file or a direct object.
+   * This is used to check for existing translations and reuse keys.
+   * The expected format (for both file and object) is { key: value }.
+   *
+   * 现有的翻译内容，可以是JSON文件的路径，也可以是直接的对象。
+   * 用于检查现有翻译并复用键。
+   * 预期的格式（文件和对象相同）为 { key: value }。
    */
-  existingJsonPath?: string; // 新增：用户传递的已提取json路径
-
+  existingTranslations?: string | Record<string, string | number>; // Renamed and updated type
 }
 
 export interface ExtractedString {

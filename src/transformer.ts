@@ -33,14 +33,49 @@ export async function processFiles(
   // 1. 加载 existingJsonPath 并生成 value->key 映射
   let existingValueToKey: Map<string, string | number> | undefined = undefined;
   let usedExistingKeysList: UsedExistingKey[] = [];
-  if (options.existingJsonPath && fs.existsSync(options.existingJsonPath)) {
-    const jsonObj = JSON.parse(
-      fs.readFileSync(options.existingJsonPath, "utf8")
-    );
-    existingValueToKey = new Map<string, string | number>();
-    Object.entries(jsonObj).forEach(([key, value]) => {
-      existingValueToKey!.set(value as string, key);
-    });
+  let sourceJsonObject: Record<string, string | number> | undefined = undefined;
+
+  if (options.existingTranslations) {
+    if (typeof options.existingTranslations === "string") {
+      // It's a file path
+      const filePath = options.existingTranslations;
+      if (fs.existsSync(filePath)) {
+        try {
+          sourceJsonObject = JSON.parse(fs.readFileSync(filePath, "utf8"));
+        } catch (e) {
+          console.error(
+            `Error parsing existing translations file: ${filePath}`,
+            e
+          );
+        }
+      } else {
+        console.warn(`Existing translations file not found: ${filePath}`);
+      }
+    } else if (typeof options.existingTranslations === "object") {
+      // It's an object
+      sourceJsonObject = options.existingTranslations;
+    }
+
+    // Build the value -> key map from the loaded/provided object
+    if (sourceJsonObject) {
+      existingValueToKey = new Map<string, string | number>();
+      Object.entries(sourceJsonObject).forEach(([key, value]) => {
+        if (typeof value === "string") {
+          // Prioritize non-identical keys if a value maps to multiple keys
+          if (!existingValueToKey!.has(value) || key !== value) {
+            existingValueToKey!.set(value, key);
+          }
+        } else if (typeof value === "number") {
+          // Also handle number values if needed
+          if (
+            !existingValueToKey!.has(String(value)) ||
+            key !== String(value)
+          ) {
+            existingValueToKey!.set(String(value), key);
+          }
+        }
+      });
+    }
   }
 
   for (const file of files) {
