@@ -7,6 +7,6 @@ export default defineConfig({
     environment: 'node',
     include: ['**/__tests__/**/*.{test,spec}.{ts,js}', '**/*.test.ts', '**/*.spec.ts'],
     exclude: ['**/node_modules/**', '**/dist/**'],
-    setupFiles: [resolve(__dirname, './test/setup.ts')],
+    // setupFiles: [resolve(__dirname, './test/setup.ts')],
   },
 })
