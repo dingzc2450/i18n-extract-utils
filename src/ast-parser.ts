@@ -301,7 +301,7 @@ export function transformCode(
                   t.isExpressionStatement(node) &&
                   t.isStringLiteral(node.expression) &&
                   path.node.directives?.some(
-                    (dir) => dir.value.value === node.expression.value
+                    (dir) => dir.value.value === (t.isStringLiteral(node.expression) ? node.expression.value : "")
                   )
                 ) {
                   lastDirectiveIndex = i;
