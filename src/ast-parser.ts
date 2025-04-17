@@ -15,7 +15,9 @@ function createTranslationCall(
   methodName: string,
   translationKey: string | number
 ): t.CallExpression {
-  return t.callExpression(t.identifier(methodName), [
+  // If the user specified 'default' as the method, assume the actual function is 't'
+  const effectiveMethodName = methodName === 'default' ? 't' : methodName;
+  return t.callExpression(t.identifier(effectiveMethodName), [
     typeof translationKey === "string"
       ? t.stringLiteral(translationKey)
       : t.numericLiteral(translationKey),
@@ -109,7 +111,7 @@ export function transformCode(
 
           if (matchResult) {
             path.node.value = t.jsxExpressionContainer(
-              createTranslationCall(
+              createTranslationCall( // Pass the original translationMethod here
                 translationMethod,
                 matchResult.translationKey
               )
@@ -144,7 +146,7 @@ export function transformCode(
 
         if (matchResult) {
           path.replaceWith(
-            createTranslationCall(translationMethod, matchResult.translationKey)
+            createTranslationCall(translationMethod, matchResult.translationKey) // Pass the original translationMethod here
           );
           modified = true;
         } else {
@@ -185,7 +187,7 @@ export function transformCode(
 
             newNodes.push(
               t.jsxExpressionContainer(
-                createTranslationCall(translationMethod, translationKey)
+                createTranslationCall(translationMethod, translationKey) // Pass the original translationMethod here
               )
             );
             lastIndex = matchEnd;
@@ -238,7 +240,7 @@ export function transformCode(
           if (matchResult) {
             path.replaceWith(
               createTranslationCall(
-                translationMethod,
+                translationMethod, // Pass the original translationMethod here
                 matchResult.translationKey
               )
             );
@@ -360,30 +362,45 @@ export function transformCode(
                 stmt.declarations.forEach((decl) => {
                   if (
                     tg.isVariableDeclarator(decl) &&
-                    tg.isObjectPattern(decl.id) &&
-                    tg.isCallExpression(decl.init) &&
+                    tg.isCallExpression(decl.init) && // Check init first
                     tg.isIdentifier(decl.init.callee) &&
                     decl.init.callee.name === hookName
                   ) {
-                    callExists = true;
+                    // Check if it's the default assignment or destructuring
+                    if (tg.isIdentifier(decl.id) || tg.isObjectPattern(decl.id)) {
+                       callExists = true;
+                    }
                   }
                 });
               }
             });
 
             if (!callExists) {
-              const hookIdentifier = t.identifier(translationMethod);
-              const objectPattern = t.objectPattern([
-                t.objectProperty(hookIdentifier, hookIdentifier, false, true),
-              ]);
               const callExpression = t.callExpression(
                 t.identifier(hookName),
                 []
               );
-              const variableDeclarator = t.variableDeclarator(
-                objectPattern,
-                callExpression
-              );
+              let variableDeclarator;
+
+              // Check for the special 'default' case
+              if (translationMethod === 'default') {
+                // Create: const t = useHook(); (Assuming 't' is the desired variable name)
+                variableDeclarator = t.variableDeclarator(
+                  t.identifier('t'), // Use 't' as the variable name
+                  callExpression
+                );
+              } else {
+                // Create: const { actualMethodName } = useHook();
+                const hookIdentifier = t.identifier(translationMethod);
+                const objectPattern = t.objectPattern([
+                  t.objectProperty(hookIdentifier, hookIdentifier, false, true),
+                ]);
+                variableDeclarator = t.variableDeclarator(
+                  objectPattern,
+                  callExpression
+                );
+              }
+
               const variableDeclaration = t.variableDeclaration("const", [
                 variableDeclarator,
               ]);
@@ -396,7 +413,7 @@ export function transformCode(
     }
 
     let { code: generatedCode } = generate(ast, {
-      retainLines: true,
+      retainLines: true, // Keep original line breaks as much as possible
       compact: false,
       comments: true,
       jsescOption: { minimal: true },

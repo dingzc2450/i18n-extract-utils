@@ -659,4 +659,44 @@ export default SearchForm;`
     expect(result.extractedStrings.length).toBe(1);
     expect(result.extractedStrings[0].value).toBe("请输入名称");
   });
+  test("should handle translationMethod: 'default' correctly in AST", () => {
+    const code = `
+      import React from 'react';
+
+      function MyComponent() {
+        const message = "___Hello Default___";
+        return (
+          <div>
+            <h1>___Page Title Default___</h1>
+            <p>{message}</p>
+          </div>
+        );
+      }
+    `;
+
+    const tempFile = createTempFile(code);
+    tempFiles.push(tempFile);
+
+    const result = transformCode(tempFile, {
+      translationMethod: "default", // Use 'default'
+      hookName: "useTranslations", // Example hook name
+      hookImport: "my-i18n-lib", // Example import source
+    });
+
+    // 1. Check Import
+    expect(result.code).toContain('import { useTranslations } from "my-i18n-lib";');
+
+    // 2. Check Hook Call - Should be const t = useTranslations();
+    expect(result.code).toMatch(/function MyComponent\(\) \{\s*const t = useTranslations\(\);/);
+    expect(result.code).not.toMatch(/const \{.*?\} = useTranslations\(\);/); // Should NOT be destructuring
+
+    // 3. Check Transformations - Should still use t("key")
+    expect(result.code).toMatch(/const message = t\(['"]Hello Default['"]\);/);
+    expect(result.code).toMatch(/<h1>\{t\(['"]Page Title Default['"]\)\}<\/h1>/);
+
+    // 4. Check Extraction
+    expect(result.extractedStrings.length).toBe(2);
+    expect(result.extractedStrings[0].value).toBe("Hello Default");
+    expect(result.extractedStrings[1].value).toBe("Page Title Default");
+  });
 });
