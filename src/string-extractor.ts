@@ -39,6 +39,13 @@ export function extractStringsFromCode(
     const column = lines[lines.length - 1].length + 1;
 
     let key: string | number;
+    let extractedValue = value;
+    // 生成key时将${...}替换为{argN}
+    let argIndex = 1;
+    const keyStr = value.replace(/\$\{[^\}]+\}/g, () => `{arg${argIndex++}}`);
+    // value 也做同样的处理，保证和 key 一致
+    extractedValue = keyStr;
+
     if (existingValueToKey && existingValueToKey.has(value)) {
       key = existingValueToKey.get(value)!;
       usedExistingKeysList?.push({
@@ -46,18 +53,24 @@ export function extractStringsFromCode(
         line,
         column,
         key,
-        value,
+        value: extractedValue,
+      });
+    } else if (existingValueToKey && existingValueToKey.has(keyStr)) {
+      key = existingValueToKey.get(keyStr)!;
+      usedExistingKeysList?.push({
+        filePath,
+        line,
+        column,
+        key,
+        value: extractedValue,
       });
     } else {
-      // 生成key时将${...}替换为{argN}
-      let argIndex = 1;
-      const keyStr = value.replace(/\$\{[^\}]+\}/g, () => `{arg${argIndex++}}`);
       key = options?.generateKey ? options.generateKey(keyStr, filePath) : keyStr;
     }
 
     extractedStrings.push({
       key,
-      value,
+      value: extractedValue,
       filePath,
       line,
       column,

@@ -715,54 +715,6 @@ export default SearchForm;`;
     expect(result.extractedStrings[1].value).toBe("Page Title Default");
   });
 
-  test("should handle template literals with one interpolation", () => {
-    const code = `
-      function MyComponent({ label }) {
-        const text = \`___请选择\${label}___\`;
-        return <div>{text}</div>;
-      }
-    `;
-    const tempFile = createTempFile(code);
-    tempFiles.push(tempFile);
-
-    const result = transformCode(tempFile, {
-      translationMethod: "t",
-      hookName: "useTranslation",
-    });
-
-    // 检查替换
-    expect(result.code).toMatch(
-      /const text = t\(['"]请选择\{arg1}['"],\s*\{\s*arg1:\s*label\s*\}\);/
-    );
-    // 检查提取
-    expect(result.extractedStrings.length).toBe(1);
-    expect(result.extractedStrings[0].key).toBe("请选择{arg1}");
-    expect(result.extractedStrings[0].value).toBe("请选择${label}");
-  });
-
-  test("should handle template literals with multiple interpolations", () => {
-    const code = `
-      function MyComponent({ name, age }) {
-        const text = \`___你好, \${name}, \${age}___\`;
-        return <div>{text}</div>;
-      }
-    `;
-    const tempFile = createTempFile(code);
-    tempFiles.push(tempFile);
-
-    const result = transformCode(tempFile, {
-      translationMethod: "t",
-      hookName: "useTranslation",
-    });
-
-    expect(result.code).toMatch(
-      /const text = t\(['"]你好, \{arg1}, \{arg2}['"],\s*\{\s*arg1:\s*name,\s*arg2:\s*age\s*\}\);/
-    );
-    expect(result.extractedStrings.length).toBe(1);
-    expect(result.extractedStrings[0].key).toBe("你好, {arg1}, {arg2}");
-    expect(result.extractedStrings[0].value).toBe("你好, ${name}, ${age}");
-  });
-
   test("should handle template literals with no interpolation as normal string", () => {
     const code = `
       function MyComponent() {
@@ -804,7 +756,81 @@ export default SearchForm;`;
     );
     expect(result.extractedStrings.length).toBe(1);
     expect(result.extractedStrings[0].key).toBe("欢迎{arg1}");
-    expect(result.extractedStrings[0].value).toBe('欢迎${user.name + "!"}');
+    expect(result.extractedStrings[0].value).toBe('欢迎{arg1}');
+  });
+
+  test("should handle template literals with one interpolation", () => {
+    const code = `
+      function MyComponent({ label }) {
+        const text = \`___请选择\${label}___\`;
+        return <div>{text}</div>;
+      }
+    `;
+    const tempFile = createTempFile(code);
+    tempFiles.push(tempFile);
+
+    const result = transformCode(tempFile, {
+      translationMethod: "t",
+      hookName: "useTranslation",
+    });
+
+    // Check that the replacement is correct
+    expect(result.code).toMatch(
+      /const text = t\(['"]请选择\{arg1}['"],\s*\{\s*arg1:\s*label\s*\}\);/
+    );
+    // Check extraction
+    expect(result.extractedStrings.length).toBe(1);
+    expect(result.extractedStrings[0].key).toBe("请选择{arg1}");
+    expect(result.extractedStrings[0].value).toBe("请选择{arg1}");
+  });
+
+  test("should handle template literals with multiple interpolations", () => {
+    const code = `
+      function MyComponent({ name, age }) {
+        const text = \`___你好, \${name}, \${age}___\`;
+        return <div>{text}</div>;
+      }
+    `;
+    const tempFile = createTempFile(code);
+    tempFiles.push(tempFile);
+
+    const result = transformCode(tempFile, {
+      translationMethod: "t",
+      hookName: "useTranslation",
+    });
+
+    // Check that the replacement is correct
+    expect(result.code).toMatch(
+      /const text = t\(['"]你好, \{arg1}, \{arg2}['"],\s*\{\s*arg1:\s*name,\s*arg2:\s*age\s*\}\);/
+    );
+    expect(result.extractedStrings.length).toBe(1);
+    expect(result.extractedStrings[0].key).toBe("你好, {arg1}, {arg2}");
+    expect(result.extractedStrings[0].value).toBe("你好, {arg1}, {arg2}");
+  });
+
+
+  test("should handle template literals with complex expressions", () => {
+    const code = `
+      function MyComponent({ user }) {
+        const text = \`___欢迎\${user.name + "!"}___\`;
+        return <div>{text}</div>;
+      }
+    `;
+    const tempFile = createTempFile(code);
+    tempFiles.push(tempFile);
+
+    const result = transformCode(tempFile, {
+      translationMethod: "t",
+      hookName: "useTranslation",
+    });
+
+    // Check that the replacement is correct
+    expect(result.code).toMatch(
+      /const text = t\(['"]欢迎\{arg1}['"],\s*\{\s*arg1:\s*user\.name \+ "!"/
+    );
+    expect(result.extractedStrings.length).toBe(1);
+    expect(result.extractedStrings[0].key).toBe("欢迎{arg1}");
+    expect(result.extractedStrings[0].value).toBe('欢迎{arg1}');
   });
 });
 describe("AST import/hook formatting", () => {
