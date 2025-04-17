@@ -42,7 +42,7 @@ export async function processFiles(
 
   // 如果提供了输出路径，输出提取的字符串到JSON文件
   if (options.outputPath && extractedStrings.length > 0) {
-    const outputObj: Record<string, string> = {};
+    const outputObj: Record<string, string | number> = {};
 
     extractedStrings.forEach((item) => {
       // 使用提取的值作为键和值

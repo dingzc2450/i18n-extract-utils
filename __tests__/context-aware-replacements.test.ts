@@ -37,9 +37,14 @@ describe("Context-Aware Replacements", () => {
     const filePath = path.resolve(__dirname, "../samples/demo.tsx");
 
     const codeContent = fs.readFileSync(filePath, "utf8");
+    const code =`
+const SearchForm = () => {
+  return <input className="w-52" placeholder="___请输入名称___" />;
+};
 
+export default SearchForm;`
     // 使用该内容作为测试
-    const tempFile = createTempFile(codeContent);
+    const tempFile = createTempFile(code);
     tempFiles.push(tempFile);
     let id = 1;
     const keys = {};
@@ -458,14 +463,11 @@ describe("Context-Aware Replacements", () => {
       return `test_${hash}`;
     };
 
-
-    let id = 1;
-    const keys = {};
     const result = transformCode(tempFile, {
       translationMethod: "t",
       hookImport: "next-intl",
       hookName: "useTranslations",
-      generateKey: (value) => keys[value] || (keys[value] = id++),
+      generateKey: generateTestKey,
     });
   
 
@@ -521,9 +523,9 @@ describe("Context-Aware Replacements", () => {
     );
 
     // 3. Check Hook/Import (should still be added correctly)
-    expect(result.code).toContain("import { useTranslation } from");
+    expect(result.code).toContain("import { useTranslations } from");
     expect(result.code).toMatch(
-      /function MyComponent\(\) \{\s*const \{ t \} = useTranslation\(\);/
+      /function MyComponent\(\) \{\s*const \{\s* t \s*} = useTranslations\(\);/
     );
   });
   test("should handle JSX attributes with single quotes correctly", () => {
@@ -601,18 +603,10 @@ describe("Context-Aware Replacements", () => {
     const tempFile = createTempFile(code);
     tempFiles.push(tempFile);
 
-    let id = 1;
-    const keys = {};
     const result = transformCode(tempFile, {
       translationMethod: "t",
       hookImport: "next-intl",
       hookName: "useTranslations",
-      generateKey: (value) =>{
-        if(!keys[value]){
-          keys[value] = id++
-        }
-        return String(keys[value]);
-      },
     });
 
     // 1. Check Hook/Import were added correctly inside the arrow function
@@ -638,5 +632,31 @@ describe("Context-Aware Replacements", () => {
     );
     // Check default keys
     result.extractedStrings.forEach(s => expect(s.key).toBe(s.value));
+  });
+  test('shoule handle nested components correctly', () => {
+    const code =`
+    const SearchForm = () => {
+      return <input className="w-52" placeholder="___请输入名称___" />;
+    };
+    
+    export default SearchForm;`
+    const tempFile = createTempFile(code);
+    tempFiles.push(tempFile);
+    let id = 1;
+    const keys = {};
+    const result = transformCode(tempFile, {
+      translationMethod: "t",
+      hookImport: "next-intl",
+      hookName: "useTranslations",
+      generateKey: (value) => keys[value] || (keys[value] = id++),
+    });
+    // 测试result.code中相应内容是否有转换成功
+    expect(result.code).toMatch(/import { useTranslations } from ["']next-intl["'];/);
+    expect(result.code).toContain('useTranslations()')
+    expect(result.code).toMatch(/placeholder=\{t\(\d\)\}/);
+    expect(result.code).toMatch(/<input className="w-52"/);
+    // 测试result.extractedStrings中是否有提取到相应内容
+    expect(result.extractedStrings.length).toBe(1);
+    expect(result.extractedStrings[0].value).toBe("请输入名称");
   });
 });

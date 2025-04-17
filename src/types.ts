@@ -11,11 +11,11 @@ export interface TransformOptions {
    * @param filePath The path of the file where the string was found.
    * @returns The generated key.
    */
-  generateKey?: (value: string, filePath: string) => string;
+  generateKey?: (value: string, filePath: string) => string | number; // Updated return type
 }
 
 export interface ExtractedString {
-  key: string; // The generated or default key for translation
+  key: string | number; // Updated type to match generateKey return type
   value: string;
   filePath: string;
   line: number;
