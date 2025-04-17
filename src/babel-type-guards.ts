@@ -160,6 +160,14 @@ export function isFunction(node: t.Node | null | undefined): node is t.Function 
   return t.isFunction(node);
 }
 
+export function isFunctionDeclaration(node: t.Node | null | undefined): node is t.FunctionDeclaration {
+  return t.isFunctionDeclaration(node);
+}
+
+export function isFunctionExpression(node: t.Node | null | undefined): node is t.FunctionExpression {
+  return t.isFunctionExpression(node);
+}
+
 /**
  * Checks if a node is a BlockStatement.
  * 检查节点是否为 BlockStatement。

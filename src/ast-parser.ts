@@ -309,16 +309,27 @@ function addHookAndImport(
         }
       },
     },
-    "FunctionDeclaration|FunctionExpression|ArrowFunctionExpression": (
-      path
-    ) => {
-      // Skip nested functions
+    "FunctionDeclaration|FunctionExpression|ArrowFunctionExpression": (path) => {
+      // 跳过嵌套函数
       if (path.findParent((p) => tg.isFunction(p.node))) {
         return;
       }
 
-      // Check if the function returns JSX
+      // 检查是否为组件（返回JSX）或自定义hook（函数名以use开头）
       let returnsJSX = false;
+      let isCustomHook = false;
+
+      // 检查函数名
+      if (
+        tg.isFunction(path.node) && 
+        (tg.isFunctionDeclaration(path.node) || tg.isFunctionExpression(path.node)) && 
+        path.node.id && 
+        /^use[A-Z\d_]/.test(path.node.id.name)
+      ) {
+        isCustomHook = true;
+      }
+
+      // 检查是否返回JSX
       path.traverse({
         ReturnStatement(returnPath) {
           if (
@@ -327,17 +338,31 @@ function addHookAndImport(
               tg.isJSXFragment(returnPath.node.argument))
           ) {
             returnsJSX = true;
-            returnPath.stop(); // Stop traversal once JSX is found
+            returnPath.stop();
           }
         },
       });
 
-      // If it's a component function returning JSX, check/add the hook call
+      // 检查函数体内是否有 t(...) 调用
+      let hasTCall = false;
+      path.traverse({
+        CallExpression(callPath) {
+          if (
+            tg.isIdentifier(callPath.node.callee) &&
+            callPath.node.callee.name === "t"
+          ) {
+            hasTCall = true;
+            callPath.stop();
+          }
+        },
+      });
+
+      // 组件 或 自定义hook且用到t()，都插入hook语句
       if (
-        returnsJSX &&
-        tg.isFunction(path.node) &&
-        path.node.body &&
-        tg.isBlockStatement(path.node.body)
+        ((returnsJSX || (isCustomHook && hasTCall)) &&
+          tg.isFunction(path.node) &&
+          path.node.body &&
+          tg.isBlockStatement(path.node.body))
       ) {
         // Check if the hook call already exists
         let callExists = false;

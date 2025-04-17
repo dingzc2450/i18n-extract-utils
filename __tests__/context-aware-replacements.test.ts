@@ -749,3 +749,52 @@ export default SearchForm;
     expect(result.code).toContain('t("请输入名称")');
   });
 });
+describe("i18n-extract-utils: custom hook context", () => {
+  test("should transform text inside a custom React hook", () => {
+    const code = `
+      import { useState } from "react";
+      // 自定义hook
+      function useCustomLogic() {
+      const [state, setState] = useState();
+      const label = "___自定义hook内的文本___";
+      return { label };
+      }
+      // 组件
+      function Demo() {
+      const { label } = useCustomLogic();
+      return <div>{label}</div>;
+      }
+    `;
+    const tempFile = createTempFile(code);
+
+    const result = transformCode(tempFile, {
+      translationMethod: "t",
+      hookName: "useTranslation",
+      hookImport: "react-i18next",
+    });
+
+    // 检查自定义hook内的文本被替换
+    expect(result.code).toMatch(/const label = t\(['"]自定义hook内的文本['"]\);/);
+
+    // 检查hook和import只加在组件Demo内，不加在useCustomLogic内
+    // Demo组件应有hook调用
+    expect(result.code).toMatch(/function Demo\(\) \{\s*const \{\s*t\s*\} = useTranslation\(\);/);
+    // useCustomLogic内应有hook调用
+    expect(result.code).toMatch(/function useCustomLogic\(\) \{\s*const \{\s*t\s*\} = useTranslation\(\);/);
+
+    // 检查import只加一次
+    expect(result.code.match(/import { useTranslation } from ['"]react-i18next['"];/g)?.length).toBe(1);
+
+    // 检查自定义hook内是否缺少hook语句但依然使用了t函数
+    const useCustomLogicBody = result.code.substring(
+      result.code.indexOf("function useCustomLogic()"),
+      result.code.indexOf("function Demo()")
+    );
+    expect(useCustomLogicBody).toContain('t("自定义hook内的文本")');
+    expect(useCustomLogicBody).toContain('useTranslation()');
+
+    // 检查提取
+    expect(result.extractedStrings.length).toBe(1);
+    expect(result.extractedStrings[0].value).toBe("自定义hook内的文本");
+  });
+});
