@@ -22,7 +22,7 @@
     "start": "node dist/cli.js",
     "dev": "ts-node --esm src/cli.ts",
     "test": "vitest run",
-    "test:dist": "node tests/dist-test.js",
+    "test:dist": "node __tests__/dist-test.js",
     "test:all": "npm run test && npm run test:dist",
     "prepublishOnly": "npm run build && npm run test:all",
     "test:watch": "vitest"
