@@ -16,7 +16,7 @@ function createTranslationCall(
   translationKey: string | number
 ): t.CallExpression {
   // If the user specified 'default' as the method, assume the actual function is 't'
-  const effectiveMethodName = methodName === 'default' ? 't' : methodName;
+  const effectiveMethodName = methodName === "default" ? "t" : methodName;
   return t.callExpression(t.identifier(effectiveMethodName), [
     typeof translationKey === "string"
       ? t.stringLiteral(translationKey)
@@ -198,10 +198,7 @@ function replaceStringsWithTCalls(
       if (tg.isTaggedTemplateExpression(path.parent)) {
         return;
       }
-      if (
-        path.node.quasis.length === 1 &&
-        path.node.expressions.length === 0
-      ) {
+      if (path.node.quasis.length === 1 && path.node.expressions.length === 0) {
         const templateValue = path.node.quasis[0].value.raw;
         const testPattern = options?.pattern
           ? new RegExp(options.pattern)
@@ -307,12 +304,15 @@ function addHookAndImport(
           } else if (lastDirectiveIndex !== -1) {
             insertIndex = lastDirectiveIndex + 1;
           }
-          path.node.body.splice(insertIndex, 0, importDeclaration);
+          const emptyLine = t.noop();
+          path.node.body.splice(insertIndex, 0, emptyLine, importDeclaration);
           importAdded = true;
         }
       },
     },
-    "FunctionDeclaration|FunctionExpression|ArrowFunctionExpression": (path) => {
+    "FunctionDeclaration|FunctionExpression|ArrowFunctionExpression": (
+      path
+    ) => {
       // Skip nested functions
       if (path.findParent((p) => tg.isFunction(p.node))) {
         return;
@@ -475,11 +475,13 @@ export function transformCode(
     const transformedCode = formatGeneratedCode(
       generatedCode,
       importAdded,
-      hookCallAdded
+      hookCallAdded,
+      hookName,
+      hookImport,
+      translationMethod,
     );
 
     return { code: transformedCode, extractedStrings, usedExistingKeysList };
-
   } catch (error) {
     console.error(`[${filePath}] Error during AST transformation: ${error}`);
     if (error instanceof Error) {

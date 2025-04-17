@@ -44,7 +44,7 @@ const SearchForm = () => {
 
 export default SearchForm;`
     // 使用该内容作为测试
-    const tempFile = createTempFile(code);
+    const tempFile = createTempFile(codeContent);
     tempFiles.push(tempFile);
     let id = 1;
     const keys = {};
@@ -313,7 +313,7 @@ export default SearchForm;`
     );
     // 2. Check for hook call in ComponentA
     expect(result.code).toMatch(
-      /function ComponentA\(\) \{\s*const \{ t \} = useTranslation\(\);\s*const message = t\(['"]Message A['"]\);/s
+      /function ComponentA\(\) \{\s*const \{\s*t\s*} = useTranslation\(\);\s*const message = t\(['"]Message A['"]\);/s
     );
     // Check transformations in ComponentA
     expect(result.code).toMatch(/title=\{t\(['"]Title A['"]\)\}/);
@@ -321,7 +321,7 @@ export default SearchForm;`
 
     // 3. Check for hook call in ComponentB
     expect(result.code).toMatch(
-      /const ComponentB = \(\) => \{\s*const \{ t \} = useTranslation\(\);\s*return \(/s
+      /const ComponentB = \(\) => \{\s*const \{\s*t\s*} = useTranslation\(\);\s*return \(/s
     );
     // Check transformations in ComponentB
     expect(result.code).toMatch(/aria-label=\{t\(['"]Label B['"]\)\}/);
@@ -373,7 +373,7 @@ export default SearchForm;`
     // Import and hook should be added to component
     expect(result.code).toContain("import { useTranslation } from");
     expect(result.code).toMatch(
-      /function MyComponent\(\) \{\s*const \{ t \} = useTranslation\(\);/
+      /function MyComponent\(\) \{\s*const \{\s*t\s*} = useTranslation\(\);/
     );
 
     // Hook should NOT be added to the internal formatMessage function
@@ -432,7 +432,7 @@ export default SearchForm;`
 
     // 验证添加的hook调用格式正确
     expect(result.code).toMatch(
-      /function MyComponent\(\) \{\s*const \{ t \} = useTranslation\(\);/
+      /function MyComponent\(\) \{\s*const \{\s*t\s*} = useTranslation\(\);/
     );
   });
 
@@ -525,7 +525,7 @@ export default SearchForm;`
     // 3. Check Hook/Import (should still be added correctly)
     expect(result.code).toContain("import { useTranslations } from");
     expect(result.code).toMatch(
-      /function MyComponent\(\) \{\s*const \{\s* t \s*} = useTranslations\(\);/
+      /function MyComponent\(\) \{\s*const \{\s*t\s*} = useTranslations\(\);/
     );
   });
   test("should handle JSX attributes with single quotes correctly", () => {
@@ -572,7 +572,7 @@ export default SearchForm;`
 
     // Check Hook/Import were added
     expect(result.code).toContain("import { useTranslation } from");
-    expect(result.code).toMatch(/function InputComponent\(\) \{\s*const \{ t \} = useTranslation\(\);/);
+    expect(result.code).toMatch(/function InputComponent\(\) \{\s*const \{\s*t\s*} = useTranslation\(\);/);
   });
   
   test("should handle arrow function components correctly", () => {
@@ -612,7 +612,7 @@ export default SearchForm;`
     // 1. Check Hook/Import were added correctly inside the arrow function
     expect(result.code).toContain('import { useTranslations } from "next-intl";');
     // Check hook call is right after the opening brace of the arrow function body
-    expect(result.code).toMatch(/const ArrowComponent = \(\{ initialCount \}\) => \{\s*const \{ t \} = useTranslations\(\);/);
+    expect(result.code).toMatch(/const ArrowComponent = \(\{ initialCount \}\) => \{\s*const \{\s*t\s*} = useTranslations\(\);/);
 
     // 2. Check Transformations
     expect(result.code).toMatch(/const label = t\(['"]Counter Label['"]\);/); // String literal
@@ -698,5 +698,54 @@ export default SearchForm;`
     expect(result.extractedStrings.length).toBe(2);
     expect(result.extractedStrings[0].value).toBe("Hello Default");
     expect(result.extractedStrings[1].value).toBe("Page Title Default");
+  });
+});
+describe("AST import/hook formatting", () => {
+  test("should ensure import and hook call are on their own lines (demo.tsx)", () => {
+    const demoCode = `
+'use client'
+import React, { useState } from 'react';
+import { useDebouncedCallback } from "use-debounce";
+import { Input } from 'components/ui/input';
+const SearchForm = () => {
+  return <input className="w-52" placeholder="___请输入名称___" />;
+};
+
+export default SearchForm;
+    `;
+    const tempFile = createTempFile(demoCode);
+
+    const result = transformCode(tempFile, {
+      translationMethod: "t",
+      hookName: "useTranslations",
+      hookImport: "next-intl",
+    });
+
+    // 1. 检查导入语句是否独占一行
+    const lines = result.code.split("\n");
+    const importLineIndex = lines.findIndex(
+      (line) =>
+        line.trim() === 'import { useTranslations } from "next-intl";'
+    );
+    expect(importLineIndex).toBeGreaterThan(-1);
+    // 上下行都应该是空行或其他import结尾
+    if (importLineIndex > 0) {
+      expect(lines[importLineIndex - 1].trim()).not.toMatch(/[^;]$/); // 上一行以;结尾或空
+    }
+    if (importLineIndex < lines.length - 1) {
+      expect(lines[importLineIndex + 1].trim()).not.toMatch(/^import /); // 下一行不是import开头
+    }
+
+    // 2. 检查hook调用语句是否独占一行
+    const hookLine = 'const { t } = useTranslations();';
+    const hookLineIndex = lines.findIndex((line) => line.trim() === hookLine);
+    expect(hookLineIndex).toBeGreaterThan(-1);
+    // 上下行应该是函数体的花括号或空行
+    if (hookLineIndex > 0) {
+      expect(lines[hookLineIndex - 1].trim()).toMatch(/{$/);
+    }
+
+    // 3. 检查替换是否正确
+    expect(result.code).toContain('t("请输入名称")');
   });
 });
