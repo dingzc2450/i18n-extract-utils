@@ -37,12 +37,12 @@ describe("Context-Aware Replacements", () => {
     const filePath = path.resolve(__dirname, "../samples/demo.tsx");
 
     const codeContent = fs.readFileSync(filePath, "utf8");
-    const code =`
+    const code = `
 const SearchForm = () => {
   return <input className="w-52" placeholder="___请输入名称___" />;
 };
 
-export default SearchForm;`
+export default SearchForm;`;
     // 使用该内容作为测试
     const tempFile = createTempFile(codeContent);
     tempFiles.push(tempFile);
@@ -469,7 +469,6 @@ export default SearchForm;`
       hookName: "useTranslations",
       generateKey: generateTestKey,
     });
-  
 
     const expectedKey = generateTestKey("Duplicate Text", tempFile); // Calculate the expected key
 
@@ -572,9 +571,11 @@ export default SearchForm;`
 
     // Check Hook/Import were added
     expect(result.code).toContain("import { useTranslation } from");
-    expect(result.code).toMatch(/function InputComponent\(\) \{\s*const \{\s*t\s*} = useTranslation\(\);/);
+    expect(result.code).toMatch(
+      /function InputComponent\(\) \{\s*const \{\s*t\s*} = useTranslation\(\);/
+    );
   });
-  
+
   test("should handle arrow function components correctly", () => {
     const code = `
       import React from 'react';
@@ -610,19 +611,25 @@ export default SearchForm;`
     });
 
     // 1. Check Hook/Import were added correctly inside the arrow function
-    expect(result.code).toContain('import { useTranslations } from "next-intl";');
+    expect(result.code).toContain(
+      'import { useTranslations } from "next-intl";'
+    );
     // Check hook call is right after the opening brace of the arrow function body
-    expect(result.code).toMatch(/const ArrowComponent = \(\{ initialCount \}\) => \{\s*const \{\s*t\s*} = useTranslations\(\);/);
+    expect(result.code).toMatch(
+      /const ArrowComponent = \(\{ initialCount \}\) => \{\s*const \{\s*t\s*} = useTranslations\(\);/
+    );
 
     // 2. Check Transformations
     expect(result.code).toMatch(/const label = t\(['"]Counter Label['"]\);/); // String literal
-    expect(result.code).toMatch(/<p>\{t\(['"]Current count['"]\)\}: \{count\}<\/p>/); // JSX Text
+    expect(result.code).toMatch(
+      /<p>\{t\(['"]Current count['"]\)\}: \{count\}<\/p>/
+    ); // JSX Text
     expect(result.code).toMatch(/aria-label=\{t\(['"]Increment count['"]\)\}/); // JSX Attribute
     expect(result.code).toMatch(/\{t\(['"]Increment['"]\)\}/); // JSX Text inside button
 
     // 3. Check Extraction
     expect(result.extractedStrings.length).toBe(4);
-    expect(result.extractedStrings.map(s => s.value)).toEqual(
+    expect(result.extractedStrings.map((s) => s.value)).toEqual(
       expect.arrayContaining([
         "Counter Label",
         "Current count",
@@ -631,15 +638,15 @@ export default SearchForm;`
       ])
     );
     // Check default keys
-    result.extractedStrings.forEach(s => expect(s.key).toBe(s.value));
+    result.extractedStrings.forEach((s) => expect(s.key).toBe(s.value));
   });
-  test('shoule handle nested components correctly', () => {
-    const code =`
+  test("shoule handle nested components correctly", () => {
+    const code = `
     const SearchForm = () => {
       return <input className="w-52" placeholder="___请输入名称___" />;
     };
     
-    export default SearchForm;`
+    export default SearchForm;`;
     const tempFile = createTempFile(code);
     tempFiles.push(tempFile);
     let id = 1;
@@ -651,8 +658,10 @@ export default SearchForm;`
       generateKey: (value) => keys[value] || (keys[value] = id++),
     });
     // 测试result.code中相应内容是否有转换成功
-    expect(result.code).toMatch(/import { useTranslations } from ["']next-intl["'];/);
-    expect(result.code).toContain('useTranslations()')
+    expect(result.code).toMatch(
+      /import { useTranslations } from ["']next-intl["'];/
+    );
+    expect(result.code).toContain("useTranslations()");
     expect(result.code).toMatch(/placeholder=\{t\(\d\)\}/);
     expect(result.code).toMatch(/<input className="w-52"/);
     // 测试result.extractedStrings中是否有提取到相应内容
@@ -684,20 +693,118 @@ export default SearchForm;`
     });
 
     // 1. Check Import
-    expect(result.code).toContain('import { useTranslations } from "my-i18n-lib";');
+    expect(result.code).toContain(
+      'import { useTranslations } from "my-i18n-lib";'
+    );
 
     // 2. Check Hook Call - Should be const t = useTranslations();
-    expect(result.code).toMatch(/function MyComponent\(\) \{\s*const t = useTranslations\(\);/);
+    expect(result.code).toMatch(
+      /function MyComponent\(\) \{\s*const t = useTranslations\(\);/
+    );
     expect(result.code).not.toMatch(/const \{.*?\} = useTranslations\(\);/); // Should NOT be destructuring
 
     // 3. Check Transformations - Should still use t("key")
     expect(result.code).toMatch(/const message = t\(['"]Hello Default['"]\);/);
-    expect(result.code).toMatch(/<h1>\{t\(['"]Page Title Default['"]\)\}<\/h1>/);
+    expect(result.code).toMatch(
+      /<h1>\{t\(['"]Page Title Default['"]\)\}<\/h1>/
+    );
 
     // 4. Check Extraction
     expect(result.extractedStrings.length).toBe(2);
     expect(result.extractedStrings[0].value).toBe("Hello Default");
     expect(result.extractedStrings[1].value).toBe("Page Title Default");
+  });
+
+  test("should handle template literals with one interpolation", () => {
+    const code = `
+      function MyComponent({ label }) {
+        const text = \`___请选择\${label}___\`;
+        return <div>{text}</div>;
+      }
+    `;
+    const tempFile = createTempFile(code);
+    tempFiles.push(tempFile);
+
+    const result = transformCode(tempFile, {
+      translationMethod: "t",
+      hookName: "useTranslation",
+    });
+
+    // 检查替换
+    expect(result.code).toMatch(
+      /const text = t\(['"]请选择\{arg1}['"],\s*\{\s*arg1:\s*label\s*\}\);/
+    );
+    // 检查提取
+    expect(result.extractedStrings.length).toBe(1);
+    expect(result.extractedStrings[0].key).toBe("请选择{arg1}");
+    expect(result.extractedStrings[0].value).toBe("请选择${label}");
+  });
+
+  test("should handle template literals with multiple interpolations", () => {
+    const code = `
+      function MyComponent({ name, age }) {
+        const text = \`___你好, \${name}, \${age}___\`;
+        return <div>{text}</div>;
+      }
+    `;
+    const tempFile = createTempFile(code);
+    tempFiles.push(tempFile);
+
+    const result = transformCode(tempFile, {
+      translationMethod: "t",
+      hookName: "useTranslation",
+    });
+
+    expect(result.code).toMatch(
+      /const text = t\(['"]你好, \{arg1}, \{arg2}['"],\s*\{\s*arg1:\s*name,\s*arg2:\s*age\s*\}\);/
+    );
+    expect(result.extractedStrings.length).toBe(1);
+    expect(result.extractedStrings[0].key).toBe("你好, {arg1}, {arg2}");
+    expect(result.extractedStrings[0].value).toBe("你好, ${name}, ${age}");
+  });
+
+  test("should handle template literals with no interpolation as normal string", () => {
+    const code = `
+      function MyComponent() {
+        const text = \`___纯文本___\`;
+        return <div>{text}</div>;
+      }
+    `;
+    const tempFile = createTempFile(code);
+    tempFiles.push(tempFile);
+
+    const result = transformCode(tempFile, {
+      translationMethod: "t",
+      hookName: "useTranslation",
+    });
+
+    expect(result.code).toMatch(/const text = t\(['"]纯文本['"]\);/);
+    expect(result.extractedStrings.length).toBe(1);
+    expect(result.extractedStrings[0].key).toBe("纯文本");
+    expect(result.extractedStrings[0].value).toBe("纯文本");
+  });
+
+  test("should handle template literals with complex expressions", () => {
+    const code = `
+      function MyComponent({ user }) {
+        const text = \`___欢迎\${user.name + "!"}___\`;
+        return <div>{text}</div>;
+      }
+    `;
+    const tempFile = createTempFile(code);
+    tempFiles.push(tempFile);
+
+    const result = transformCode(tempFile, {
+      translationMethod: "t",
+      hookName: "useTranslation",
+    });
+
+    expect(result.code).toMatch(
+      /const text = t\(['"]欢迎\{arg1}['"],\s*\{\s*arg1:\s*user\.name \+ "!"/
+    );
+    expect(result.extractedStrings.length).toBe(1);
+    expect(result.extractedStrings[0].key).toBe("欢迎{arg1}");
+    expect(result.extractedStrings[0].value).toBe('欢迎${user.name + "!"}');
   });
 });
 describe("AST import/hook formatting", () => {
@@ -724,8 +831,7 @@ export default SearchForm;
     // 1. 检查导入语句是否独占一行
     const lines = result.code.split("\n");
     const importLineIndex = lines.findIndex(
-      (line) =>
-        line.trim() === 'import { useTranslations } from "next-intl";'
+      (line) => line.trim() === 'import { useTranslations } from "next-intl";'
     );
     expect(importLineIndex).toBeGreaterThan(-1);
     // 上下行都应该是空行或其他import结尾
@@ -737,7 +843,7 @@ export default SearchForm;
     }
 
     // 2. 检查hook调用语句是否独占一行
-    const hookLine = 'const { t } = useTranslations();';
+    const hookLine = "const { t } = useTranslations();";
     const hookLineIndex = lines.findIndex((line) => line.trim() === hookLine);
     expect(hookLineIndex).toBeGreaterThan(-1);
     // 上下行应该是函数体的花括号或空行
@@ -774,16 +880,26 @@ describe("i18n-extract-utils: custom hook context", () => {
     });
 
     // 检查自定义hook内的文本被替换
-    expect(result.code).toMatch(/const label = t\(['"]自定义hook内的文本['"]\);/);
+    expect(result.code).toMatch(
+      /const label = t\(['"]自定义hook内的文本['"]\);/
+    );
 
     // 检查hook和import只加在组件Demo内，不加在useCustomLogic内
     // Demo组件应有hook调用
-    expect(result.code).toMatch(/function Demo\(\) \{\s*const \{\s*t\s*\} = useTranslation\(\);/);
+    expect(result.code).toMatch(
+      /function Demo\(\) \{\s*const \{\s*t\s*\} = useTranslation\(\);/
+    );
     // useCustomLogic内应有hook调用
-    expect(result.code).toMatch(/function useCustomLogic\(\) \{\s*const \{\s*t\s*\} = useTranslation\(\);/);
+    expect(result.code).toMatch(
+      /function useCustomLogic\(\) \{\s*const \{\s*t\s*\} = useTranslation\(\);/
+    );
 
     // 检查import只加一次
-    expect(result.code.match(/import { useTranslation } from ['"]react-i18next['"];/g)?.length).toBe(1);
+    expect(
+      result.code.match(
+        /import { useTranslation } from ['"]react-i18next['"];/g
+      )?.length
+    ).toBe(1);
 
     // 检查自定义hook内是否缺少hook语句但依然使用了t函数
     const useCustomLogicBody = result.code.substring(
@@ -791,7 +907,7 @@ describe("i18n-extract-utils: custom hook context", () => {
       result.code.indexOf("function Demo()")
     );
     expect(useCustomLogicBody).toContain('t("自定义hook内的文本")');
-    expect(useCustomLogicBody).toContain('useTranslation()');
+    expect(useCustomLogicBody).toContain("useTranslation()");
 
     // 检查提取
     expect(result.extractedStrings.length).toBe(1);

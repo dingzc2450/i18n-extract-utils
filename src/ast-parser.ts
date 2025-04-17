@@ -200,15 +200,11 @@ function replaceStringsWithTCalls(
       // 判断是否有插值
       if (node.expressions.length === 0) {
         // 没有插值，等价于普通字符串，直接用 StringLiteral 逻辑
-        const raw = node.quasis.map(q => q.value.raw).join("");
+        const raw = node.quasis.map((q) => q.value.raw).join("");
         const pattern = options?.pattern
           ? new RegExp(options.pattern)
           : new RegExp(defaultPattern.source);
-        const matchResult = getTranslationMatch(
-          raw,
-          pattern,
-          valueToKeyMap
-        );
+        const matchResult = getTranslationMatch(raw, pattern, valueToKeyMap);
         if (matchResult) {
           path.replaceWith(
             createTranslationCall(translationMethod, matchResult.translationKey)
@@ -218,27 +214,26 @@ function replaceStringsWithTCalls(
         return;
       }
       // 有插值，才做参数对象处理
-      const raw = node.quasis.map(q => q.value.raw).join("${}");
+      const raw = node.quasis.map((q) => q.value.raw).join("${}");
       const pattern = options?.pattern
         ? new RegExp(options.pattern)
         : new RegExp(defaultPattern.source);
       const match = pattern.exec(raw.replace(/\$\{\}/g, "${arg}"));
       if (match) {
         let argIndex = 1;
-        let key = raw.replace(/\$\{\}/g, () => `{arg${argIndex++}}`);
+        // 1. 先去掉前后的___
+        let keyCore = match[1]; // match[1] 已经是去掉___的内容
+        // 2. 再将${}替换为{argN}
+        keyCore = keyCore.replace(/\$\{[^\}]+\}/g, () => `{arg${argIndex++}}`);
         const properties = node.expressions.map((expr, i) =>
-          t.objectProperty(
-            t.identifier(`arg${i + 1}`),
-            expr as t.Expression
-          )
+          t.objectProperty(t.identifier(`arg${i + 1}`), expr as t.Expression)
         );
         path.replaceWith(
           t.callExpression(
-            t.identifier(translationMethod === "default" ? "t" : translationMethod),
-            [
-              t.stringLiteral(key),
-              t.objectExpression(properties)
-            ]
+            t.identifier(
+              translationMethod === "default" ? "t" : translationMethod
+            ),
+            [t.stringLiteral(keyCore), t.objectExpression(properties)]
           )
         );
         modified = true;
@@ -331,7 +326,9 @@ function addHookAndImport(
         }
       },
     },
-    "FunctionDeclaration|FunctionExpression|ArrowFunctionExpression": (path) => {
+    "FunctionDeclaration|FunctionExpression|ArrowFunctionExpression": (
+      path
+    ) => {
       // 跳过嵌套函数
       if (path.findParent((p) => tg.isFunction(p.node))) {
         return;
@@ -343,9 +340,10 @@ function addHookAndImport(
 
       // 检查函数名
       if (
-        tg.isFunction(path.node) && 
-        (tg.isFunctionDeclaration(path.node) || tg.isFunctionExpression(path.node)) && 
-        path.node.id && 
+        tg.isFunction(path.node) &&
+        (tg.isFunctionDeclaration(path.node) ||
+          tg.isFunctionExpression(path.node)) &&
+        path.node.id &&
         /^use[A-Z\d_]/.test(path.node.id.name)
       ) {
         isCustomHook = true;
@@ -381,10 +379,10 @@ function addHookAndImport(
 
       // 组件 或 自定义hook且用到t()，都插入hook语句
       if (
-        ((returnsJSX || (isCustomHook && hasTCall)) &&
-          tg.isFunction(path.node) &&
-          path.node.body &&
-          tg.isBlockStatement(path.node.body))
+        (returnsJSX || (isCustomHook && hasTCall)) &&
+        tg.isFunction(path.node) &&
+        path.node.body &&
+        tg.isBlockStatement(path.node.body)
       ) {
         // Check if the hook call already exists
         let callExists = false;
@@ -524,7 +522,7 @@ export function transformCode(
       hookCallAdded,
       hookName,
       hookImport,
-      translationMethod,
+      translationMethod
     );
 
     return { code: transformedCode, extractedStrings, usedExistingKeysList };
