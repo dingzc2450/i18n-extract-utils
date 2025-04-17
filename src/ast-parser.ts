@@ -304,8 +304,7 @@ function addHookAndImport(
           } else if (lastDirectiveIndex !== -1) {
             insertIndex = lastDirectiveIndex + 1;
           }
-          const emptyLine = t.noop();
-          path.node.body.splice(insertIndex, 0, emptyLine, importDeclaration);
+          path.node.body.splice(insertIndex, 0, importDeclaration);
           importAdded = true;
         }
       },
