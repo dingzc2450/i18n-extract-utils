@@ -2,7 +2,7 @@ import { parse } from "@babel/parser";
 import traverse from "@babel/traverse";
 import * as t from "@babel/types";
 import generate from "@babel/generator";
-import { ExtractedString, TransformOptions } from "./types";
+import { ExtractedString, TransformOptions, UsedExistingKey } from "./types";
 import fs from "fs";
 import { extractStringsFromCode, getDefaultPattern } from "./string-extractor";
 import { hasTranslationHook } from "./hook-utils";
@@ -56,12 +56,22 @@ function warnNoKey(filePath: string, text: string, context: string) {
 
 export function transformCode(
   filePath: string,
-  options: TransformOptions
-): { code: string; extractedStrings: ExtractedString[] } {
+  options: TransformOptions,
+  existingValueToKey?: Map<string, string | number>
+): {
+  code: string;
+  extractedStrings: ExtractedString[];
+  usedExistingKeysList: UsedExistingKey[];
+} {
   const code = fs.readFileSync(filePath, "utf8");
 
   // 1. Extract strings AND generate keys first
-  const extractedStrings = extractStringsFromCode(code, filePath, options);
+  const { extractedStrings, usedExistingKeysList } = extractStringsFromCode(
+    code,
+    filePath,
+    options,
+    existingValueToKey
+  );
 
   const translationMethod = options.translationMethod || "t";
   const hookName = options.hookName || "useTranslation";
@@ -69,7 +79,7 @@ export function transformCode(
   const defaultPattern = getDefaultPattern();
 
   if (extractedStrings.length === 0) {
-    return { code, extractedStrings };
+    return { code, extractedStrings, usedExistingKeysList };
   }
 
   // Create a map for quick lookup of key by value during traversal
@@ -91,11 +101,18 @@ export function transformCode(
           const testPattern = options?.pattern
             ? new RegExp(options.pattern)
             : new RegExp(defaultPattern.source);
-          const matchResult = getTranslationMatch(attrValue, testPattern, valueToKeyMap);
+          const matchResult = getTranslationMatch(
+            attrValue,
+            testPattern,
+            valueToKeyMap
+          );
 
           if (matchResult) {
             path.node.value = t.jsxExpressionContainer(
-              createTranslationCall(translationMethod, matchResult.translationKey)
+              createTranslationCall(
+                translationMethod,
+                matchResult.translationKey
+              )
             );
             modified = true;
           } else {
@@ -119,7 +136,11 @@ export function transformCode(
         const testPattern = options?.pattern
           ? new RegExp(options.pattern)
           : new RegExp(defaultPattern.source);
-        const matchResult = getTranslationMatch(literalValue, testPattern, valueToKeyMap);
+        const matchResult = getTranslationMatch(
+          literalValue,
+          testPattern,
+          valueToKeyMap
+        );
 
         if (matchResult) {
           path.replaceWith(
@@ -208,11 +229,18 @@ export function transformCode(
           const testPattern = options?.pattern
             ? new RegExp(options.pattern)
             : new RegExp(defaultPattern.source);
-          const matchResult = getTranslationMatch(templateValue, testPattern, valueToKeyMap);
+          const matchResult = getTranslationMatch(
+            templateValue,
+            testPattern,
+            valueToKeyMap
+          );
 
           if (matchResult) {
             path.replaceWith(
-              createTranslationCall(translationMethod, matchResult.translationKey)
+              createTranslationCall(
+                translationMethod,
+                matchResult.translationKey
+              )
             );
             modified = true;
           } else {
@@ -227,7 +255,7 @@ export function transformCode(
 
     // If no strings were replaced by the first traversal, return original code
     if (!modified) {
-      return { code, extractedStrings };
+      return { code, extractedStrings, usedExistingKeysList };
     }
 
     // --- Hook Insertion Logic ---
@@ -380,7 +408,7 @@ export function transformCode(
       hookCallAdded
     );
 
-    return { code: transformedCode, extractedStrings };
+    return { code: transformedCode, extractedStrings, usedExistingKeysList };
   } catch (error) {
     console.error(`[${filePath}] Error during AST transformation: ${error}`);
     if (error instanceof Error) {
@@ -391,6 +419,6 @@ export function transformCode(
     );
     // 使用抽离的降级处理
     const transformedCode = fallbackTransform(code, extractedStrings, options);
-    return { code: transformedCode, extractedStrings };
+    return { code: transformedCode, extractedStrings, usedExistingKeysList };
   }
 }

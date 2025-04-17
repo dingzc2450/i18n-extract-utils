@@ -53,6 +53,15 @@ export interface TransformOptions {
    * @returns - The generated key (string or number) to use in the translation file.
    */
   generateKey?: (value: string, filePath: string) => string | number;
+  /**
+   * The path to the existing JSON file where translations are stored.
+   * This is used to check for existing translations and avoid duplicates.
+   * 
+   * 现有JSON文件的路径，用于存储翻译。
+   * 用于检查现有翻译并避免重复。
+   */
+  existingJsonPath?: string; // 新增：用户传递的已提取json路径
+
 }
 
 export interface ExtractedString {
@@ -61,4 +70,12 @@ export interface ExtractedString {
   filePath: string;
   line: number;
   column: number;
+}
+
+export interface UsedExistingKey {
+  filePath: string;
+  line: number;
+  column: number;
+  key: string | number;
+  value: string;
 }

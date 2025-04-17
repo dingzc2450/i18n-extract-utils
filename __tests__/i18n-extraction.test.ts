@@ -37,11 +37,11 @@ test("extractStringsFromCode should extract strings with ___pattern___", () => {
     }
   `;
   
-  const extracted = extractStringsFromCode(code, "test-file.tsx");
+  const {extractedStrings} = extractStringsFromCode(code, "test-file.tsx");
   
-  expect(extracted.length).toBe(2);
-  expect(extracted[0].value).toBe("Hello World");
-  expect(extracted[1].value).toBe("Welcome to our app");
+  expect(extractedStrings.length).toBe(2);
+  expect(extractedStrings[0].value).toBe("Hello World");
+  expect(extractedStrings[1].value).toBe("Welcome to our app");
 });
 
 test("transformCode should replace patterns with t() calls", () => {
