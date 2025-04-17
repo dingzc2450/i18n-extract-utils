@@ -195,31 +195,53 @@ function replaceStringsWithTCalls(
       }
     },
     TemplateLiteral(path) {
-      if (tg.isTaggedTemplateExpression(path.parent)) {
-        return;
-      }
-      if (path.node.quasis.length === 1 && path.node.expressions.length === 0) {
-        const templateValue = path.node.quasis[0].value.raw;
-        const testPattern = options?.pattern
+      if (tg.isTaggedTemplateExpression(path.parent)) return;
+      const node = path.node;
+      // 判断是否有插值
+      if (node.expressions.length === 0) {
+        // 没有插值，等价于普通字符串，直接用 StringLiteral 逻辑
+        const raw = node.quasis.map(q => q.value.raw).join("");
+        const pattern = options?.pattern
           ? new RegExp(options.pattern)
           : new RegExp(defaultPattern.source);
         const matchResult = getTranslationMatch(
-          templateValue,
-          testPattern,
+          raw,
+          pattern,
           valueToKeyMap
         );
-
         if (matchResult) {
           path.replaceWith(
             createTranslationCall(translationMethod, matchResult.translationKey)
           );
           modified = true;
-        } else {
-          const match = testPattern.exec(templateValue);
-          if (match && match[1] !== undefined) {
-            warnNoKey(filePath, match[1], "TemplateLiteral");
-          }
         }
+        return;
+      }
+      // 有插值，才做参数对象处理
+      const raw = node.quasis.map(q => q.value.raw).join("${}");
+      const pattern = options?.pattern
+        ? new RegExp(options.pattern)
+        : new RegExp(defaultPattern.source);
+      const match = pattern.exec(raw.replace(/\$\{\}/g, "${arg}"));
+      if (match) {
+        let argIndex = 1;
+        let key = raw.replace(/\$\{\}/g, () => `{arg${argIndex++}}`);
+        const properties = node.expressions.map((expr, i) =>
+          t.objectProperty(
+            t.identifier(`arg${i + 1}`),
+            expr as t.Expression
+          )
+        );
+        path.replaceWith(
+          t.callExpression(
+            t.identifier(translationMethod === "default" ? "t" : translationMethod),
+            [
+              t.stringLiteral(key),
+              t.objectExpression(properties)
+            ]
+          )
+        );
+        modified = true;
       }
     },
   });
