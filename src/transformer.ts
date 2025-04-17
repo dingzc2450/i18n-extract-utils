@@ -82,25 +82,28 @@ export async function processFiles(
     try {
       // 1. 用 ast-parser 做代码转换
       const result = transformCode(
-        file,
-        {
-          ...options,
-          // 这里 transformCode 内部应继续调用 extractStringsFromCode 并传递 existingValueToKey/usedExistingKeysList
-        },
-        existingValueToKey
+      file,
+      {
+        ...options,
+        // 这里 transformCode 内部应继续调用 extractStringsFromCode 并传递 existingValueToKey/usedExistingKeysList
+      },
+      existingValueToKey
       );
 
       if (result.extractedStrings.length > 0) {
-        extractedStrings = [...extractedStrings, ...result.extractedStrings];
-        usedExistingKeysList = [
-          ...usedExistingKeysList,
-          ...result.usedExistingKeysList,
-        ];
-        writeFileContent(file, result.code);
-        processedFiles++;
+      extractedStrings = [...extractedStrings, ...result.extractedStrings];
+      usedExistingKeysList = [
+        ...usedExistingKeysList,
+        ...result.usedExistingKeysList,
+      ];
+      writeFileContent(file, result.code);
+      processedFiles++;
       }
     } catch (error) {
       console.error(`Error processing file ${file}: ${error}`);
+      if (error instanceof Error && error.stack) {
+      console.error(error.stack);
+      }
     }
   }
 

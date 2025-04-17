@@ -1,6 +1,6 @@
 {
   "name": "i18n-extract-utils",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "React i18n extraction and transformation utility",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
