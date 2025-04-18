@@ -197,47 +197,84 @@ function replaceStringsWithTCalls(
     TemplateLiteral(path) {
       if (tg.isTaggedTemplateExpression(path.parent)) return;
       const node = path.node;
-      // 判断是否有插值
+
+      // Handle template literals WITHOUT interpolation (uses StringLiteral logic)
       if (node.expressions.length === 0) {
-        // 没有插值，等价于普通字符串，直接用 StringLiteral 逻辑
         const raw = node.quasis.map((q) => q.value.raw).join("");
         const pattern = options?.pattern
           ? new RegExp(options.pattern)
           : new RegExp(defaultPattern.source);
+        // Use getTranslationMatch which looks up the key in valueToKeyMap
         const matchResult = getTranslationMatch(raw, pattern, valueToKeyMap);
         if (matchResult) {
+          // createTranslationCall uses the found key (matchResult.translationKey)
           path.replaceWith(
             createTranslationCall(translationMethod, matchResult.translationKey)
           );
           modified = true;
+        } else {
+          // Optional: Warn if pattern matches but key not found (already handled in getTranslationMatch?)
+          const match = pattern.exec(raw);
+          if (match && match[1] !== undefined && !valueToKeyMap.has(match[1])) {
+             warnNoKey(filePath, match[1], "TemplateLiteral (no interpolation)");
+          }
         }
-        return;
+        return; // Done processing this node
       }
-      // 有插值，才做参数对象处理
-      const raw = node.quasis.map((q) => q.value.raw).join("${}");
+
+      // Handle template literals WITH interpolation
+      const rawStringStructure = node.quasis.map((q) => q.value.raw).join("${}"); // e.g., "___请选择${}___"
       const pattern = options?.pattern
         ? new RegExp(options.pattern)
         : new RegExp(defaultPattern.source);
-      const match = pattern.exec(raw.replace(/\$\{\}/g, "${arg}"));
-      if (match) {
+
+      // Match the raw structure to extract the content inside delimiters
+      const structureMatch = pattern.exec(rawStringStructure);
+      if (structureMatch && structureMatch[1] !== undefined) {
+        const contentInsideDelimitersWithPlaceholders = structureMatch[1]; // e.g., "请选择${}"
+
+        // Create the placeholder key string (e.g., "请选择{arg1}") used for map lookup
         let argIndex = 1;
-        // 1. 先去掉前后的___
-        let keyCore = match[1]; // match[1] 已经是去掉___的内容
-        // 2. 再将${}替换为{argN}
-        keyCore = keyCore.replace(/\$\{[^\}]+\}/g, () => `{arg${argIndex++}}`);
-        const properties = node.expressions.map((expr, i) =>
-          t.objectProperty(t.identifier(`arg${i + 1}`), expr as t.Expression)
+        const placeholderKeyString = contentInsideDelimitersWithPlaceholders.replace(
+          /\$\{\}/g, // Replace the simple placeholder used for structure matching
+          () => `{arg${argIndex++}}`
         );
-        path.replaceWith(
-          t.callExpression(
-            t.identifier(
-              translationMethod === "default" ? "t" : translationMethod
-            ),
-            [t.stringLiteral(keyCore), t.objectExpression(properties)]
-          )
-        );
-        modified = true;
+
+        // *** FIX: Look up the FINAL key using the placeholderKeyString ***
+        const finalTranslationKey = valueToKeyMap.get(placeholderKeyString);
+
+        if (finalTranslationKey !== undefined) {
+          // Key found (could be generated or from existing map)
+          const properties = node.expressions.map((expr, i) =>
+            t.objectProperty(
+              t.identifier(`arg${i + 1}`),
+              expr as t.Expression // Assuming expressions are valid Babel expressions
+            )
+          );
+
+          // Create the t() call using the FINAL key
+          path.replaceWith(
+            t.callExpression(
+              t.identifier(
+                translationMethod === "default" ? "t" : translationMethod
+              ),
+              [
+                // Use the final key found from the map
+                typeof finalTranslationKey === "string"
+                  ? t.stringLiteral(finalTranslationKey)
+                  : t.numericLiteral(finalTranslationKey),
+                t.objectExpression(properties),
+              ]
+            )
+          );
+          modified = true;
+        } else {
+          // Key not found in map, issue a warning
+          // This might happen if extraction failed or map is inconsistent
+          warnNoKey(filePath, placeholderKeyString, "TemplateLiteral (interpolated)");
+        }
       }
+      // If pattern didn't match the structure, do nothing
     },
   });
 
