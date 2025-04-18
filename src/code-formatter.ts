@@ -12,11 +12,19 @@ import generate from "@babel/generator";
  */
 export function formatGeneratedCode(
   code: string,
-  importAdded: boolean,
-  hookCallAdded: boolean,
-  hookName: string,
-  hookImport: string,
-  translationMethod?: string
+  {
+    importAdded,
+    hookCallAdded,
+    hookName,
+    hookImport,
+    translationMethod,
+  }: {
+    importAdded: boolean;
+    hookCallAdded: boolean;
+    hookName: string;
+    hookImport: string;
+    translationMethod?: string;
+  }
 ): string {
   let formattedCode = code;
 
@@ -100,7 +108,8 @@ export function formatGeneratedCode(
           }
 
           if (!isHasNewLine) {
-            lines[i] = line.slice(0, startIndex) + "\n" + line.slice(startIndex);
+            lines[i] =
+              line.slice(0, startIndex) + "\n" + line.slice(startIndex);
           }
         }
       }

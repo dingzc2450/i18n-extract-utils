@@ -4,7 +4,7 @@ import * as t from "@babel/types";
 import generate from "@babel/generator";
 import { ExtractedString, TransformOptions, UsedExistingKey } from "./types";
 import fs from "fs";
-import { extractStringsFromCode, getDefaultPattern } from "./string-extractor";
+import {  getDefaultPattern } from "./string-extractor";
 import { hasTranslationHook } from "./hook-utils";
 import { formatGeneratedCode } from "./code-formatter";
 import * as tg from "./babel-type-guards"; // 引入类型辅助工具
@@ -67,218 +67,369 @@ function warnNoKey(filePath: string, text: string, context: string) {
  */
 function replaceStringsWithTCalls(
   ast: t.File,
-  valueToKeyMap: Map<string, string | number>,
+  existingValueToKey: Map<string, string | number>, // Pre-built from existing translations
+  extractedStrings: ExtractedString[], // To be populated
+  usedExistingKeysList: UsedExistingKey[], // To be populated
   translationMethod: string,
   options: TransformOptions,
   filePath: string
 ): { modified: boolean } {
   let modified = false;
-  const defaultPattern = getDefaultPattern(); // Get default pattern if needed
+  const generatedKeysMap = new Map<string, string | number>(); // Track keys generated in this file run
+
+  // 确定实际使用的翻译函数名，因为 'default' 会映射到 't'
+  const effectiveMethodName =
+    translationMethod === "default" ? "t" : translationMethod;
+
+  // --- 获取全局匹配模式 ---
+  const globalPattern = options?.pattern
+    ? new RegExp(options.pattern, "g") // 确保是全局模式
+    : new RegExp(getDefaultPattern().source, "g"); // 确保是全局模式
 
   traverse(ast, {
-    JSXAttribute(path) {
-      if (path.node.value && tg.isStringLiteral(path.node.value)) {
-        const attrValue = path.node.value.value;
-        const testPattern = options?.pattern
-          ? new RegExp(options.pattern)
-          : new RegExp(defaultPattern.source);
-        const matchResult = getTranslationMatch(
-          attrValue,
-          testPattern,
-          valueToKeyMap
-        );
-
-        if (matchResult) {
-          path.node.value = t.jsxExpressionContainer(
-            createTranslationCall(translationMethod, matchResult.translationKey)
-          );
-          modified = true;
-        } else {
-          const match = testPattern.exec(attrValue);
-          if (match && match[1] !== undefined) {
-            warnNoKey(filePath, match[1], "JSX attribute");
-          }
-        }
-      }
-    },
+    // --- StringLiteral Visitor ---
     StringLiteral(path) {
+      // --- 新增的检查 ---
+      // 检查父节点是否为我们正在使用的翻译函数的调用表达式
+      if (
+        tg.isCallExpression(path.parent) &&
+        tg.isIdentifier(path.parent.callee) &&
+        path.parent.callee.name === effectiveMethodName && // 使用实际的函数名比较
+        path.listKey === "arguments" // 确保是参数部分
+      ) {
+        // 如果这个 StringLiteral 是 t(...) 的参数，直接跳过，不处理
+        return;
+      }
+      // --- 检查结束 ---
+
+      // --- 原有的检查 ---
       if (
         tg.isJSXAttribute(path.parent) ||
         tg.isImportDeclaration(path.parent) ||
         tg.isExportDeclaration(path.parent)
       ) {
-        return;
+        return; // 跳过 JSX 属性、导入/导出声明
       }
-      const literalValue = path.node.value;
-      const testPattern = options?.pattern
-        ? new RegExp(options.pattern)
-        : new RegExp(defaultPattern.source);
-      const matchResult = getTranslationMatch(
-        literalValue,
-        testPattern,
-        valueToKeyMap
+      // --- 原有检查结束 ---
+
+      const nodeValue = path.node.value;
+      const location = {
+        filePath,
+        line: path.node.loc?.start.line ?? 0,
+        column: path.node.loc?.start.column ?? 0,
+      };
+
+      const translationKey = getKeyAndRecord(
+        nodeValue, // Pass the original value for pattern matching
+        location,
+        existingValueToKey,
+        generatedKeysMap,
+        extractedStrings,
+        usedExistingKeysList,
+        options
       );
 
-      if (matchResult) {
+      if (translationKey !== undefined) {
         path.replaceWith(
-          createTranslationCall(translationMethod, matchResult.translationKey)
+          createTranslationCall(translationMethod, translationKey)
         );
         modified = true;
-      } else {
-        const match = testPattern.exec(literalValue);
-        if (match && match[1] !== undefined) {
-          warnNoKey(filePath, match[1], "StringLiteral");
+      }
+    },
+
+    // --- JSXAttribute Visitor ---
+    JSXAttribute(path) {
+      if (path.node.value && tg.isStringLiteral(path.node.value)) {
+        const nodeValue = path.node.value.value;
+        const location = {
+          filePath,
+          line: path.node.loc?.start.line ?? 0,
+          column: path.node.loc?.start.column ?? 0,
+        };
+
+        const translationKey = getKeyAndRecord(
+          nodeValue, // Pass original value
+          location,
+          existingValueToKey,
+          generatedKeysMap,
+          extractedStrings,
+          usedExistingKeysList,
+          options
+        );
+
+        if (translationKey !== undefined) {
+          path.node.value = t.jsxExpressionContainer(
+            createTranslationCall(translationMethod, translationKey)
+          );
+          modified = true;
         }
       }
     },
-    JSXText(path) {
-      const textValue = path.node.value;
-      const globalPattern = options?.pattern
-        ? new RegExp(options.pattern, "g")
-        : new RegExp(defaultPattern.source, "g");
-      let match;
-      let lastIndex = 0;
-      const newNodes: (t.JSXText | t.JSXExpressionContainer)[] = [];
-      let textModified = false;
 
+    // --- JSXText Visitor ---
+    JSXText(path) {
+      const nodeValue = path.node.value;
+      const location = {
+        filePath,
+        line: path.node.loc?.start.line ?? 0,
+        column: path.node.loc?.start.column ?? 0, // 列可能需要更精确计算
+      };
+
+      // 重置全局正则表达式的 lastIndex
       globalPattern.lastIndex = 0;
 
-      while ((match = globalPattern.exec(textValue)) !== null) {
-        if (match[1] === undefined) continue;
+      // 检查是否包含需要翻译的模式
+      if (!globalPattern.test(nodeValue)) {
+        return; // 如果完全不包含模式，直接跳过
+      }
 
-        const textToTranslate = match[1];
-        const translationKey = valueToKeyMap.get(textToTranslate);
+      // 重置 lastIndex 以便重新开始匹配
+      globalPattern.lastIndex = 0;
+
+      const newNodes: (t.JSXText | t.JSXExpressionContainer)[] = [];
+      let lastIndex = 0;
+      let match;
+
+      // 循环查找所有匹配项
+      while ((match = globalPattern.exec(nodeValue)) !== null) {
+        const matchStartIndex = match.index;
+        const matchedTextWithDelimiters = match[0]; // e.g., "___Hello___"
+        const textToTranslate = match[1]; // e.g., "Hello"
+
+        // 1. 添加匹配项之前的文本（如果存在）
+        if (matchStartIndex > lastIndex) {
+          const textBefore = nodeValue.slice(lastIndex, matchStartIndex);
+          if (/\S/.test(textBefore)) { // 仅添加非纯空白文本
+            newNodes.push(t.jsxText(textBefore));
+          }
+        }
+
+        // 2. 处理匹配项，获取 key 并创建 JSXExpressionContainer
+        // 注意：这里我们用 textToTranslate (内部文本) 去获取 key
+        const translationKey = getKeyAndRecord(
+          matchedTextWithDelimiters, // 传递原始匹配项给 getKeyAndRecord 进行模式确认和提取
+          { ...location, column: location.column + matchStartIndex }, // 调整列号
+          existingValueToKey,
+          generatedKeysMap,
+          extractedStrings,
+          usedExistingKeysList,
+          options
+        );
 
         if (translationKey !== undefined) {
-          const matchStart = match.index;
-          const matchEnd = matchStart + match[0].length;
-
-          if (matchStart > lastIndex) {
-            const precedingText = textValue.substring(lastIndex, matchStart);
-            if (/\S/.test(precedingText)) {
-              newNodes.push(t.jsxText(precedingText));
-            }
-          }
-
           newNodes.push(
             t.jsxExpressionContainer(
               createTranslationCall(translationMethod, translationKey)
             )
           );
-          lastIndex = matchEnd;
-          textModified = true;
+          modified = true; // 标记发生了修改
         } else {
-          warnNoKey(filePath, textToTranslate, "JSXText");
-          lastIndex = match.index + match[0].length;
-          globalPattern.lastIndex = lastIndex;
+          // 如果 getKeyAndRecord 返回 undefined (理论上不应发生，因为 globalPattern 已匹配)
+          // 则将原始匹配文本添加回去，避免丢失
+           if (/\S/.test(matchedTextWithDelimiters)) {
+               newNodes.push(t.jsxText(matchedTextWithDelimiters));
+           }
         }
+
+        // 更新 lastIndex 到当前匹配项之后
+        lastIndex = globalPattern.lastIndex;
       }
 
-      if (lastIndex < textValue.length) {
-        const remainingText = textValue.substring(lastIndex);
-        if (/\S/.test(remainingText)) {
-          newNodes.push(t.jsxText(remainingText));
-        }
+      // 3. 添加最后一个匹配项之后的文本（如果存在）
+      if (lastIndex < nodeValue.length) {
+        const textAfter = nodeValue.slice(lastIndex);
+         if (/\S/.test(textAfter)) { // 仅添加非纯空白文本
+            newNodes.push(t.jsxText(textAfter));
+         }
       }
 
-      if (textModified && newNodes.length > 0) {
-        if (
-          newNodes.length === 1 &&
-          tg.isJSXText(newNodes[0]) &&
-          newNodes[0].value === textValue
-        ) {
-          // No effective change
-        } else {
-          path.replaceWithMultiple(newNodes);
-          modified = true;
-        }
+      // 4. 如果生成了新节点，则替换原节点
+      if (newNodes.length > 0 && modified) { // 只有在实际发生替换时才执行 replaceWithMultiple
+        path.replaceWithMultiple(newNodes);
       }
-    },
+    }, // --- JSXText Visitor 结束 ---
+
+    // --- TemplateLiteral Visitor ---
     TemplateLiteral(path) {
       if (tg.isTaggedTemplateExpression(path.parent)) return;
       const node = path.node;
+      const location = {
+        filePath,
+        line: path.node.loc?.start.line ?? 0,
+        column: path.node.loc?.start.column ?? 0,
+      };
 
-      // Handle template literals WITHOUT interpolation (uses StringLiteral logic)
+      // --- 处理没有插值的模板字符串 ---
       if (node.expressions.length === 0) {
-        const raw = node.quasis.map((q) => q.value.raw).join("");
-        const pattern = options?.pattern
-          ? new RegExp(options.pattern)
-          : new RegExp(defaultPattern.source);
-        // Use getTranslationMatch which looks up the key in valueToKeyMap
-        const matchResult = getTranslationMatch(raw, pattern, valueToKeyMap);
-        if (matchResult) {
-          // createTranslationCall uses the found key (matchResult.translationKey)
-          path.replaceWith(
-            createTranslationCall(translationMethod, matchResult.translationKey)
-          );
-          modified = true;
-        } else {
-          // Optional: Warn if pattern matches but key not found (already handled in getTranslationMatch?)
-          const match = pattern.exec(raw);
-          if (match && match[1] !== undefined && !valueToKeyMap.has(match[1])) {
-             warnNoKey(filePath, match[1], "TemplateLiteral (no interpolation)");
-          }
-        }
-        return; // Done processing this node
-      }
+        // 1. 获取原始的、包含 ___ 的字符串值
+        const originalRawString = node.quasis.map((q) => q.value.raw).join(""); // e.g., "___Error occurred___"
 
-      // Handle template literals WITH interpolation
-      const rawStringStructure = node.quasis.map((q) => q.value.raw).join("${}"); // e.g., "___请选择${}___"
-      const pattern = options?.pattern
-        ? new RegExp(options.pattern)
-        : new RegExp(defaultPattern.source);
-
-      // Match the raw structure to extract the content inside delimiters
-      const structureMatch = pattern.exec(rawStringStructure);
-      if (structureMatch && structureMatch[1] !== undefined) {
-        const contentInsideDelimitersWithPlaceholders = structureMatch[1]; // e.g., "请选择${}"
-
-        // Create the placeholder key string (e.g., "请选择{arg1}") used for map lookup
-        let argIndex = 1;
-        const placeholderKeyString = contentInsideDelimitersWithPlaceholders.replace(
-          /\$\{\}/g, // Replace the simple placeholder used for structure matching
-          () => `{arg${argIndex++}}`
+        // 2. 使用 getKeyAndRecord 来处理：它会匹配模式、提取内部内容、查找/生成 key
+        const translationKey = getKeyAndRecord(
+          originalRawString, // 传递原始字符串给 getKeyAndRecord
+          location,
+          existingValueToKey,
+          generatedKeysMap,
+          extractedStrings,
+          usedExistingKeysList,
+          options
         );
 
-        // *** FIX: Look up the FINAL key using the placeholderKeyString ***
-        const finalTranslationKey = valueToKeyMap.get(placeholderKeyString);
-
-        if (finalTranslationKey !== undefined) {
-          // Key found (could be generated or from existing map)
-          const properties = node.expressions.map((expr, i) =>
-            t.objectProperty(
-              t.identifier(`arg${i + 1}`),
-              expr as t.Expression // Assuming expressions are valid Babel expressions
-            )
+        // 3. 如果 getKeyAndRecord 成功找到了 key（说明模式匹配且 key 已处理）
+        if (translationKey !== undefined) {
+          // 4. 使用返回的正确 key 进行替换
+          path.replaceWith(
+            createTranslationCall(translationMethod, translationKey)
           );
+          modified = true;
+        }
+        // 如果 translationKey 是 undefined，说明原始字符串不匹配 ___...___ 模式，不做任何事
+        return; // 处理完毕，退出此节点的访问
+      }
 
-          // Create the t() call using the FINAL key
+      // --- 处理带有插值的模板字符串 (修改后) ---
+      else {
+        // 1. 重构原始字符串结构，用于模式匹配 (例如 "___Select ${...}___")
+        let originalRawStringForPatternCheck = "";
+        node.quasis.forEach((quasi, i) => {
+          originalRawStringForPatternCheck += quasi.value.raw;
+          if (i < node.expressions.length) {
+            // 使用一个简单的、不会与真实代码冲突的占位符进行结构匹配
+            originalRawStringForPatternCheck += "${...}";
+          }
+        });
+
+        const pattern = options?.pattern
+          ? new RegExp(options.pattern)
+          : new RegExp(getDefaultPattern().source); // 非全局，用于单次匹配
+
+        // 2. 对原始结构进行模式匹配
+        const match = pattern.exec(originalRawStringForPatternCheck);
+
+        // 3. 检查是否匹配成功，并且捕获组 match[1] 存在
+        if (match && match[1] !== undefined) {
+          // 模式匹配成功！
+
+          // 4. 从 match[1] 获取 *内部* 内容结构 (例如 "Select ${...}")
+          const matchedContentStructure = match[1];
+
+          // 5. 将内部内容结构转换为标准的 canonicalValue (例如 "Select {arg1}")
+          //    这才是用于 key 查找/生成 和 存储到 extractedStrings 的值
+          let argIndex = 1;
+          const canonicalValue = matchedContentStructure.replace(
+            /\$\{\.\.\.\}/g, // 替换掉之前用于结构匹配的简单占位符
+            () => `{arg${argIndex++}}`
+          ); // 得到 "Select {arg1}"
+
+          // 6. 使用这个正确的 canonicalValue 进行 key 查找或生成
+          let translationKey: string | number | undefined;
+
+          if (existingValueToKey.has(canonicalValue)) {
+            // 查找现有 key
+            translationKey = existingValueToKey.get(canonicalValue)!;
+            // 记录使用情况 (如果需要)
+            if (!usedExistingKeysList.some((k) => k.key === translationKey && k.value === canonicalValue)) {
+              usedExistingKeysList.push({ ...location, key: translationKey, value: canonicalValue });
+            }
+          } else if (generatedKeysMap.has(canonicalValue)) {
+            // 复用本次运行中已生成的 key
+            translationKey = generatedKeysMap.get(canonicalValue)!;
+          } else {
+            // 生成新 key
+            translationKey = options.generateKey
+              ? options.generateKey(canonicalValue, location.filePath) // 使用正确的 canonicalValue 生成
+              : canonicalValue;
+            generatedKeysMap.set(canonicalValue, translationKey);
+            // 将带有 *正确* canonicalValue 的记录添加到 extractedStrings
+            if (!extractedStrings.some((s) => s.key === translationKey && s.value === canonicalValue)) {
+              extractedStrings.push({ key: translationKey, value: canonicalValue, ...location });
+            }
+          }
+
+          // 7. 使用找到或生成的 translationKey 执行代码替换
+          const properties = node.expressions.map((expr, i) =>
+            t.objectProperty(t.identifier(`arg${i + 1}`), expr as t.Expression)
+          );
           path.replaceWith(
             t.callExpression(
               t.identifier(
                 translationMethod === "default" ? "t" : translationMethod
               ),
               [
-                // Use the final key found from the map
-                typeof finalTranslationKey === "string"
-                  ? t.stringLiteral(finalTranslationKey)
-                  : t.numericLiteral(finalTranslationKey),
+                typeof translationKey === "string"
+                  ? t.stringLiteral(translationKey)
+                  : t.numericLiteral(translationKey),
                 t.objectExpression(properties),
               ]
             )
           );
           modified = true;
-        } else {
-          // Key not found in map, issue a warning
-          // This might happen if extraction failed or map is inconsistent
-          warnNoKey(filePath, placeholderKeyString, "TemplateLiteral (interpolated)");
         }
+        // 如果原始结构不匹配模式，则不进行任何操作
+        // Babel 会继续遍历插值表达式内部
       }
-      // If pattern didn't match the structure, do nothing
-    },
+    }, // --- TemplateLiteral Visitor 结束 ---
   });
 
   return { modified };
+}
+
+// Helper function to manage key lookup and recording
+function getKeyAndRecord(
+  originalNodeValue: string, // The raw value from the AST node (e.g., "___Hello___")
+  location: { filePath: string; line: number; column: number },
+  existingValueToKey: Map<string, string | number>,
+  generatedKeysMap: Map<string, string | number>, // Map for keys generated in *this* run
+  extractedStrings: ExtractedString[], // Array to add newly generated keys to
+  usedExistingKeysList: UsedExistingKey[], // Array to record usage of existing keys
+  options: TransformOptions
+): string | number | undefined {
+  // Return undefined if pattern doesn't match
+  const pattern = options?.pattern
+    ? new RegExp(options.pattern)
+    : new RegExp(getDefaultPattern().source); // Use non-global for single match test
+
+  const match = pattern.exec(originalNodeValue); // Test the original node value
+  if (!match || match[1] === undefined) {
+    return undefined; // Not a match for our pattern
+  }
+
+  // *** FIX: Derive the canonical value from the match ***
+  const canonicalValue = match[1]; // e.g., "Hello" or "Select {arg1}" (if pattern matches template literal structure)
+
+  // Now use canonicalValue for lookups and generation
+  if (existingValueToKey.has(canonicalValue)) {
+    const key = existingValueToKey.get(canonicalValue)!;
+    // Record usage if not already recorded for this specific key-value pair
+    if (
+      !usedExistingKeysList.some(
+        (k) => k.key === key && k.value === canonicalValue
+      )
+    ) {
+      usedExistingKeysList.push({ ...location, key, value: canonicalValue });
+    }
+    return key;
+  }
+
+  if (generatedKeysMap.has(canonicalValue)) {
+    return generatedKeysMap.get(canonicalValue)!; // Reuse key generated earlier in this file
+  }
+
+  // Generate new key using canonicalValue
+  const newKey = options.generateKey
+    ? options.generateKey(canonicalValue, location.filePath)
+    : canonicalValue;
+  generatedKeysMap.set(canonicalValue, newKey);
+
+  // Add to extractedStrings if it's the first time seeing this value/key in this file
+  if (
+    !extractedStrings.some(
+      (s) => s.key === newKey && s.value === canonicalValue
+    )
+  ) {
+    extractedStrings.push({ key: newKey, value: canonicalValue, ...location });
+  }
+  return newKey;
 }
 
 /**
@@ -477,6 +628,7 @@ function addHookAndImport(
 export function transformCode(
   filePath: string,
   options: TransformOptions,
+  // Renamed parameter for clarity: this map comes *only* from pre-existing translations
   existingValueToKey?: Map<string, string | number>
 ): {
   code: string;
@@ -484,25 +636,13 @@ export function transformCode(
   usedExistingKeysList: UsedExistingKey[];
 } {
   const code = fs.readFileSync(filePath, "utf8");
-
-  // 1. Extract strings AND generate keys first
-  const { extractedStrings, usedExistingKeysList } = extractStringsFromCode(
-    code,
-    filePath,
-    options,
-    existingValueToKey
-  );
-
   const translationMethod = options.translationMethod || "t";
   const hookName = options.hookName || "useTranslation";
   const hookImport = options.hookImport || "react-i18next";
 
-  if (extractedStrings.length === 0) {
-    return { code, extractedStrings, usedExistingKeysList };
-  }
-
-  // Create a map for quick lookup of key by value during traversal
-  const valueToKeyMap = new Map(extractedStrings.map((s) => [s.value, s.key]));
+  // Initialize lists to be populated during traversal
+  const extractedStrings: ExtractedString[] = [];
+  const usedExistingKeysList: UsedExistingKey[] = [];
 
   try {
     const ast = parse(code, {
@@ -510,26 +650,29 @@ export function transformCode(
       plugins: ["jsx", "typescript"],
     });
 
-    // --- Step 1: Replace Strings ---
+    // --- Step 1: Traverse, Extract, and Replace ---
     const { modified } = replaceStringsWithTCalls(
       ast,
-      valueToKeyMap,
+      existingValueToKey || new Map(), // Pass existing map or empty map
+      extractedStrings, // Pass array to be filled
+      usedExistingKeysList, // Pass array to be filled
       translationMethod,
       options,
       filePath
     );
 
-    // If no strings were replaced, return original code (or code after extraction if keys were generated)
-    if (!modified) {
-      // Generate code even if no replacements, in case comments/formatting changed
-      // let { code: generatedCode } = generate(ast, { /* ... generate options ... */ });
-      // Potentially format here if needed, though less critical if no changes
+    // If no strings were extracted/modified, return original code
+    if (!modified && extractedStrings.length === 0) {
+      // Check modified flag as well, in case only existing keys were used
       return { code, extractedStrings, usedExistingKeysList };
     }
 
     // --- Step 2: Add Hook and Import if needed ---
-    const hookAlreadyExists = hasTranslationHook(code, hookName); // Check original code
-    const needsHook = !hookAlreadyExists && modified;
+    // Check if hook needs to be added based on whether *any* modification happened
+    // or if strings were extracted (even if only existing keys were used, hook might be needed)
+    const hookAlreadyExists = hasTranslationHook(code, hookName);
+    const needsHook =
+      !hookAlreadyExists && (modified || extractedStrings.length > 0);
     let importAdded = false;
     let hookCallAdded = false;
 
@@ -553,14 +696,14 @@ export function transformCode(
     });
 
     // --- Step 4: Format Generated Code ---
-    const transformedCode = formatGeneratedCode(
-      generatedCode,
+    // Pass necessary info for formatting
+    const transformedCode = formatGeneratedCode(generatedCode, {
       importAdded,
       hookCallAdded,
       hookName,
       hookImport,
-      translationMethod
-    );
+      translationMethod: needsHook ? translationMethod : undefined,
+    });
 
     return { code: transformedCode, extractedStrings, usedExistingKeysList };
   } catch (error) {
@@ -569,10 +712,12 @@ export function transformCode(
       console.error(error.stack);
     }
     console.error(
-      `[${filePath}] Falling back to simple regex replacement (key generation not supported in fallback)`
+      `[${filePath}] Falling back to simple regex replacement (key generation/reuse might be inaccurate in fallback)`
     );
-    // Use the fallback transform
-    const transformedCode = fallbackTransform(code, extractedStrings, options);
-    return { code: transformedCode, extractedStrings, usedExistingKeysList };
+    // Fallback needs adjustment as it relied on pre-extracted strings
+    // For now, return original code on error to avoid incorrect fallback
+    // TODO: Improve fallback to work without pre-extraction if needed
+    // const transformedCode = fallbackTransform(code, extractedStrings, options); // This won't work correctly anymore
+    return { code, extractedStrings: [], usedExistingKeysList: [] }; // Return original code on error
   }
 }

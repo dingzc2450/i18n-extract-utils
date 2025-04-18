@@ -23,6 +23,13 @@ afterEach(() => {
   tempFiles.length = 0;
 });
 
+// Define a simple key generator for tests
+const generateTestKey = (value: string, filePath: string): string => {
+  const hash = crypto.createHash("sha1").update(value).digest("hex").substring(0, 6);
+  return `test_${hash}`;
+};
+
+
 describe("Options Handling", () => {
   test("should handle translationMethod: 'default' correctly in AST", () => {
     const code = `
@@ -72,11 +79,8 @@ describe("Options Handling", () => {
     expect(result.code).toContain(`t("simple_text_key")`);
 
     // Check extracted strings reflect the used keys
-    expect(result.extractedStrings.length).toBe(2);
-    const extractedInterpolated = result.extractedStrings.find(s => s.value === "请选择{arg1}");
-    const extractedSimple = result.extractedStrings.find(s => s.value === "简单文本");
-    expect(extractedInterpolated?.key).toBe("select_placeholder_key");
-    expect(extractedSimple?.key).toBe("simple_text_key");
+    expect(result.extractedStrings.length).toBe(0);
+
 
     // Check usedExistingKeysList
     expect(result.usedExistingKeysList.length).toBe(2);
@@ -86,5 +90,37 @@ describe("Options Handling", () => {
         expect.objectContaining({ key: "simple_text_key", value: "简单文本" }),
       ])
     );
+  });
+
+  test("should reuse key for same structure but different interpolated expressions", () => {
+    const code = `
+      function Demo({ varA, varB }) {
+        const textA = \`___Value \${varA}___\`; // Same structure
+        const textB = \`___Value \${varB}___\`; // Same structure, different variable
+        return <div>{textA}{textB}</div>;
+      }
+    `;
+    const tempFile = createTempFile(code);
+    tempFiles.push(tempFile);
+
+    const result = transformCode(tempFile, {
+      translationMethod: "t",
+      hookName: "useTranslation",
+      generateKey: generateTestKey, // Use key generation
+    });
+
+    // 1. Check that only one key was generated (based on "Value {arg1}")
+    const expectedKey = generateTestKey("Value {arg1}", tempFile);
+    expect(result.extractedStrings.length).toBe(1);
+     // Only one unique string extracted
+    expect(result.extractedStrings[0].key).toBe(expectedKey);
+    expect(result.extractedStrings[0].value).toBe("Value {arg1}");
+
+    // 2. Check that both transformations use the SAME key but DIFFERENT arguments
+    expect(result.code).toContain(`const textA = t("${expectedKey}", { arg1: varA });`);
+    expect(result.code).toContain(`const textB = t("${expectedKey}", { arg1: varB });`);
+
+    // 3. Check usedExistingKeysList is empty (as keys were generated)
+    expect(result.usedExistingKeysList.length).toBe(0);
   });
 });

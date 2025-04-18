@@ -50,14 +50,19 @@ describe("Key Generation and Reuse", () => {
       generateKey: generateTestKey,
     });
     const expectedKey = generateTestKey("Duplicate Text", tempFile);
-    expect(result.extractedStrings.length).toBe(3);
-    result.extractedStrings.forEach((item) => {
-      expect(item.value).toBe("Duplicate Text"); // Value should be original text
-      expect(item.key).toBe(expectedKey);
-    });
+
+    // --- 调整断言 ---
+    // extractedStrings 只包含首次遇到的唯一规范值
+    expect(result.extractedStrings.length).toBe(1);
+    expect(result.extractedStrings[0].value).toBe("Duplicate Text"); // 规范值
+    expect(result.extractedStrings[0].key).toBe(expectedKey);
+    // --- 调整结束 ---
+
+    // 检查代码替换是否正确，key 是否被复用
     const expectedReplacement = `t("${expectedKey}")`;
-    const occurrencesInCode = (result.code.match(new RegExp(expectedReplacement.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g")) || []).length;
-    expect(occurrencesInCode).toBe(3); // Key used 3 times
+    // 使用更精确的匹配来查找 t("...") 调用
+    const occurrencesInCode = (result.code.match(new RegExp(`t\\("${expectedKey}"\\)`, "g")) || []).length;
+    expect(occurrencesInCode).toBe(3); // Key 应该在代码中被使用了 3 次
   });
 
   test("generateKey should use placeholder keyStr for interpolated strings", () => {
@@ -118,13 +123,16 @@ describe("Key Generation and Reuse", () => {
       generateKey: generateTestKey,
     });
     const expectedKey = generateTestKey("纯文本", tempFile);
-    expect(result.extractedStrings.length).toBe(2);
+
+    // --- 调整断言 ---
+    // extractedStrings 只包含首次遇到的唯一规范值
+    expect(result.extractedStrings.length).toBe(1);
     expect(result.extractedStrings[0].key).toBe(expectedKey);
-    expect(result.extractedStrings[1].key).toBe(expectedKey);
     expect(result.extractedStrings[0].value).toBe("纯文本");
-    expect(result.extractedStrings[1].value).toBe("纯文本");
-    expect(result.code).toMatch(new RegExp(`t\\("${expectedKey}"\\)`, "g"));
+    // --- 调整结束 ---
+
+    // 检查代码替换是否正确，key 是否被复用
     const occurrences = (result.code.match(new RegExp(`t\\("${expectedKey}"\\)`, "g")) || []).length;
-    expect(occurrences).toBe(2);
+    expect(occurrences).toBe(2); // Key 应该在代码中被使用了 2 次
   });
 });
