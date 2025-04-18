@@ -32,7 +32,7 @@ program
       console.log(`处理匹配模式的文件: ${filePattern}`);
       const result = await processFiles(filePattern, options);
       
-      console.log(`处理了 ${result.processedFiles} 个文件`);
+      console.log(`处理了 ${result.modifiedFiles.length} 个文件`);
       console.log(`找到 ${result.extractedStrings.length} 个可翻译字符串`);
       
       if (options.outputPath) {
