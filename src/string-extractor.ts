@@ -7,6 +7,7 @@ const DEFAULT_PATTERN = /___([\s\S]+?)___/g;
 
 /**
  * Extracts strings matching a pattern from code.
+ * @deprecated This function is deprecated and will be removed in future versions.
  * @param code The source code content.
  * @param filePath The path to the file being processed.
  * @param options Transformation options, including the pattern and optional key generator.

@@ -85,7 +85,6 @@ export async function processFiles(
       file,
       {
         ...options,
-        // 这里 transformCode 内部应继续调用 extractStringsFromCode 并传递 existingValueToKey/usedExistingKeysList
       },
       existingValueToKey
       );
