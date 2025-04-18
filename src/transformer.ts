@@ -1,7 +1,8 @@
 import fs from "fs";
 import path from "path";
 import { glob } from "glob";
-import { ExtractedString, TransformOptions, UsedExistingKey } from "./types";
+// 确保导入 ChangeDetail
+import { ExtractedString, TransformOptions, UsedExistingKey, FileModificationRecord, ChangeDetail } from "./types";
 import { transformCode } from "./ast-parser";
 
 function ensureDirectoryExistence(filePath: string): void {
@@ -23,18 +24,18 @@ export async function processFiles(
   options: TransformOptions
 ): Promise<{
   extractedStrings: ExtractedString[];
-  processedFiles: number;
   usedExistingKeys?: UsedExistingKey[];
+  modifiedFiles: FileModificationRecord[];
 }> {
-  const files = await glob.glob(pattern);
-  let extractedStrings: ExtractedString[] = [];
-  let processedFiles = 0;
+  const files = await glob.glob(pattern, { absolute: true });
+  let allExtractedStrings: ExtractedString[] = [];
+  let allUsedExistingKeys: UsedExistingKey[] = [];
+  let modifiedFiles: FileModificationRecord[] = [];
+  let processedFileCount = 0;
 
-  // 1. 加载 existingJsonPath 并生成 value->key 映射
+  // 1. 加载现有翻译映射 (现有逻辑保持不变)
   let existingValueToKey: Map<string, string | number> | undefined = undefined;
-  let usedExistingKeysList: UsedExistingKey[] = [];
   let sourceJsonObject: Record<string, string | number> | undefined = undefined;
-
   if (options.existingTranslations) {
     if (typeof options.existingTranslations === "string") {
       // It's a file path
@@ -80,47 +81,65 @@ export async function processFiles(
 
   for (const file of files) {
     try {
-      // 1. 用 ast-parser 做代码转换
+      // 2. 使用 ast-parser 转换代码
+      // 假设 transformCode 现在返回 { code, extractedStrings, usedExistingKeysList, changes }
       const result = transformCode(
-      file,
-      {
-        ...options,
-      },
-      existingValueToKey
+        file,
+        {
+          ...options,
+          generateKey: options.generateKey
+        },
+        existingValueToKey
       );
 
-      if (result.extractedStrings.length > 0) {
-      extractedStrings = [...extractedStrings, ...result.extractedStrings];
-      usedExistingKeysList = [
-        ...usedExistingKeysList,
-        ...result.usedExistingKeysList,
-      ];
-      writeFileContent(file, result.code);
-      processedFiles++;
+      // 3. 检查文件是否实际被修改
+      // 使用 result.changes.length > 0 来判断是否有修改更可靠
+      if (result.changes && result.changes.length > 0) {
+        // 聚合提取的字符串和使用的键
+        allExtractedStrings = [...allExtractedStrings, ...result.extractedStrings];
+        allUsedExistingKeys = [...allUsedExistingKeys, ...result.usedExistingKeysList];
+
+        // 将修改后的内容写回文件
+        writeFileContent(file, result.code);
+
+        // 记录修改，包含详细的更改列表
+        modifiedFiles.push({
+          filePath: file,
+          newContent: result.code,
+          changes: result.changes, // <-- 将从 transformCode 返回的 changes 添加到记录中
+        });
+
+        processedFileCount++; // 仅为修改过的文件增加计数
       }
+      // 如果没有修改，则不对此文件执行任何操作
     } catch (error) {
       console.error(`Error processing file ${file}: ${error}`);
       if (error instanceof Error && error.stack) {
-      console.error(error.stack);
+        console.error(error.stack);
       }
     }
   }
 
-  // 如果提供了输出路径，输出提取的字符串到JSON文件
-  if (options.outputPath && extractedStrings.length > 0) {
+  // 4. 如果提供了路径，则将聚合的提取字符串写入输出 JSON (现有逻辑保持不变)
+  if (options.outputPath && allExtractedStrings.length > 0) {
     const outputObj: Record<string, string | number> = {};
-
-    extractedStrings.forEach((item) => {
-      // 使用提取的值作为键和值
-      outputObj[item.key] = item.value;
+    // Ensure uniqueness based on key when writing output JSON
+    const uniqueExtractedMap = new Map<string | number, string>();
+    allExtractedStrings.forEach((item) => {
+        // If multiple values map to the same key, the last one wins (or apply specific logic)
+        uniqueExtractedMap.set(item.key, item.value);
+    });
+    uniqueExtractedMap.forEach((value, key) => {
+        outputObj[typeof key === 'number' ? key.toString() : key] = value;
     });
 
     writeFileContent(options.outputPath, JSON.stringify(outputObj, null, 2));
   }
 
+  // 5. 返回结果，包括修改的文件列表及其详细更改
   return {
-    extractedStrings,
-    processedFiles,
-    usedExistingKeys: usedExistingKeysList,
+    extractedStrings: allExtractedStrings,
+    usedExistingKeys: allUsedExistingKeys,
+    modifiedFiles: modifiedFiles, // 返回包含 changes 的数组
   };
 }

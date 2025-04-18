@@ -81,3 +81,47 @@ export interface UsedExistingKey {
   key: string | number;
   value: string;
 }
+
+/**
+ * Represents the location (start/end line and column) of a code segment.
+ */
+export interface CodeLocation {
+  start: { line: number; column: number };
+  end: { line: number; column: number };
+}
+
+/**
+ * Details about a single replacement made in the code.
+ * 关于在代码中所做的单个替换的详细信息。
+ */
+export interface ChangeDetail {
+  /** The absolute path to the file where the change occurred. 文件路径 */
+  filePath: string;
+  /** The generated code string of the original node that was replaced. 原始节点的代码字符串 */
+  original: string;
+  /** The generated code string of the node that replaced the original one. 替换节点的代码字符串 */
+  replacement: string;
+  /** The starting line number of the original node. 原始节点的起始行号 */
+  line: number;
+  /** The starting column number of the original node. 原始节点的起始列号 */
+  column: number;
+  /** The ending line number of the original node. 原始节点的结束行号 */
+  endLine: number;
+  /** The ending column number of the original node. 原始节点的结束列号 */
+  endColumn: number;
+}
+
+/**
+ * Represents a record of a file that was modified, including details of the changes.
+ * 表示已修改文件的记录，包括更改的详细信息。
+ */
+export interface FileModificationRecord {
+  /** The absolute path to the modified file. 修改文件的绝对路径 */
+  filePath: string;
+  /** An array detailing each replacement made in the file. 文件中每次替换的详细信息数组 */
+  changes: ChangeDetail[];
+  /** The full content of the file after all transformations. 所有转换后文件的完整内容 */
+  newContent: string;
+}
+
+

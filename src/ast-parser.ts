@@ -2,7 +2,8 @@ import { parse } from "@babel/parser";
 import traverse from "@babel/traverse";
 import * as t from "@babel/types";
 import generate from "@babel/generator";
-import { ExtractedString, TransformOptions, UsedExistingKey } from "./types";
+// Import ChangeDetail
+import { ExtractedString, TransformOptions, UsedExistingKey, ChangeDetail } from "./types";
 import fs from "fs";
 import {  getDefaultPattern } from "./string-extractor";
 import { hasTranslationHook } from "./hook-utils";
@@ -58,12 +59,7 @@ function warnNoKey(filePath: string, text: string, context: string) {
 
 /**
  * Traverses the AST to replace matched strings with translation function calls.
- * @param ast The Babel AST root node.
- * @param valueToKeyMap Map of string values to their translation keys.
- * @param translationMethod The name of the translation function (or 'default').
- * @param options Transformation options.
- * @param filePath The path of the file being processed (for warnings).
- * @returns { modified: boolean } Indicates if any replacements were made.
+ * @returns { modified: boolean, changes: ChangeDetail[] } Indicates if replacements were made and details of changes.
  */
 function replaceStringsWithTCalls(
   ast: t.File,
@@ -73,8 +69,9 @@ function replaceStringsWithTCalls(
   translationMethod: string,
   options: TransformOptions,
   filePath: string
-): { modified: boolean } {
+): { modified: boolean; changes: ChangeDetail[] } { // Updated return type
   let modified = false;
+  const changes: ChangeDetail[] = []; // Initialize changes array
   const generatedKeysMap = new Map<string, string | number>(); // Track keys generated in this file run
 
   // 确定实际使用的翻译函数名，因为 'default' 会映射到 't'
@@ -130,9 +127,21 @@ function replaceStringsWithTCalls(
       );
 
       if (translationKey !== undefined) {
-        path.replaceWith(
-          createTranslationCall(translationMethod, translationKey)
-        );
+        const originalNode = path.node;
+        const replacementNode = createTranslationCall(translationMethod, translationKey);
+        // Record change before replacement
+        if (originalNode.loc) {
+          changes.push({
+            filePath,
+            original: generate(originalNode).code, // Use generator for consistent quoting
+            replacement: generate(replacementNode).code,
+            line: originalNode.loc.start.line,
+            column: originalNode.loc.start.column,
+            endLine: originalNode.loc.end.line,
+            endColumn: originalNode.loc.end.column,
+          });
+        }
+        path.replaceWith(replacementNode);
         modified = true;
       }
     },
@@ -158,9 +167,23 @@ function replaceStringsWithTCalls(
         );
 
         if (translationKey !== undefined) {
-          path.node.value = t.jsxExpressionContainer(
+          const originalNode = path.node.value; // The StringLiteral node
+          const replacementNode = t.jsxExpressionContainer(
             createTranslationCall(translationMethod, translationKey)
           );
+          // Record change before replacement
+          if (originalNode.loc) {
+             changes.push({
+               filePath,
+               original: generate(originalNode).code,
+               replacement: generate(replacementNode).code,
+               line: originalNode.loc.start.line,
+               column: originalNode.loc.start.column,
+               endLine: originalNode.loc.end.line,
+               endColumn: originalNode.loc.end.column,
+             });
+          }
+          path.node.value = replacementNode;
           modified = true;
         }
       }
@@ -189,6 +212,7 @@ function replaceStringsWithTCalls(
       const newNodes: (t.JSXText | t.JSXExpressionContainer)[] = [];
       let lastIndex = 0;
       let match;
+      let madeChangeInJSXText = false; // Track if any replacement happened within this JSXText
 
       // 循环查找所有匹配项
       while ((match = globalPattern.exec(nodeValue)) !== null) {
@@ -222,6 +246,7 @@ function replaceStringsWithTCalls(
               createTranslationCall(translationMethod, translationKey)
             )
           );
+          madeChangeInJSXText = true; // Mark change occurred
           modified = true; // 标记发生了修改
         } else {
           // 如果 getKeyAndRecord 返回 undefined (理论上不应发生，因为 globalPattern 已匹配)
@@ -244,8 +269,23 @@ function replaceStringsWithTCalls(
       }
 
       // 4. 如果生成了新节点，则替换原节点
-      if (newNodes.length > 0 && modified) { // 只有在实际发生替换时才执行 replaceWithMultiple
+      if (newNodes.length > 0 && madeChangeInJSXText) { // Only replace if a change was made
+        const originalNode = path.node;
+        // Record one change for the entire JSXText replacement
+        if (originalNode.loc) {
+            const replacementCode = newNodes.map(n => generate(n).code).join('');
+            changes.push({
+                filePath,
+                original: originalNode.value, // Original text content
+                replacement: replacementCode, // Generated code for new nodes
+                line: originalNode.loc.start.line,
+                column: originalNode.loc.start.column,
+                endLine: originalNode.loc.end.line,
+                endColumn: originalNode.loc.end.column,
+            });
+        }
         path.replaceWithMultiple(newNodes);
+        modified = true; // Mark overall modification
       }
     }, // --- JSXText Visitor 结束 ---
 
@@ -277,10 +317,21 @@ function replaceStringsWithTCalls(
 
         // 3. 如果 getKeyAndRecord 成功找到了 key（说明模式匹配且 key 已处理）
         if (translationKey !== undefined) {
-          // 4. 使用返回的正确 key 进行替换
-          path.replaceWith(
-            createTranslationCall(translationMethod, translationKey)
-          );
+          const originalNode = path.node;
+          const replacementNode = createTranslationCall(translationMethod, translationKey);
+          // Record change
+          if (originalNode.loc) {
+            changes.push({
+              filePath,
+              original: generate(originalNode).code,
+              replacement: generate(replacementNode).code,
+              line: originalNode.loc.start.line,
+              column: originalNode.loc.start.column,
+              endLine: originalNode.loc.end.line,
+              endColumn: originalNode.loc.end.column,
+            });
+          }
+          path.replaceWith(replacementNode);
           modified = true;
         }
         // 如果 translationKey 是 undefined，说明原始字符串不匹配 ___...___ 模式，不做任何事
@@ -350,19 +401,31 @@ function replaceStringsWithTCalls(
           const properties = node.expressions.map((expr, i) =>
             t.objectProperty(t.identifier(`arg${i + 1}`), expr as t.Expression)
           );
-          path.replaceWith(
-            t.callExpression(
-              t.identifier(
-                translationMethod === "default" ? "t" : translationMethod
-              ),
-              [
-                typeof translationKey === "string"
-                  ? t.stringLiteral(translationKey)
-                  : t.numericLiteral(translationKey),
-                t.objectExpression(properties),
-              ]
-            )
+          const originalNode = path.node;
+          const replacementNode = t.callExpression(
+            t.identifier(
+              translationMethod === "default" ? "t" : translationMethod
+            ),
+            [
+              typeof translationKey === "string"
+                ? t.stringLiteral(translationKey)
+                : t.numericLiteral(translationKey),
+              t.objectExpression(properties),
+            ]
           );
+          // Record change
+          if (originalNode.loc) {
+             changes.push({
+               filePath,
+               original: generate(originalNode).code,
+               replacement: generate(replacementNode).code,
+               line: originalNode.loc.start.line,
+               column: originalNode.loc.start.column,
+               endLine: originalNode.loc.end.line,
+               endColumn: originalNode.loc.end.column,
+             });
+          }
+          path.replaceWith(replacementNode);
           modified = true;
         }
         // 如果原始结构不匹配模式，则不进行任何操作
@@ -371,7 +434,7 @@ function replaceStringsWithTCalls(
     }, // --- TemplateLiteral Visitor 结束 ---
   });
 
-  return { modified };
+  return { modified, changes }; // Return collected changes
 }
 
 // Helper function to manage key lookup and recording
@@ -634,6 +697,7 @@ export function transformCode(
   code: string;
   extractedStrings: ExtractedString[];
   usedExistingKeysList: UsedExistingKey[];
+  changes: ChangeDetail[]; // Add changes to return type
 } {
   const code = fs.readFileSync(filePath, "utf8");
   const translationMethod = options.translationMethod || "t";
@@ -643,15 +707,17 @@ export function transformCode(
   // Initialize lists to be populated during traversal
   const extractedStrings: ExtractedString[] = [];
   const usedExistingKeysList: UsedExistingKey[] = [];
+  let changes: ChangeDetail[] = []; // Initialize changes array
 
   try {
     const ast = parse(code, {
       sourceType: "module",
       plugins: ["jsx", "typescript"],
+      errorRecovery: true, // Enable error recovery
     });
 
-    // --- Step 1: Traverse, Extract, and Replace ---
-    const { modified } = replaceStringsWithTCalls(
+    // --- Step 1: Traverse, Extract, Replace, and Collect Changes ---
+    const { modified, changes: replacementChanges } = replaceStringsWithTCalls(
       ast,
       existingValueToKey || new Map(), // Pass existing map or empty map
       extractedStrings, // Pass array to be filled
@@ -660,11 +726,12 @@ export function transformCode(
       options,
       filePath
     );
+    changes = replacementChanges; // Assign collected changes
 
     // If no strings were extracted/modified, return original code
     if (!modified && extractedStrings.length === 0) {
       // Check modified flag as well, in case only existing keys were used
-      return { code, extractedStrings, usedExistingKeysList };
+      return { code, extractedStrings, usedExistingKeysList, changes: [] };
     }
 
     // --- Step 2: Add Hook and Import if needed ---
@@ -705,7 +772,8 @@ export function transformCode(
       translationMethod: needsHook ? translationMethod : undefined,
     });
 
-    return { code: transformedCode, extractedStrings, usedExistingKeysList };
+    return { code: transformedCode, extractedStrings, usedExistingKeysList, changes };
+
   } catch (error) {
     console.error(`[${filePath}] Error during AST transformation: ${error}`);
     if (error instanceof Error) {
@@ -718,6 +786,6 @@ export function transformCode(
     // For now, return original code on error to avoid incorrect fallback
     // TODO: Improve fallback to work without pre-extraction if needed
     // const transformedCode = fallbackTransform(code, extractedStrings, options); // This won't work correctly anymore
-    return { code, extractedStrings: [], usedExistingKeysList: [] }; // Return original code on error
+    return { code, extractedStrings: [], usedExistingKeysList: [], changes: [] }; // Return original code on error
   }
 }
