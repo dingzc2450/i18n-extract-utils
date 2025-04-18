@@ -4,16 +4,17 @@ import { ExtractedString, TransformOptions } from "./types";
 
 /**
  * Fallback transformation: simple regex replacement and basic hook/import insertion.
- * 用于AST处理失败时的降级操作：简单正则替换和基础hook/import插入。
- *
- * 新增：当 translationMethod 为 'default' 时，hook 解构语句变为 const t = useTranslations();
+ * Uses the captured text as the key, similar to the default AST behavior without key generation/reuse.
  */
 export function fallbackTransform(
   code: string,
+  // extractedStrings is passed but might be unreliable in fallback, primarily used to check if *any* extraction happened.
   extractedStrings: ExtractedString[],
   options: TransformOptions
 ): string {
-  const translationMethod = options.translationMethod || "t";
+  const translationMethodOption = options.translationMethod || "t";
+  // Determine the actual function name to call (e.g., 't' even if option is 'default')
+  const effectiveMethodName = translationMethodOption === "default" ? "t" : translationMethodOption;
   const hookName = options.hookName || "useTranslation";
   const hookImport = options.hookImport || "react-i18next";
   const defaultPattern = getDefaultPattern();
@@ -23,24 +24,34 @@ export function fallbackTransform(
     ? new RegExp(options.pattern, "g")
     : new RegExp(defaultPattern.source, "g");
 
-  // 1. Perform the basic regex replacement for translation calls
+  // 1. Perform regex replacement using the captured group as the key
   transformedCode = transformedCode.replace(
     fallbackPattern,
-    (match, p1) => `${translationMethod}("${p1.replace(/"/g, '\\"')}")`
+    (match, p1) => {
+      // p1 is the captured text (the intended key/value)
+      const key = p1;
+      // Escape double quotes within the key for use in the string literal
+      const escapedKey = key.replace(/"/g, '\\"');
+      // Construct the translation call, e.g., t("Your Text")
+      return `${effectiveMethodName}("${escapedKey}")`;
+    }
   );
 
-  // 2. Check if hook/import insertion is needed (early exit if not)
+  // 2. Check if hook/import insertion is needed
+  // Base this on the original code and whether *any* strings were passed (even if potentially incomplete)
+  // This assumes if AST parsing failed but strings were found, a hook might still be needed.
   const needsHook = !hasTranslationHook(code, hookName) && extractedStrings.length > 0;
   if (!needsHook) {
-    return transformedCode;
+    return transformedCode; // Return early if no hook needed
   }
 
-  // 3. Add import statement if missing
+  // 3. Add import statement if missing (logic remains the same)
   const importStatement = `import { ${hookName} } from '${hookImport}';`;
   if (!transformedCode.includes(importStatement)) {
     const lines = transformedCode.split("\n");
     let lastImportIndex = -1;
     let directiveEndIndex = -1;
+    // Find insertion point (after directives and imports)
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
       if (line.startsWith("'use ") || line.startsWith('"use ')) {
@@ -67,22 +78,34 @@ export function fallbackTransform(
     transformedCode = lines.join("\n");
   }
 
-  // 4. Determine the correct hook call statement based on translationMethod
+  // 4. Determine the correct hook call statement based on translationMethodOption (logic remains the same)
   let hookCallStatement: string;
-  if (translationMethod === "default") {
+  if (translationMethodOption === "default") {
+    // If the option was 'default', the variable should be 't'
     hookCallStatement = `const t = ${hookName}();`;
   } else {
-    hookCallStatement = `const { ${translationMethod} } = ${hookName}();`;
+    // Otherwise, destructure the specific method name
+    hookCallStatement = `const { ${translationMethodOption} } = ${hookName}();`;
   }
 
-  // 5. Add hook call statement if missing
+  // 5. Add hook call statement if missing (logic remains the same)
   if (!transformedCode.includes(hookCallStatement)) {
+    // Very basic regex to find the start of a function/arrow function body
     const functionComponentRegex =
       /(function\s+\w+\s*\(.*?\)\s*\{|const\s+\w+\s*=\s*\(.*?\)\s*=>\s*\{)/g;
+    let hookAdded = false;
     transformedCode = transformedCode.replace(
       functionComponentRegex,
-      `$1\n  ${hookCallStatement}\n` // Use the determined statement
+      (match) => {
+        // Add hook only once if multiple functions exist (simple approach)
+        if (!hookAdded) {
+          hookAdded = true;
+          return `${match}\n  ${hookCallStatement}\n`; // Add hook call inside
+        }
+        return match;
+      }
     );
+    // If regex didn't match (e.g., class component), hook won't be added by this simple fallback
   }
 
   return transformedCode;
