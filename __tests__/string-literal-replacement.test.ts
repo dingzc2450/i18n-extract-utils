@@ -3,24 +3,37 @@ import { transformCode } from "../src/index.js";
 import * as fs from "fs";
 import * as path from "path";
 import { tmpdir } from "os";
+import crypto from "crypto"; // Import crypto if not already present
 
 // Helper to create temporary test files
 function createTempFile(content: string): string {
   const tempDir = tmpdir();
-  const tempFile = path.join(tempDir, `test-${Date.now()}-${Math.random().toString(36).slice(2)}.tsx`);
+  // Use a more unique ID to avoid potential collisions in rapid test runs
+  const uniqueId = `${Date.now()}-${crypto.randomBytes(6).toString("hex")}`;
+  const tempFile = path.join(tempDir, `test-${uniqueId}.tsx`);
   fs.writeFileSync(tempFile, content);
+  tempFiles.push(tempFile); // Add to cleanup list
   return tempFile;
 }
 
 const tempFiles: string[] = [];
 afterEach(() => {
   tempFiles.forEach((file) => {
-    if (fs.existsSync(file)) fs.unlinkSync(file);
+    if (fs.existsSync(file)) {
+      try {
+        fs.unlinkSync(file);
+      } catch (err) {
+        console.error(`Error removing temp file ${file}:`, err);
+      }
+    }
   });
   tempFiles.length = 0;
 });
 
+
 describe("String/JSX Literal and Attribute Replacements", () => {
+  // ... existing tests ...
+
   test("should handle string literals correctly", () => {
     const code = `
       function MyComponent() {
@@ -32,7 +45,7 @@ describe("String/JSX Literal and Attribute Replacements", () => {
       }
     `;
     const tempFile = createTempFile(code);
-    tempFiles.push(tempFile);
+    // tempFiles.push(tempFile); // createTempFile now handles this
 
     const result = transformCode(tempFile, {
       translationMethod: "t",
@@ -60,7 +73,7 @@ describe("String/JSX Literal and Attribute Replacements", () => {
       }
     `;
     const tempFile = createTempFile(code);
-    tempFiles.push(tempFile);
+    // tempFiles.push(tempFile); // createTempFile now handles this
 
     const result = transformCode(tempFile, {
       translationMethod: "t",
@@ -75,5 +88,62 @@ describe("String/JSX Literal and Attribute Replacements", () => {
     expect(result.extractedStrings[1].value).toBe("This is a paragraph");
     expect(result.extractedStrings[2].value).toBe("with translation");
   });
+
+  // --- NEW TEST CASE ---
+  test("should handle string/template literals containing HTML with pattern inside", () => {
+    const code = `
+      import React from 'react';
+
+      function MyComponent() {
+        // Using template literal for easier expectation matching
+        const linkHtml = \`<a href="/some/path" title="Click here">___Link Text___</a>\`;
+        const complexHtml = \`<span>Prefix <strong>___Bold Text___</strong> Suffix</span>\`;
+        const stringLit = "Plain string ___with pattern___ inside.";
+        return (
+          <div>
+            <div dangerouslySetInnerHTML={{ __html: linkHtml }} />
+            <div dangerouslySetInnerHTML={{ __html: complexHtml }} />
+            <p>{stringLit}</p>
+          </div>
+        );
+      }
+    `;
+    const tempFile = createTempFile(code);
+
+    const result = transformCode(tempFile, {
+      translationMethod: "t",
+      hookName: "useTranslation",
+      hookImport: "react-i18next",
+    });
+
+    // Check hook and import are added
+    expect(result.code).toContain('import { useTranslation } from "react-i18next";');
+    expect(result.code).toContain('const { t } = useTranslation();');
+
+    // Check that the pattern within the literals is replaced, keeping surrounding HTML/text
+    expect(result.code).toContain(`const linkHtml = \`<a href="/some/path" title="Click here">\${t("Link Text")}</a>\`;`);
+    expect(result.code).toContain(`const complexHtml = \`<span>Prefix <strong>\${t("Bold Text")}</strong> Suffix</span>\`;`);
+    expect(result.code).toContain(`const stringLit = \`Plain string \${t("with pattern")} inside.\`;`);
+
+
+    // Check extracted strings
+    expect(result.extractedStrings.length).toBe(3);
+    expect(result.extractedStrings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ value: "Link Text", key: "Link Text" }),
+        expect.objectContaining({ value: "Bold Text", key: "Bold Text" }),
+        expect.objectContaining({ value: "with pattern", key: "with pattern" }),
+      ])
+    );
+
+    // Ensure the original surrounding HTML/text structure is still present
+    expect(result.code).toContain('<a href="/some/path" title="Click here">');
+    expect(result.code).toContain('</a>');
+    expect(result.code).toContain('<span>Prefix <strong>');
+    expect(result.code).toContain('</strong> Suffix</span>');
+    expect(result.code).toContain('Plain string ');
+    expect(result.code).toContain(' inside.');
+  });
+  // --- END NEW TEST CASE ---
 
 });
