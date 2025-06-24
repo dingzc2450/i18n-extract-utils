@@ -10,48 +10,11 @@ import {
   ChangeDetail,
 } from "./types";
 import fs from "fs";
-import { getDefaultPattern } from "./string-extractor";
 import { hasTranslationHook } from "./hook-utils";
 import { formatGeneratedCode } from "./code-formatter";
 import * as tg from "./babel-type-guards"; // 引入类型辅助工具
 import { fallbackTransform } from "./fallback-transform"; // 新增
 import { replaceStringsWithTCalls } from "./ast-replacer";
-
-
-
-/**
- * 工具函数：尝试将字符串节点替换为 t(key) 调用
- * @param nodeValue 原始字符串
- * @param pattern 匹配正则
- * @param valueToKeyMap value->key映射
- * @returns 匹配到则返回 {textToTranslate, translationKey}，否则 undefined
- */
-function getTranslationMatch(
-  nodeValue: string,
-  pattern: RegExp,
-  valueToKeyMap: Map<string, string | number>
-): { textToTranslate: string; translationKey: string | number } | undefined {
-  const match = pattern.exec(nodeValue);
-  if (match && match[1] !== undefined) {
-    const textToTranslate = match[1];
-    const translationKey = valueToKeyMap.get(textToTranslate);
-    if (translationKey !== undefined) {
-      return { textToTranslate, translationKey };
-    }
-  }
-  return undefined;
-}
-
-/**
- * 工具函数：警告未找到 key 的情况
- */
-function warnNoKey(filePath: string, text: string, context: string) {
-  console.warn(
-    `[${filePath}] Warning: Found match "${text}" in ${context} but no key in valueToKeyMap.`
-  );
-}
-
-
 
 /**
  * Traverses the AST to add the translation hook import and call if necessary.
