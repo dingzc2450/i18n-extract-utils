@@ -1,7 +1,7 @@
 {
   "name": "i18n-extract-utils",
   "version": "0.2.9",
-  "description": "一个用于提取和转换 React/Vue 国际化字符串的实用工具",
+  "description": "React/Vue i18n extraction and transformation utility",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
