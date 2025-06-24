@@ -211,6 +211,7 @@ export interface FrameworkCodeGenerator {
 export interface I18nConfig {
   /** 
    * 当前框架类型（如 'react' | 'react15' | 'vue' 等）
+   * @default 'react'
    * @description 'react' 表示 React 16+，'react15' 表示 React 15
    * @description 'vue' 表示 Vue.js，'vue2' 表示 Vue 2.x，'vue3' 表示 Vue 3.x
    */
