@@ -1,5 +1,3 @@
-import fs from "fs";
-import path from "path";
 import { ExtractedString, TransformOptions, UsedExistingKey } from "./types";
 
 // 支持插值的正则
@@ -66,7 +64,9 @@ export function extractStringsFromCode(
         value: extractedValue,
       });
     } else {
-      key = options?.generateKey ? options.generateKey(keyStr, filePath) : keyStr;
+      key = options?.generateKey
+        ? options.generateKey(keyStr, filePath)
+        : keyStr;
     }
 
     extractedStrings.push({
