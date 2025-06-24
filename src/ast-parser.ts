@@ -8,9 +8,14 @@ import {
   TransformOptions,
   UsedExistingKey,
   ChangeDetail,
+  I18nTransformer,
 } from "./types";
 import fs from "fs";
-import { hasTranslationHook } from "./hook-utils";
+import {
+  hasTranslationHook,
+  isJSXElement,
+  isJSXFragment,
+} from "./frameworks/react-support";
 import { formatGeneratedCode } from "./code-formatter";
 import * as tg from "./babel-type-guards"; // 引入类型辅助工具
 import { fallbackTransform } from "./fallback-transform"; // 新增
@@ -126,8 +131,8 @@ function addHookAndImport(
         ReturnStatement(returnPath) {
           if (
             returnPath.node.argument &&
-            (tg.isJSXElement(returnPath.node.argument) ||
-              tg.isJSXFragment(returnPath.node.argument))
+            (isJSXElement(returnPath.node.argument) ||
+              isJSXFragment(returnPath.node.argument))
           ) {
             returnsJSX = true;
             returnPath.stop();
@@ -209,113 +214,136 @@ function addHookAndImport(
   return { importAdded, hookCallAdded };
 }
 
+/**
+ * 默认的 React 框架多语言提取与替换实现
+ */
+export class ReactTransformer implements I18nTransformer {
+  extractAndReplace(
+    code: string,
+    filePath: string,
+    options: TransformOptions,
+    existingValueToKey?: Map<string, string | number>
+  ) {
+    const translationMethod =
+      options.i18nConfig?.i18nImport?.name ||
+      options.translationMethod ||
+      "t"; // 已废弃，建议通过 options 传递框架配置
+    const hookName =
+      options.i18nConfig?.i18nImport?.importName ||
+      options.hookName ||
+      "useTranslation"; // 已废弃
+    const hookImport =
+      options.i18nConfig?.i18nImport?.source ||
+      options.hookImport ||
+      "react-i18next"; // 已废弃
+    const extractedStrings: ExtractedString[] = [];
+    const usedExistingKeysList: UsedExistingKey[] = [];
+    let changes: ChangeDetail[] = [];
+    try {
+      const ast = parse(code, {
+        sourceType: "module",
+        plugins: ["jsx", "typescript"],
+        errorRecovery: true,
+      });
+      const { modified, changes: replacementChanges } =
+        replaceStringsWithTCalls(
+          ast,
+          existingValueToKey || new Map(),
+          extractedStrings,
+          usedExistingKeysList,
+          translationMethod,
+          options,
+          filePath
+        );
+      changes = replacementChanges;
+      // 如果没有修改，直接返回原始代码
+      if (!modified && extractedStrings.length === 0) {
+        return { code, extractedStrings, usedExistingKeysList, changes: [] };
+      }
+      // hook 相关逻辑
+      const hookAlreadyExists = hasTranslationHook(code, hookName);
+      const needsHook =
+        !hookAlreadyExists && (modified || extractedStrings.length > 0);
+      let importAdded = false;
+      let hookCallAdded = false;
+      if (needsHook) {
+        const addResult = addHookAndImport(
+          ast,
+          translationMethod,
+          hookName,
+          hookImport
+        );
+        importAdded = addResult.importAdded;
+        hookCallAdded = addResult.hookCallAdded;
+      }
+      let { code: generatedCode } = generate(ast, {
+        retainLines: true,
+        compact: false,
+        comments: true,
+        jsescOption: { minimal: true },
+      });
+      const transformedCode = formatGeneratedCode(generatedCode, {
+        importAdded,
+        hookCallAdded,
+        hookName,
+        hookImport,
+        translationMethod: needsHook ? translationMethod : undefined,
+      });
+      return {
+        code: transformedCode,
+        extractedStrings,
+        usedExistingKeysList,
+        changes,
+      };
+    } catch (error) {
+      console.error(`[${filePath}] Error during AST transformation: ${error}`);
+      if (error instanceof Error) {
+        console.error(error.stack);
+      }
+      console.error(
+        `[${filePath}] Falling back to simple regex replacement (key generation/reuse might be inaccurate in fallback)`
+      );
+      const transformedCode = fallbackTransform(
+        code,
+        extractedStrings,
+        options
+      );
+      return {
+        code: transformedCode,
+        extractedStrings: [],
+        usedExistingKeysList: [],
+        changes: [],
+      };
+    }
+  }
+}
+
+/**
+ * 通用多语言提取与替换主入口
+ * @param filePath 文件路径
+ * @param options 转换配置
+ * @param existingValueToKey 现有 value->key 映射
+ * @param transformer 框架实现（可选，默认 ReactTransformer）
+ * @returns { code, extractedStrings, usedExistingKeysList, changes }
+ */
 export function transformCode(
   filePath: string,
   options: TransformOptions,
-  // Renamed parameter for clarity: this map comes *only* from pre-existing translations
-  existingValueToKey?: Map<string, string | number>
+  existingValueToKey?: Map<string, string | number>,
+  transformer?: I18nTransformer
 ): {
   code: string;
   extractedStrings: ExtractedString[];
   usedExistingKeysList: UsedExistingKey[];
-  changes: ChangeDetail[]; // Add changes to return type
+  changes: ChangeDetail[];
 } {
   const code = fs.readFileSync(filePath, "utf8");
-  const translationMethod = options.translationMethod || "t";
-  const hookName = options.hookName || "useTranslation";
-  const hookImport = options.hookImport || "react-i18next";
-
-  // Initialize lists to be populated during traversal
-  const extractedStrings: ExtractedString[] = [];
-  const usedExistingKeysList: UsedExistingKey[] = [];
-  let changes: ChangeDetail[] = []; // Initialize changes array
-
-  try {
-    const ast = parse(code, {
-      sourceType: "module",
-      plugins: ["jsx", "typescript"],
-      errorRecovery: true, // Enable error recovery
-    });
-
-    // --- Step 1: Traverse, Extract, Replace, and Collect Changes ---
-    const { modified, changes: replacementChanges } = replaceStringsWithTCalls(
-      ast,
-      existingValueToKey || new Map(), // Pass existing map or empty map
-      extractedStrings, // Pass array to be filled
-      usedExistingKeysList, // Pass array to be filled
-      translationMethod,
-      options,
-      filePath
-    );
-    changes = replacementChanges; // Assign collected changes
-
-    // If no strings were extracted/modified, return original code
-    if (!modified && extractedStrings.length === 0) {
-      // Check modified flag as well, in case only existing keys were used
-      return { code, extractedStrings, usedExistingKeysList, changes: [] };
-    }
-
-    // --- Step 2: Add Hook and Import if needed ---
-    // Check if hook needs to be added based on whether *any* modification happened
-    // or if strings were extracted (even if only existing keys were used, hook might be needed)
-    const hookAlreadyExists = hasTranslationHook(code, hookName);
-    const needsHook =
-      !hookAlreadyExists && (modified || extractedStrings.length > 0);
-    let importAdded = false;
-    let hookCallAdded = false;
-
-    if (needsHook) {
-      const addResult = addHookAndImport(
-        ast,
-        translationMethod,
-        hookName,
-        hookImport
-      );
-      importAdded = addResult.importAdded;
-      hookCallAdded = addResult.hookCallAdded;
-    }
-
-    // --- Step 3: Generate Final Code ---
-    let { code: generatedCode } = generate(ast, {
-      retainLines: true,
-      compact: false,
-      comments: true,
-      jsescOption: { minimal: true },
-    });
-
-    // --- Step 4: Format Generated Code ---
-    // Pass necessary info for formatting
-    const transformedCode = formatGeneratedCode(generatedCode, {
-      importAdded,
-      hookCallAdded,
-      hookName,
-      hookImport,
-      translationMethod: needsHook ? translationMethod : undefined,
-    });
-
-    return {
-      code: transformedCode,
-      extractedStrings,
-      usedExistingKeysList,
-      changes,
-    };
-  } catch (error) {
-    console.error(`[${filePath}] Error during AST transformation: ${error}`);
-    if (error instanceof Error) {
-      console.error(error.stack);
-    }
-    console.error(
-      `[${filePath}] Falling back to simple regex replacement (key generation/reuse might be inaccurate in fallback)`
-    );
-    // Fallback needs adjustment as it relied on pre-extracted strings
-    // For now, return original code on error to avoid incorrect fallback
-    // TODO: Improve fallback to work without pre-extraction if needed
-    const transformedCode = fallbackTransform(code, extractedStrings, options); // This won't work correctly anymore
-    return {
-      code: transformedCode,
-      extractedStrings: [],
-      usedExistingKeysList: [],
-      changes: [],
-    }; // Return original code on error
-  }
+  // 兼容老用法，默认用 ReactTransformer
+  const realTransformer = transformer || new ReactTransformer();
+  return realTransformer.extractAndReplace(
+    code,
+    filePath,
+    options,
+    existingValueToKey
+  );
 }

@@ -22,6 +22,7 @@ export interface TransformOptions {
    * Default is "t".
    * 替换匹配模式时使用的翻译方法名称。
    * 默认值为 "t"。
+   * @deprecated 请使用 i18nConfig.i18nImport.name 代替 translationMethod
    */
   translationMethod?: string;
 
@@ -30,6 +31,7 @@ export interface TransformOptions {
    * Default is "useTranslation".
    * 添加用于翻译功能的hook名称。
    * 默认值为 "useTranslation"。
+   * @deprecated 请使用 i18nConfig.i18nImport.importName 代替 hookName
    */
   hookName?: string;
 
@@ -38,6 +40,7 @@ export interface TransformOptions {
    * Default is 'react-i18next'.
    * 翻译hook的导入路径。
    * 默认值为 'react-i18next'。
+   * @deprecated 请使用 i18nConfig.i18nImport.source 代替 hookImport
    */
   hookImport?: string;
 
@@ -64,6 +67,11 @@ export interface TransformOptions {
    * 预期的格式（文件和对象相同）为 { key: value }。
    */
   existingTranslations?: string | Record<string, string | number>; // Renamed and updated type
+
+  /**
+   * 多语言相关配置（框架、导入、调用等）
+   */
+  i18nConfig?: I18nConfig;
 }
 
 export interface ExtractedString {
@@ -124,4 +132,51 @@ export interface FileModificationRecord {
   newContent: string;
 }
 
+/**
+ * 多语言导入配置
+ */
+export interface I18nImportConfig {
+  /** 最终调用的国际化方法名（如 t），兼容 translationMethod */
+  name: string;
+  /** 导入的变量名（如 useTranslation），兼容 hookName，可选 */
+  importName?: string;
+  /** 导入源，如 'i18n-lib'，兼容 hookImport */
+  source: string;
+  /** 可选：完全自定义导入语句（如 import t from ...），若设置则覆盖自动生成 */
+  custom?: string;
+}
 
+/**
+ * 框架无关的多语言提取与替换接口
+ */
+export interface I18nTransformer {
+  /**
+   * 提取和替换多语言内容，返回替换后的代码、提取的字符串、已用 key、变更详情等
+   */
+  extractAndReplace(
+    code: string,
+    filePath: string,
+    options: TransformOptions,
+    existingValueToKey?: Map<string, string | number>
+  ): {
+    code: string;
+    extractedStrings: ExtractedString[];
+    usedExistingKeysList: UsedExistingKey[];
+    changes: ChangeDetail[];
+  };
+}
+
+/**
+ * 多语言配置总入口
+ */
+export interface I18nConfig {
+  /** 当前框架类型（如 'react' | 'react15' | 'vue' 等） */
+  framework?: string;
+  /** 国际化导入配置，支持自定义，兼容 translationMethod/hookName/hookImport */
+  i18nImport?: I18nImportConfig;
+  /**
+   * 自定义生成调用表达式的方法（返回 t.CallExpression）
+   * (callName, key, rawText) => t.CallExpression
+   */
+  i18nCall?: (callName: string, key: string | number, rawText: string) => import("@babel/types").CallExpression;
+}

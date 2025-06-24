@@ -41,56 +41,6 @@ export function isCallExpression(node: t.Node | null | undefined): node is t.Cal
 }
 
 /**
- * Checks if a node is a JSXAttribute.
- * 检查节点是否为 JSXAttribute。
- * @param node The AST node to check.
- * @returns True if the node is a JSXAttribute, false otherwise.
- */
-export function isJSXAttribute(node: t.Node | null | undefined): node is t.JSXAttribute {
-  return t.isJSXAttribute(node);
-}
-
-/**
- * Checks if a node is a JSXExpressionContainer.
- * 检查节点是否为 JSXExpressionContainer。
- * @param node The AST node to check.
- * @returns True if the node is a JSXExpressionContainer, false otherwise.
- */
-export function isJSXExpressionContainer(node: t.Node | null | undefined): node is t.JSXExpressionContainer {
-  return t.isJSXExpressionContainer(node);
-}
-
-/**
- * Checks if a node is a JSXText.
- * 检查节点是否为 JSXText。
- * @param node The AST node to check.
- * @returns True if the node is a JSXText, false otherwise.
- */
-export function isJSXText(node: t.Node | null | undefined): node is t.JSXText {
-  return t.isJSXText(node);
-}
-
-/**
- * Checks if a node is a JSXElement.
- * 检查节点是否为 JSXElement。
- * @param node The AST node to check.
- * @returns True if the node is a JSXElement, false otherwise.
- */
-export function isJSXElement(node: t.Node | null | undefined): node is t.JSXElement {
-    return t.isJSXElement(node);
-}
-
-/**
- * Checks if a node is a JSXFragment.
- * 检查节点是否为 JSXFragment。
- * @param node The AST node to check.
- * @returns True if the node is a JSXFragment, false otherwise.
- */
-export function isJSXFragment(node: t.Node | null | undefined): node is t.JSXFragment {
-    return t.isJSXFragment(node);
-}
-
-/**
  * Checks if a node is a TemplateLiteral.
  * 检查节点是否为 TemplateLiteral。
  * @param node The AST node to check.
@@ -217,3 +167,39 @@ export function isObjectPattern(node: t.Node | null | undefined): node is t.Obje
 export function isReturnStatement(node: t.Node | null | undefined): node is t.ReturnStatement {
     return t.isReturnStatement(node);
 }
+
+/**
+ * Checks if a node is a JSXAttribute.
+ * 检查节点是否为 JSXAttribute。
+ * @param node The AST node to check.
+ * @returns True if the node is a JSXAttribute, false otherwise.
+ */
+
+/**
+ * Checks if a node is a JSXExpressionContainer.
+ * 检查节点是否为 JSXExpressionContainer。
+ * @param node The AST node to check.
+ * @returns True if the node is a JSXExpressionContainer, false otherwise.
+ */
+
+/**
+ * Checks if a node is a JSXText.
+ * 检查节点是否为 JSXText。
+ * @param node The AST node to check.
+ * @returns True if the node is a JSXText, false otherwise.
+ */
+
+/**
+ * Checks if a node is a JSXElement.
+ * 检查节点是否为 JSXElement。
+ * @param node The AST node to check.
+ * @returns True if the node is a JSXElement, false otherwise.
+ */
+
+/**
+ * Checks if a node is a JSXFragment.
+ * 检查节点是否为 JSXFragment。
+ * @param node The AST node to check.
+ * @returns True if the node is a JSXFragment, false otherwise.
+ */
+export { isJSXAttribute, isJSXExpressionContainer, isJSXText, isJSXElement, isJSXFragment } from './frameworks/react-support';

@@ -11,6 +11,7 @@ import { getKeyAndRecord } from "./key-manager";
 import { createTranslationCall } from "./ast-utils";
 import { getDefaultPattern } from "./string-extractor";
 import * as tg from "./babel-type-guards";
+import { isJSXAttribute, isJSXExpressionContainer, isJSXText, isJSXElement, isJSXFragment } from './frameworks/react-support';
 
 /**
  * Traverses the AST to replace matched strings/JSX/templates with translation function calls.
@@ -35,6 +36,9 @@ export function replaceStringsWithTCalls(
   const patternRegex = options?.pattern
     ? new RegExp(options.pattern, "g")
     : new RegExp(getDefaultPattern().source, "g");
+
+  // 支持自定义调用生成
+  const callFactory = (options.i18nConfig && options.i18nConfig.i18nCall) || ((callName, key, rawText) => createTranslationCall(callName, key));
 
   const recordChange = (
     path: NodePath<t.Node>,
@@ -78,7 +82,7 @@ export function replaceStringsWithTCalls(
             tg.isIdentifier(path.parent.callee) &&
             path.parent.callee.name === effectiveMethodName &&
             path.listKey === "arguments") ||
-            tg.isJSXAttribute(path.parent) ||
+            isJSXAttribute(path.parent) ||
             tg.isImportDeclaration(path.parent) ||
             tg.isExportDeclaration(path.parent)
         ) {
@@ -106,6 +110,9 @@ export function replaceStringsWithTCalls(
         let madeChangeInString = false;
         let firstMatchIndex = -1;
 
+        // 支持自定义调用生成
+        const callFactory = (options.i18nConfig && options.i18nConfig.i18nCall) || ((callName, key, rawText) => createTranslationCall(callName, key));
+
         while ((match = patternRegex.exec(nodeValue)) !== null) {
             if (firstMatchIndex === -1) {
                 firstMatchIndex = match.index;
@@ -131,8 +138,15 @@ export function replaceStringsWithTCalls(
             if (stringParts.length === expressions.length) {
                 stringParts.push("");
             }
+            // Extract the raw text without delimiters for i18nCall
+            const pattern = options?.pattern
+              ? new RegExp(options.pattern)
+              : new RegExp(getDefaultPattern().source);
+            const rawTextMatch = pattern.exec(matchedTextWithDelimiters);
+            const rawText = rawTextMatch ? rawTextMatch[1] : matchedTextWithDelimiters;
+            
             expressions.push(
-                createTranslationCall(translationMethod, translationKey)
+                callFactory(effectiveMethodName, translationKey, rawText)
             );
             madeChangeInString = true;
             } else {
@@ -203,8 +217,9 @@ export function replaceStringsWithTCalls(
 
                 if (translationKey !== undefined) {
                     const originalNode = path.node.value;
+                    const rawText = match[1]; // Extract the raw text without delimiters
                     const replacementNode = t.jsxExpressionContainer(
-                        createTranslationCall(translationMethod, translationKey)
+                        callFactory(translationMethod, translationKey, rawText)
                     );
                     recordChange(path, originalNode, replacementNode);
                     path.node.value = replacementNode;
@@ -246,9 +261,16 @@ export function replaceStringsWithTCalls(
             );
 
             if (translationKey !== undefined) {
+                // Extract the raw text without delimiters for i18nCall
+                const pattern = options?.pattern
+                  ? new RegExp(options.pattern)
+                  : new RegExp(getDefaultPattern().source);
+                const rawTextMatch = pattern.exec(matchedTextWithDelimiters);
+                const rawText = rawTextMatch ? rawTextMatch[1] : matchedTextWithDelimiters;
+                
                 newNodes.push(
                     t.jsxExpressionContainer(
-                        createTranslationCall(translationMethod, translationKey)
+                        callFactory(translationMethod, translationKey, rawText)
                     )
                 );
                 madeChangeInJSXText = true;
@@ -329,14 +351,33 @@ export function replaceStringsWithTCalls(
             const interpolations = t.objectExpression(properties);
 
             const originalNode = path.node;
-            // Create the t(key, { interpolations }) call
-            const replacementNode = createTranslationCall(
-              translationMethod,
-              translationKey,
-              interpolations // Pass interpolations object
-            );
-            recordChange(path, originalNode, replacementNode);
-            path.replaceWith(replacementNode);
+            // Extract the raw text without delimiters for i18nCall
+            const pattern = options?.pattern
+              ? new RegExp(options.pattern)
+              : new RegExp(getDefaultPattern().source);
+            const rawTextMatch = pattern.exec(originalRawStringForPatternCheck);
+            const rawText = rawTextMatch ? rawTextMatch[1] : originalRawStringForPatternCheck;
+            
+            // For custom i18nCall, we need to handle interpolations differently
+            if (options.i18nConfig && options.i18nConfig.i18nCall) {
+              // Custom i18nCall should handle interpolations as needed
+              const replacementNode = callFactory(
+                translationMethod,
+                translationKey,
+                rawText
+              );
+              recordChange(path, originalNode, replacementNode);
+              path.replaceWith(replacementNode);
+            } else {
+              // Default behavior with interpolations
+              const replacementNode = createTranslationCall(
+                translationMethod,
+                translationKey,
+                interpolations // Pass interpolations object
+              );
+              recordChange(path, originalNode, replacementNode);
+              path.replaceWith(replacementNode);
+            }
           }
         }
         return; // Handled this case
@@ -383,8 +424,15 @@ export function replaceStringsWithTCalls(
           if (stringParts.length === expressions.length) {
             stringParts.push("");
           }
+          // Extract the raw text without delimiters for i18nCall
+          const pattern = options?.pattern
+            ? new RegExp(options.pattern)
+            : new RegExp(getDefaultPattern().source);
+          const rawTextMatch = pattern.exec(matchedTextWithDelimiters);
+          const rawText = rawTextMatch ? rawTextMatch[1] : matchedTextWithDelimiters;
+          
           expressions.push(
-            createTranslationCall(translationMethod, translationKey)
+            callFactory(translationMethod, translationKey, rawText)
           );
           madeChangeInTemplate = true;
         } else {
