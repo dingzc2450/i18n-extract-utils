@@ -8,6 +8,7 @@ import generate from "@babel/generator";
 import { I18nTransformer, TransformOptions, ExtractedString, UsedExistingKey, ChangeDetail } from "../types";
 import { formatGeneratedCode } from "../code-formatter";
 import { fallbackTransform } from "../fallback-transform";
+import { vueFallbackTransform } from "./vue-fallback-transform";
 import { replaceStringsWithTCalls } from "../ast-replacer";
 
 /**
@@ -98,8 +99,8 @@ export class VueTransformer implements I18nTransformer {
       if (error instanceof Error) {
         console.error(error.stack);
       }
-      
-      const transformedCode = fallbackTransform(code, extractedStrings, options);
+      // Vue 兜底处理
+      const transformedCode = vueFallbackTransform(code, extractedStrings, options);
       return {
         code: transformedCode,
         extractedStrings: [],

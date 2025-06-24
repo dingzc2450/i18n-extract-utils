@@ -1,9 +1,13 @@
-import { hasTranslationHook } from "./hook-utils";
+// fallback-transform.ts
+// 仅适用于 React 代码的兜底替换与 hook/导入插入，不适用于 Vue。
+
+import { hasTranslationHook } from "./frameworks/react-support";
 import { getDefaultPattern } from "./string-extractor";
 import { ExtractedString, TransformOptions } from "./types";
 
 /**
- * Fallback transformation: simple regex replacement and basic hook/import insertion.
+ * Fallback transformation for React: simple regex replacement and basic hook/import insertion.
+ * 仅适用于 React。Vue 请使用 vue-support.ts 内的 vueFallbackTransform。
  * Uses the captured text as the key, similar to the default AST behavior without key generation/reuse.
  */
 export function fallbackTransform(
