@@ -20,6 +20,7 @@ import { formatGeneratedCode } from "./code-formatter";
 import * as tg from "./babel-type-guards"; // 引入类型辅助工具
 import { fallbackTransform } from "./fallback-transform"; // 新增
 import { replaceStringsWithTCalls } from "./ast-replacer";
+import { createFrameworkTransformer, detectFramework, mergeWithFrameworkDefaults, createFrameworkCodeGenerator } from "./frameworks/framework-factory";
 
 /**
  * Traverses the AST to add the translation hook import and call if necessary.
@@ -319,11 +320,11 @@ export class ReactTransformer implements I18nTransformer {
 }
 
 /**
- * 通用多语言提取与替换主入口
+ * 通用多语言提取与替换主入口（增强版，支持框架自动检测）
  * @param filePath 文件路径
  * @param options 转换配置
  * @param existingValueToKey 现有 value->key 映射
- * @param transformer 框架实现（可选，默认 ReactTransformer）
+ * @param transformer 框架实现（可选，会根据 framework 配置自动选择）
  * @returns { code, extractedStrings, usedExistingKeysList, changes }
  */
 export function transformCode(
@@ -338,12 +339,41 @@ export function transformCode(
   changes: ChangeDetail[];
 } {
   const code = fs.readFileSync(filePath, "utf8");
-  // 兼容老用法，默认用 ReactTransformer
-  const realTransformer = transformer || new ReactTransformer();
+  
+  // 如果用户提供了 transformer，直接使用
+  if (transformer) {
+    return transformer.extractAndReplace(
+      code,
+      filePath,
+      options,
+      existingValueToKey
+    );
+  }
+  
+  // 自动检测框架（如果配置中没有指定）
+  const detectedFramework = detectFramework(code, filePath);
+  
+  // 合并用户配置和框架默认配置
+  const mergedOptions = mergeWithFrameworkDefaults(options, detectedFramework);
+  
+  // 优先使用新的框架代码生成器
+  const codeGenerator = createFrameworkCodeGenerator(mergedOptions);
+  if (codeGenerator.canHandle(code, filePath)) {
+    return codeGenerator.processCode(
+      code,
+      filePath,
+      mergedOptions,
+      existingValueToKey
+    );
+  }
+  
+  // 回退到老的 transformer（向后兼容）
+  const realTransformer = createFrameworkTransformer(mergedOptions);
+  
   return realTransformer.extractAndReplace(
     code,
     filePath,
-    options,
+    mergedOptions,
     existingValueToKey
   );
 }

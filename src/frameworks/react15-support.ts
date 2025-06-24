@@ -33,7 +33,6 @@ export class React15Transformer implements I18nTransformer {
         errorRecovery: true,
       });
       // 1. 替换文本为 t('key')，支持自定义调用生成
-      const callFactory = i18nConfig.i18nCall || ((callName, key) => t.callExpression(t.identifier(callName), [t.stringLiteral(String(key))]));
       const { modified, changes: replacementChanges } = replaceStringsWithTCalls(
         ast,
         existingValueToKey || new Map(),

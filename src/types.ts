@@ -56,7 +56,7 @@ export interface TransformOptions {
    * @returns - The generated key (string or number) to use in the translation file.
    */
   generateKey?: (value: string, filePath: string) => string | number;
-  
+
   /**
    * Existing translations, either as a path to a JSON file or a direct object.
    * This is used to check for existing translations and reuse keys.
@@ -167,16 +167,63 @@ export interface I18nTransformer {
 }
 
 /**
+ * 框架特定的代码生成器接口
+ * 每个框架实现自己的解析和代码生成逻辑
+ */
+export interface FrameworkCodeGenerator {
+  /**
+   * 框架名称
+   */
+  name: string;
+
+  /**
+   * 解析源代码并替换i18n字符串
+   * @param code 源代码
+   * @param filePath 文件路径
+   * @param options 转换选项
+   * @param existingValueToKey 已存在的键值映射
+   * @returns 转换结果
+   */
+  processCode(
+    code: string,
+    filePath: string,
+    options: TransformOptions,
+    existingValueToKey?: Map<string, string | number>
+  ): {
+    code: string;
+    extractedStrings: ExtractedString[];
+    usedExistingKeysList: UsedExistingKey[];
+    changes: ChangeDetail[];
+  };
+
+  /**
+   * 检查是否支持处理此文件
+   * @param code 源代码
+   * @param filePath 文件路径
+   * @returns 是否支持
+   */
+  canHandle(code: string, filePath: string): boolean;
+}
+
+/**
  * 多语言配置总入口
  */
 export interface I18nConfig {
-  /** 当前框架类型（如 'react' | 'react15' | 'vue' 等） */
-  framework?: string;
+  /** 
+   * 当前框架类型（如 'react' | 'react15' | 'vue' 等）
+   * @description 'react' 表示 React 16+，'react15' 表示 React 15
+   * @description 'vue' 表示 Vue.js，'vue2' 表示 Vue 2.x，'vue3' 表示 Vue 3.x
+   */
+  framework?: "react" | "react15" | "vue" | "vue2" | "vue3";
   /** 国际化导入配置，支持自定义，兼容 translationMethod/hookName/hookImport */
   i18nImport?: I18nImportConfig;
   /**
    * 自定义生成调用表达式的方法（返回 t.CallExpression）
    * (callName, key, rawText) => t.CallExpression
    */
-  i18nCall?: (callName: string, key: string | number, rawText: string) => import("@babel/types").CallExpression;
+  i18nCall?: (
+    callName: string,
+    key: string | number,
+    rawText: string
+  ) => import("@babel/types").CallExpression;
 }
