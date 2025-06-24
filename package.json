@@ -34,8 +34,8 @@
     "internationalization",
     "ast"
   ],
-  "author": "",
-  "license": "ISC",
+  "author": "Dz",
+  "license": "Apache-2.0",
   "dependencies": {
     "@babel/generator": "^7.27.0",
     "@babel/parser": "^7.23.0",
