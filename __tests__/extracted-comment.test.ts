@@ -490,33 +490,115 @@ export function Welcome() {
     });
   });
 
-  describe("Vue Framework Future Support Note", () => {
-    it("should note that Vue framework will support comment feature in future", () => {
-      // 这个测试用例主要是文档性的，提醒Vue框架将在未来支持注释功能
-      // 当前Vue框架的注释功能标记为"@future 待实现"
-
-      const vueOptions: TransformOptions = {
-        i18nConfig: {
-          framework: "vue",
-          i18nImport: {
-            name: "t",
-            importName: "useI18n",
-            source: "vue-i18n",
-          },
+  describe("Vue Framework - Comments", () => {
+    const baseOptions: TransformOptions = {
+      i18nConfig: {
+        framework: "vue",
+        i18nImport: {
+          name: "t",
+          importName: "useI18n",
+          source: "vue-i18n",
         },
-        appendExtractedComment: true,
-        extractedCommentType: "block",
-      };
+      },
+      appendExtractedComment: true,
+    };
 
-      // 注意：当前Vue框架尚未实现注释功能
-      // 此测试用例仅作为未来实现的占位符
-      expect(vueOptions.appendExtractedComment).toBe(true);
-      expect(vueOptions.extractedCommentType).toBe("block");
+    it("should add HTML comment in template for string replacement", () => {
+      const input = `
+<template>
+  <div>___Hello Vue Template___</div>
+</template>
+`;
+      const tempFile = createTempFile(input, ".vue");
+      tempFiles.push(tempFile);
 
-      // TODO: 当Vue框架实现注释功能时，添加具体的测试用例
-      console.log(
-        "Vue framework comment feature will be implemented in future versions"
-      );
+      const result = transformCode(tempFile, { ...baseOptions, extractedCommentType: "line" });
+
+      expect(result.code).toContain("{{ t(\"Hello Vue Template\") }}");
+      // Vue templates use HTML comments
+      expect(result.code).toContain("<!-- Hello Vue Template -->");
+      expect(result.extractedStrings).toHaveLength(1);
+      expect(result.extractedStrings[0].value).toBe("Hello Vue Template");
+    });
+
+    it("should add line comment in script setup", () => {
+      const input = `
+<script setup>
+import { ref } from 'vue';
+const message = ref('___Hello Vue Script___');
+</script>
+`;
+      const tempFile = createTempFile(input, ".vue");
+      tempFiles.push(tempFile);
+
+      const result = transformCode(tempFile, { ...baseOptions, extractedCommentType: "line" });
+
+      expect(result.code).toContain("const message = ref(t(\"Hello Vue Script\"));");
+      expect(result.code).toContain("// Hello Vue Script");
+      expect(result.extractedStrings).toHaveLength(1);
+      expect(result.extractedStrings[0].value).toBe("Hello Vue Script");
+    });
+
+    it("should add block comment in script setup", () => {
+      const input = `
+<script setup>
+import { ref } from 'vue';
+const message = ref('___Hello Vue Script Block___');
+</script>
+`;
+      const tempFile = createTempFile(input, ".vue");
+      tempFiles.push(tempFile);
+
+      const result = transformCode(tempFile, { ...baseOptions, extractedCommentType: "block" });
+
+      expect(result.code).toContain("const message = ref(t(\"Hello Vue Script Block\"));");
+      expect(result.code).toContain("/* Hello Vue Script Block */");
+      expect(result.extractedStrings).toHaveLength(1);
+      expect(result.extractedStrings[0].value).toBe("Hello Vue Script Block");
+    });
+
+    it("should handle both template and script replacements with comments", () => {
+      const input = `
+<template>
+  <p>___Static Vue Text___</p>
+</template>
+<script setup>
+import { ref } from 'vue';
+const dynamicText = ref('___Dynamic Vue Text___');
+</script>
+`;
+      const tempFile = createTempFile(input, ".vue");
+      tempFiles.push(tempFile);
+
+      const result = transformCode(tempFile, { ...baseOptions, extractedCommentType: "line" });
+
+      expect(result.code).toContain("{{ t(\"Static Vue Text\") }}");
+      expect(result.code).toContain("<!-- Static Vue Text -->");
+      expect(result.code).toContain("const dynamicText = ref(t(\"Dynamic Vue Text\"));");
+      expect(result.code).toContain("// Dynamic Vue Text");
+      expect(result.extractedStrings).toHaveLength(2);
+    });
+
+    it("should not add comments for Vue when appendExtractedComment is false", () => {
+      const input = `
+<template>
+  <div>___No Comment Vue___</div>
+</template>
+<script setup>
+const text = '___No Comment Script___';
+</script>
+`;
+      const tempFile = createTempFile(input, ".vue");
+      tempFiles.push(tempFile);
+
+      const result = transformCode(tempFile, { ...baseOptions, appendExtractedComment: false });
+
+      expect(result.code).toContain("{{ t(\"No Comment Vue\") }}");
+      expect(result.code).toContain("const text = t(\"No Comment Script\");");
+      expect(result.code).not.toContain("<!--");
+      expect(result.code).not.toContain("//");
+      expect(result.code).not.toContain("/*");
+      expect(result.extractedStrings).toHaveLength(2);
     });
   });
 });

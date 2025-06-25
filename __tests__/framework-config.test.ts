@@ -18,10 +18,10 @@ const tempFiles: string[] = [];
 afterEach(() => {
   tempFiles.forEach((file) => {
     if (fs.existsSync(file)) {
-      try { 
-        fs.unlinkSync(file); 
-      } catch (err) { 
-        console.error(`Error removing temp file ${file}:`, err); 
+      try {
+        fs.unlinkSync(file);
+      } catch (err) {
+        console.error(`Error removing temp file ${file}:`, err);
       }
     }
   });
@@ -44,12 +44,14 @@ describe("Framework Configuration Tests", () => {
 
       const result = transformCode(tempFile, {
         i18nConfig: {
-          framework: "react"
-        }
+          framework: "react",
+        },
       });
 
-      expect(result.code).toContain('import { useTranslation } from "react-i18next";');
-      expect(result.code).toContain('const { t } = useTranslation();');
+      expect(result.code).toContain(
+        'import { useTranslation } from "react-i18next";'
+      );
+      expect(result.code).toContain("const { t } = useTranslation();");
       expect(result.code).toContain('t("Hello World")');
     });
 
@@ -68,8 +70,10 @@ describe("Framework Configuration Tests", () => {
       // 不指定 framework，应该自动检测为 React（因为有 useState）
       const result = transformCode(tempFile, {});
 
-      expect(result.code).toContain('import { useTranslation } from "react-i18next";');
-      expect(result.code).toContain('const { t } = useTranslation();');
+      expect(result.code).toContain(
+        'import { useTranslation } from "react-i18next";'
+      );
+      expect(result.code).toContain("const { t } = useTranslation();");
       expect(result.code).toContain('t("Hello World")');
     });
   });
@@ -91,14 +95,14 @@ describe("Framework Configuration Tests", () => {
 
       const result = transformCode(tempFile, {
         i18nConfig: {
-          framework: "react15"
-        }
+          framework: "react15",
+        },
       });
 
       expect(result.code).toContain('import { t } from "i18n";');
       expect(result.code).toContain('t("Hello World")');
-      expect(result.code).not.toContain('useTranslation');
-      expect(result.code).not.toContain('const { t } =');
+      expect(result.code).not.toContain("useTranslation");
+      expect(result.code).not.toContain("const { t } =");
     });
 
     test("should auto-detect React 15 framework", () => {
@@ -139,9 +143,9 @@ describe("Framework Configuration Tests", () => {
           framework: "react15",
           i18nImport: {
             name: "translate",
-            source: "my-i18n-lib"
-          }
-        }
+            source: "my-i18n-lib",
+          },
+        },
       });
 
       expect(result.code).toContain('import { translate } from "my-i18n-lib";');
@@ -161,21 +165,21 @@ describe("Framework Configuration Tests", () => {
           }
         });
       `;
-      const tempFile = createTempFile(code, "vue");
+      const tempFile = createTempFile(code, "tsx");
       tempFiles.push(tempFile);
 
       const result = transformCode(tempFile, {
         i18nConfig: {
-          framework: "vue"
-        }
+          framework: "vue",
+        },
       });
 
       expect(result.code).toContain('import { useI18n } from "vue-i18n";');
-      expect(result.code).toContain('const { t } = useI18n();');
+      expect(result.code).toContain("const { t } = useI18n();");
       expect(result.code).toContain('t("Hello World")');
     });
 
-    test("should auto-detect Vue framework from .vue extension", () => {
+    test("should auto-detect Vue framework from .tsx extension", () => {
       const code = `
         export default {
           data() {
@@ -185,10 +189,14 @@ describe("Framework Configuration Tests", () => {
           }
         };
       `;
-      const tempFile = createTempFile(code, "vue");
+      const tempFile = createTempFile(code, "tsx");
       tempFiles.push(tempFile);
 
-      const result = transformCode(tempFile, {});
+      const result = transformCode(tempFile, {
+        i18nConfig: {
+          framework: "vue",
+        },
+      });
 
       expect(result.code).toContain('import { useI18n } from "vue-i18n";');
       expect(result.code).toContain('t("Hello World")');
@@ -203,7 +211,7 @@ describe("Framework Configuration Tests", () => {
           }
         };
       `;
-      const tempFile = createTempFile(code, "vue");
+      const tempFile = createTempFile(code, "tsx");
       tempFiles.push(tempFile);
 
       const result = transformCode(tempFile, {
@@ -212,13 +220,15 @@ describe("Framework Configuration Tests", () => {
           i18nImport: {
             name: "translate",
             importName: "useTranslate",
-            source: "vue-i18n-next"
-          }
-        }
+            source: "vue-i18n-next",
+          },
+        },
       });
 
-      expect(result.code).toContain('import { useTranslate } from "vue-i18n-next";');
-      expect(result.code).toContain('const { translate } = useTranslate();');
+      expect(result.code).toContain(
+        'import { useTranslate } from "vue-i18n-next";'
+      );
+      expect(result.code).toContain("const { translate } = useTranslate();");
       expect(result.code).toContain('translate("Hello World")');
     });
   });
@@ -238,8 +248,10 @@ describe("Framework Configuration Tests", () => {
 
       const result = transformCode(tempFile, {});
 
-      expect(result.code).toContain('import { useTranslation } from "react-i18next";');
-      expect(result.code).toContain('const { t } = useTranslation();');
+      expect(result.code).toContain(
+        'import { useTranslation } from "react-i18next";'
+      );
+      expect(result.code).toContain("const { t } = useTranslation();");
     });
 
     test("should detect Vue from exports and methods", () => {
@@ -288,18 +300,22 @@ describe("Framework Configuration Tests", () => {
           }
         };
       `;
-      const vueFile = createTempFile(vueCode, "vue");
+      const vueFile = createTempFile(vueCode, "tsx");
       tempFiles.push(vueFile);
 
       // Transform React file
       const reactResult = transformCode(reactFile, {});
-      expect(reactResult.code).toContain('useTranslation');
-      expect(reactResult.code).toContain('react-i18next');
+      expect(reactResult.code).toContain("useTranslation");
+      expect(reactResult.code).toContain("react-i18next");
 
       // Transform Vue file
-      const vueResult = transformCode(vueFile, {});
-      expect(vueResult.code).toContain('useI18n');
-      expect(vueResult.code).toContain('vue-i18n');
+      const vueResult = transformCode(vueFile, {
+        i18nConfig: {
+          framework: "vue",
+        },
+      });
+      expect(vueResult.code).toContain("useI18n");
+      expect(vueResult.code).toContain("vue-i18n");
     });
   });
 
@@ -318,12 +334,12 @@ describe("Framework Configuration Tests", () => {
       // 强制使用 Vue 框架，即使代码看起来像 React
       const result = transformCode(tempFile, {
         i18nConfig: {
-          framework: "vue"
-        }
+          framework: "vue",
+        },
       });
 
       expect(result.code).toContain('import { useI18n } from "vue-i18n";');
-      expect(result.code).toContain('const { t } = useI18n();');
+      expect(result.code).toContain("const { t } = useI18n();");
     });
   });
 
@@ -341,13 +357,15 @@ describe("Framework Configuration Tests", () => {
 
       const result = transformCode(tempFile, {
         i18nConfig: {
-          framework: "unknown-framework" as any
-        }
+          framework: "unknown-framework" as any,
+        },
       });
 
       // 应该回退到 React
-      expect(result.code).toContain('import { useTranslation } from "react-i18next";');
-      expect(result.code).toContain('const { t } = useTranslation();');
+      expect(result.code).toContain(
+        'import { useTranslation } from "react-i18next";'
+      );
+      expect(result.code).toContain("const { t } = useTranslation();");
     });
 
     test("should handle files without clear framework indicators", () => {

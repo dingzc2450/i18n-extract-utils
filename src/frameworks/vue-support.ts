@@ -10,6 +10,27 @@ import { formatGeneratedCode } from "../code-formatter";
 import { fallbackTransform } from "../fallback-transform";
 import { vueFallbackTransform } from "./vue-fallback-transform";
 import { replaceStringsWithTCalls } from "../ast-replacer";
+import { getKeyAndRecord } from "../key-manager";
+
+/**
+ * 将提取的注释附加到 AST 节点。
+ * @param node 要附加注释的节点。
+ * @param commentText 注释的文本。
+ */
+function attachExtractedCommentToNode(node: t.Node, commentText: string) {
+  if (!node) return;
+  const comment: t.CommentLine = {
+    type: "CommentLine",
+    // 转义结束注释字符并添加填充
+    value: ` ${commentText.replace(/\*\//g, "* /")} `,
+  };
+
+  const comments = (node.trailingComments || []) as t.Comment[];
+  // 避免添加重复的注释
+  if (!comments.some(c => c.value.trim() === commentText.trim())) {
+    node.trailingComments = [...comments, comment];
+  }
+}
 
 /**
  * Vue 框架的多语言提取与替换实现
@@ -38,12 +59,69 @@ export class VueTransformer implements I18nTransformer {
     let changes: ChangeDetail[] = [];
 
     try {
-      const ast = parse(code, {
+      // 检查是否是Vue SFC文件
+      const isVueSFC = filePath.endsWith('.vue');
+      let processedCode = code;
+      
+      // 如果是Vue文件，首先处理模板部分
+      if (isVueSFC) {
+        // 提取和处理模板部分（HTML）
+        const templateMatch = code.match(/<template>([\s\S]*?)<\/template>/);
+        if (templateMatch && templateMatch[1]) {
+          const templateContent = templateMatch[1];
+          const pattern = options?.pattern 
+            ? new RegExp(options.pattern, 'g')
+            : /___(.+?)___/g;
+          
+          // 替换模板中的文本并收集要添加注释的位置
+          let processedTemplate = templateContent.replace(pattern, (match, extractedValue) => {
+            if (!extractedValue) return match;
+            
+            // 获取或生成键值
+            const key = getKeyAndRecord(
+              match,
+              { filePath, line: 0, column: 0 },
+              existingValueToKey || new Map(),
+              new Map(),
+              extractedStrings,
+              usedExistingKeysList,
+              options
+            );
+            
+            const replacement = `{{ t('${key}') }}`;
+            
+            if (options.appendExtractedComment) {
+              // 直接返回带HTML注释的替换文本
+              return `${replacement} <!-- ${extractedValue} -->`;
+            }
+            
+            return replacement;
+          });
+          
+          // 如果有替换，更新原始代码
+          if (processedTemplate !== templateContent) {
+            processedCode = code.replace(templateMatch[0], `<template>${processedTemplate}</template>`);
+          }
+        }
+      }
+
+      // 解析脚本部分的AST（提取script内容）
+      let scriptContent = processedCode;
+      const scriptMatch = processedCode.match(/<script[^>]*>([\s\S]*?)<\/script>/);
+      if (isVueSFC && scriptMatch && scriptMatch[1]) {
+        scriptContent = scriptMatch[1];
+      } else if (isVueSFC) {
+        // 如果没有script标签，创建一个空的script内容
+        scriptContent = '';
+      }
+
+      const ast = parse(scriptContent || 'export default {}', {
         sourceType: "module",
-        plugins: ["typescript", "jsx"], // 添加 JSX 支持以处理混合代码
+        plugins: ["typescript", "jsx"],
         errorRecovery: true,
       });
 
+      // 继续处理JS/TS部分
       // 1. 替换字符串为翻译调用
       const { modified, changes: replacementChanges } = replaceStringsWithTCalls(
         ast,
@@ -56,9 +134,38 @@ export class VueTransformer implements I18nTransformer {
       );
       changes = replacementChanges;
 
-      // 如果没有修改，直接返回原始代码
+      // 如果 options.appendExtractedComment 为 true，则添加注释
+      if (options.appendExtractedComment && (extractedStrings.length > 0 || usedExistingKeysList.length > 0)) {
+        const keyToValue = new Map<string | number, string>();
+        extractedStrings.forEach(s => keyToValue.set(s.key, s.value));
+        usedExistingKeysList.forEach(s => keyToValue.set(s.key, s.value));
+
+        traverse(ast, {
+          CallExpression(path) {
+            if (
+              t.isIdentifier(path.node.callee) &&
+              path.node.callee.name === translationMethod &&
+              path.node.arguments.length > 0 &&
+              t.isStringLiteral(path.node.arguments[0])
+            ) {
+              const key = path.node.arguments[0].value;
+              const originalValue = keyToValue.get(key);
+
+              if (originalValue) {
+                // 找到父级语句以附加注释
+                const parentStatement = path.findParent((p) => p.isStatement());
+                if (parentStatement) {
+                  attachExtractedCommentToNode(parentStatement.node, originalValue);
+                }
+              }
+            }
+          },
+        });
+      }
+
+      // 如果没有修改，直接返回处理后的代码
       if (!modified && extractedStrings.length === 0) {
-        return { code, extractedStrings, usedExistingKeysList, changes: [] };
+        return { code: processedCode, extractedStrings, usedExistingKeysList, changes: [] };
       }
 
       // 2. 检查是否需要添加 i18n 相关导入和设置
@@ -67,29 +174,48 @@ export class VueTransformer implements I18nTransformer {
       let setupAdded = false;
 
       if (needsI18nSetup) {
-        const setupResult = this.addI18nSetup(ast, translationMethod, hookName, hookImport, code);
+        const setupResult = this.addI18nSetup(ast, translationMethod, hookName, hookImport, processedCode);
         importAdded = setupResult.importAdded;
         setupAdded = setupResult.setupAdded;
       }
 
       // 3. 生成代码
-      let { code: generatedCode } = generate(ast, {
+      let { code: generatedScriptCode } = generate(ast, {
         retainLines: true,
         compact: false,
         comments: true,
         jsescOption: { minimal: true },
       });
 
-      const transformedCode = formatGeneratedCode(generatedCode, {
-        importAdded,
-        hookCallAdded: setupAdded,
-        hookName,
-        hookImport,
-        translationMethod: needsI18nSetup ? translationMethod : undefined,
-      });
+      // 如果是Vue SFC文件，需要重新组装完整的文件结构
+      let finalCode: string;
+      if (isVueSFC) {
+        // 提取template、script、style部分
+        const templateMatch = processedCode.match(/(<template[^>]*>[\s\S]*?<\/template>)/);
+        const scriptMatch = processedCode.match(/<script[^>]*>([\s\S]*?)<\/script>/);
+        const styleMatch = processedCode.match(/(<style[^>]*>[\s\S]*?<\/style>)/);
+        
+        let templatePart = templateMatch ? templateMatch[1] : '';
+        let stylePart = styleMatch ? styleMatch[1] : '';
+        
+        // 重新组装，使用处理后的script内容
+        const scriptTag = scriptMatch ? 
+          `<script${scriptMatch[0].includes('setup') ? ' setup' : ''}>\n${generatedScriptCode}\n</script>` :
+          `<script setup>\n${generatedScriptCode}\n</script>`;
+          
+        finalCode = [templatePart, scriptTag, stylePart].filter(part => part.trim()).join('\n\n');
+      } else {
+        finalCode = formatGeneratedCode(generatedScriptCode, {
+          importAdded,
+          hookCallAdded: setupAdded,
+          hookName,
+          hookImport,
+          translationMethod: needsI18nSetup ? translationMethod : undefined,
+        });
+      }
 
       return {
-        code: transformedCode,
+        code: finalCode,
         extractedStrings,
         usedExistingKeysList,
         changes,

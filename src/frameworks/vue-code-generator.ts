@@ -14,6 +14,7 @@ import {
 } from "../types";
 import { getKeyAndRecord } from "../key-manager";
 import { getDefaultPattern } from "../string-extractor";
+import { attachExtractedCommentToNode } from "../ast-utils";
 
 /**
  * Vue专用代码生成器
@@ -22,16 +23,49 @@ import { getDefaultPattern } from "../string-extractor";
 export class VueCodeGenerator implements FrameworkCodeGenerator {
   name = "vue";
 
+  /**
+   * 将提取的注释附加到 AST 节点。
+   * @param node 要附加注释的节点。
+   * @param commentText 注释的文本。
+   * @param commentType 注释类型，'line' 或 'block'。
+   */
+  private attachExtractedCommentToNode(
+    node: t.Node,
+    commentText: string,
+    commentType: "line" | "block" = "line"
+  ) {
+    if (!node) return;
+
+    if (commentType === "block") {
+      const comment: t.CommentBlock = {
+        type: "CommentBlock",
+        value: ` ${commentText.replace(/\*\//g, "* /")} `,
+      };
+      const comments = (node.trailingComments || []) as t.Comment[];
+      if (!comments.some((c) => c.value.trim() === commentText.trim())) {
+        node.trailingComments = [...comments, comment];
+      }
+    } else {
+      const comment: t.CommentLine = {
+        type: "CommentLine",
+        value: ` ${commentText.replace(/\*\//g, "* /")} `,
+      };
+      const comments = (node.trailingComments || []) as t.Comment[];
+      if (!comments.some((c) => c.value.trim() === commentText.trim())) {
+        node.trailingComments = [...comments, comment];
+      }
+    }
+  }
+
   canHandle(code: string, filePath: string): boolean {
     return (
-      filePath.endsWith('.vue') ||
-      code.includes('<template>') ||
-      code.includes('export default') && (
-        code.includes('setup()') || 
-        code.includes('setup:') || 
-        code.includes('data()') || 
-        code.includes('methods:')
-      )
+      filePath.endsWith(".vue") ||
+      code.includes("<template>") ||
+      (code.includes("export default") &&
+        (code.includes("setup()") ||
+          code.includes("setup:") ||
+          code.includes("data()") ||
+          code.includes("methods:")))
     );
   }
 
@@ -50,7 +84,7 @@ export class VueCodeGenerator implements FrameworkCodeGenerator {
     const i18nImportConfig = i18nConfig.i18nImport || {
       name: "t",
       importName: "useI18n",
-      source: "vue-i18n"
+      source: "vue-i18n",
     };
 
     const translationMethod = i18nImportConfig.name;
@@ -58,14 +92,22 @@ export class VueCodeGenerator implements FrameworkCodeGenerator {
     const hookImport = i18nImportConfig.source;
 
     // 检查是否为Vue单文件组件
-    const isVueSFC = code.includes('<template>') || code.includes('<script>');
-    
+    const isVueSFC =
+      filePath.endsWith(".vue") ||
+      code.includes("<template>") ||
+      code.includes("<script");
+
     if (isVueSFC) {
       // 处理Vue单文件组件
       return this.processSFC(code, filePath, options, existingValueToKey);
     } else {
       // 处理纯JavaScript Vue组件
-      return this.processJavaScriptVue(code, filePath, options, existingValueToKey);
+      return this.processJavaScriptVue(
+        code,
+        filePath,
+        options,
+        existingValueToKey
+      );
     }
   }
 
@@ -87,7 +129,7 @@ export class VueCodeGenerator implements FrameworkCodeGenerator {
     const i18nImportConfig = i18nConfig.i18nImport || {
       name: "t",
       importName: "useI18n",
-      source: "vue-i18n"
+      source: "vue-i18n",
     };
 
     const translationMethod = i18nImportConfig.name;
@@ -96,7 +138,7 @@ export class VueCodeGenerator implements FrameworkCodeGenerator {
 
     // 解析Vue单文件组件
     const vueFile = this.parseVueFile(code);
-    
+
     // 处理模板部分
     if (vueFile.template) {
       vueFile.template = this.processTemplate(
@@ -156,7 +198,7 @@ export class VueCodeGenerator implements FrameworkCodeGenerator {
     const i18nImportConfig = i18nConfig.i18nImport || {
       name: "t",
       importName: "useI18n",
-      source: "vue-i18n"
+      source: "vue-i18n",
     };
 
     const translationMethod = i18nImportConfig.name;
@@ -223,11 +265,11 @@ export class VueCodeGenerator implements FrameworkCodeGenerator {
     isSetupScript: boolean;
   } {
     // 使用更智能的解析方式来处理嵌套的template标签
-    const template = this.extractSection(code, 'template');
-    const script = this.extractSection(code, 'script');
-    const style = this.extractSection(code, 'style');
-    
-    const isSetupScript = code.includes('<script setup');
+    const template = this.extractSection(code, "template");
+    const script = this.extractSection(code, "script");
+    const style = this.extractSection(code, "style");
+
+    const isSetupScript = code.includes("<script setup");
 
     return {
       template,
@@ -240,27 +282,30 @@ export class VueCodeGenerator implements FrameworkCodeGenerator {
   /**
    * 提取Vue文件中的特定section（template、script、style）
    */
-  private extractSection(code: string, sectionName: string): string | undefined {
-    const startTag = new RegExp(`<${sectionName}[^>]*>`, 'i');
-    const endTag = new RegExp(`<\/${sectionName}>`, 'i');
-    
+  private extractSection(
+    code: string,
+    sectionName: string
+  ): string | undefined {
+    const startTag = new RegExp(`<${sectionName}[^>]*>`, "i");
+    const endTag = new RegExp(`<\/${sectionName}>`, "i");
+
     const startMatch = code.match(startTag);
     if (!startMatch) return undefined;
-    
+
     const startIndex = startMatch.index! + startMatch[0].length;
     let depth = 1;
     let currentIndex = startIndex;
-    
+
     // 使用标签计数来正确处理嵌套标签
     while (currentIndex < code.length && depth > 0) {
       const nextStart = code.indexOf(`<${sectionName}`, currentIndex);
       const nextEnd = code.indexOf(`</${sectionName}>`, currentIndex);
-      
+
       if (nextEnd === -1) {
         // 没有找到结束标签
         break;
       }
-      
+
       if (nextStart !== -1 && nextStart < nextEnd) {
         // 找到嵌套的开始标签
         depth++;
@@ -275,7 +320,7 @@ export class VueCodeGenerator implements FrameworkCodeGenerator {
         currentIndex = nextEnd + sectionName.length + 3;
       }
     }
-    
+
     return undefined;
   }
 
@@ -298,27 +343,43 @@ export class VueCodeGenerator implements FrameworkCodeGenerator {
     let processedTemplate = template;
 
     // 查找所有匹配的字符串并替换
-    processedTemplate = processedTemplate.replace(patternRegex, (fullMatch, extractedValue) => {
-      if (!extractedValue) return fullMatch;
+    processedTemplate = processedTemplate.replace(
+      patternRegex,
+      (fullMatch, extractedValue) => {
+        if (!extractedValue) return fullMatch;
 
-      // 获取或生成键值
-      const key = getKeyAndRecord(
-        fullMatch,
-        {
-          filePath,
-          line: 0,
-          column: 0,
-        },
-        existingValueToKey,
-        new Map(),
-        extractedStrings,
-        usedExistingKeysList,
-        options
-      );
+        // 获取或生成键值
+        const key = getKeyAndRecord(
+          fullMatch,
+          {
+            filePath,
+            line: 0,
+            column: 0,
+          },
+          existingValueToKey,
+          new Map(),
+          extractedStrings,
+          usedExistingKeysList,
+          options
+        );
 
-      // 在Vue模板中，需要用{{}}包裹函数调用
-      return `{{ ${translationMethod}('${key}') }}`;
-    });
+        // 在Vue模板中，需要用{{}}包裹函数调用
+        // 使用 Babel AST 生成 {{ t("key") }} 结构
+        const callExpr = t.callExpression(t.identifier(translationMethod), [
+          t.stringLiteral(String(key)),
+        ]);
+        // 生成 t("key") 的代码
+        const { code: callCode } = generate(callExpr, {
+          compact: true,
+          jsescOption: { minimal: true, quotes: "double" },
+        });
+        const replacement = `{{ ${callCode} }}`;
+        if (options.appendExtractedComment) {
+          return `${replacement} <!-- ${extractedValue} -->`;
+        }
+        return replacement;
+      }
+    );
 
     return processedTemplate;
   }
@@ -390,13 +451,13 @@ export class VueCodeGenerator implements FrameworkCodeGenerator {
     existingValueToKey: Map<string, string | number>,
     filePath: string
   ) {
-    const patternRegex = options?.pattern
-      ? new RegExp(options.pattern, "g")
-      : new RegExp(getDefaultPattern().source, "g");
+    const pattern = options?.pattern
+      ? new RegExp(options.pattern)
+      : new RegExp(getDefaultPattern().source); // 移除'g'标志用于match()
 
     traverse(ast, {
       StringLiteral(path) {
-        // 跳过导入声明等
+        // 不处理导入/导出语句中的字符串
         if (
           t.isImportDeclaration(path.parent) ||
           t.isExportDeclaration(path.parent)
@@ -404,20 +465,19 @@ export class VueCodeGenerator implements FrameworkCodeGenerator {
           return;
         }
 
-        const nodeValue = path.node.value;
-        patternRegex.lastIndex = 0;
-        const match = patternRegex.exec(nodeValue);
+        const originalValue = path.node.value;
+        const match = originalValue.match(pattern);
 
-        if (match) {
-          const extractedValue = match[1];
-          if (!extractedValue) return;
+        if (match && match[1]) {
+          const valueToTranslate = match[1];
+          const fullMatch = match[0];
 
           const key = getKeyAndRecord(
-            nodeValue,
+            fullMatch, // 与 processTemplate 保持一致
             {
               filePath,
-              line: path.node.loc?.start.line ?? 0,
-              column: path.node.loc?.start.column ?? 0,
+              line: path.node.loc?.start.line || 0,
+              column: path.node.loc?.start.column || 0,
             },
             existingValueToKey,
             new Map(),
@@ -426,14 +486,30 @@ export class VueCodeGenerator implements FrameworkCodeGenerator {
             options
           );
 
-          if (key) {
-            // 替换为翻译函数调用
-            const callExpression = t.callExpression(
-              t.identifier(translationMethod),
-              [t.stringLiteral(String(key))]
-            );
+          const callExpression = t.callExpression(
+            t.identifier(translationMethod),
+            [t.stringLiteral(String(key))]
+          );
 
-            path.replaceWith(callExpression);
+          path.replaceWith(callExpression);
+
+          // 添加注释（如果启用）
+          if (options.appendExtractedComment) {
+            const commentType = options.extractedCommentType || "line";
+            const statement = path.findParent((p) => p.isStatement());
+            if (statement) {
+              attachExtractedCommentToNode(
+                statement.node,
+                valueToTranslate,
+                commentType
+              );
+            } else {
+              attachExtractedCommentToNode(
+                callExpression,
+                valueToTranslate,
+                commentType
+              );
+            }
           }
         }
       },
@@ -530,7 +606,11 @@ export class VueCodeGenerator implements FrameworkCodeGenerator {
     }
     // 如果没有setup方法但有export default，则创建setup方法
     else if (!hasSetupMethod && hasExportDefault && exportDefaultPath) {
-      this.addSetupMethodToOptionsAPI(exportDefaultPath, translationMethod, hookName);
+      this.addSetupMethodToOptionsAPI(
+        exportDefaultPath,
+        translationMethod,
+        hookName
+      );
     }
   }
 
@@ -541,7 +621,7 @@ export class VueCodeGenerator implements FrameworkCodeGenerator {
   ) {
     if (t.isBlockStatement(path.node.body)) {
       const setupBody = path.node.body.body;
-      
+
       // 检查是否已有useI18n调用
       let hasUseI18n = false;
       setupBody.forEach((stmt: t.Statement) => {
@@ -586,12 +666,12 @@ export class VueCodeGenerator implements FrameworkCodeGenerator {
     hookName: string
   ) {
     if (
-      (t.isFunctionExpression(path.node.value) || 
-       t.isArrowFunctionExpression(path.node.value)) &&
+      (t.isFunctionExpression(path.node.value) ||
+        t.isArrowFunctionExpression(path.node.value)) &&
       t.isBlockStatement(path.node.value.body)
     ) {
       const setupBody = path.node.value.body.body;
-      
+
       // 类似于setupMethod的处理
       let hasUseI18n = false;
       setupBody.forEach((stmt: t.Statement) => {
@@ -681,7 +761,7 @@ export class VueCodeGenerator implements FrameworkCodeGenerator {
             const variableDeclaration = t.variableDeclaration("const", [
               variableDeclarator,
             ]);
-            
+
             path.node.body.splice(insertIndex, 0, variableDeclaration);
           }
         },
@@ -705,7 +785,7 @@ export class VueCodeGenerator implements FrameworkCodeGenerator {
     }
 
     if (vueFile.script) {
-      const scriptTag = vueFile.isSetupScript ? '<script setup>' : '<script>';
+      const scriptTag = vueFile.isSetupScript ? "<script setup>" : "<script>";
       result += `${scriptTag}\n${vueFile.script}\n</script>\n\n`;
     }
 
@@ -754,7 +834,7 @@ export class VueCodeGenerator implements FrameworkCodeGenerator {
             t.identifier(translationMethod),
             false,
             true
-          )
+          ),
         ])
       );
 

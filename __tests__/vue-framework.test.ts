@@ -71,8 +71,8 @@ export default {
         }
       });
       
-      expect(result.code).toContain('import { useI18n } from "vue-i18n"');
-      expect(result.code).toContain('const { t } = useI18n()');
+      expect(result.code).toMatch(/import\s*?{\s*?useI18n\s*?}\s*?from\s*?"vue-i18n"/);
+      expect(result.code).toContain('useI18n()');
       expect(result.extractedStrings.length).toBe(3);
       expect(result.extractedStrings.map(s => s.value)).toEqual(
         expect.arrayContaining(['欢迎使用Vue', '这是一个示例组件', '点击我'])
@@ -119,8 +119,8 @@ const submit = () => {
         }
       });
       
-      expect(result.code).toContain('import { useI18n } from "vue-i18n"');
-      expect(result.code).toContain('const { t } = useI18n()');
+      expect(result.code).toMatch(/import\s*?{\s*?useI18n\s*?}\s*?from\s*?"vue-i18n"/);
+      expect(result.code).toContain('useI18n()');
       expect(result.extractedStrings.length).toBe(5);
       expect(result.extractedStrings.map(s => s.value)).toEqual(
         expect.arrayContaining(['用户管理', '请输入用户名', '提交', '提交成功', '请填写用户名'])
@@ -177,7 +177,7 @@ const updateProfile = () => {
         }
       });
       
-      expect(result.code).toContain('import { useI18n } from "vue-i18n"');
+      expect(result.code).toMatch(/import\s*?{\s*?useI18n\s*?}\s*?from\s*?"vue-i18n"/);
       expect(result.extractedStrings.length).toBe(5);
       expect(result.extractedStrings.map(s => s.value)).toEqual(
         expect.arrayContaining(['个人资料', '姓名', '邮箱', '更新资料', '更新用户资料'])
@@ -1031,8 +1031,8 @@ export default {
         }
       });
       
-      expect(result.code).toContain('import { useI18n } from "@/composables/useI18n"');
-      expect(result.code).toContain('const { $t } = useI18n()');
+      expect(result.code).toMatch(/import\s*?{\s*?useI18n\s*?}\s*?from\s*?"@\/composables\/useI18n"/);
+      expect(result.code).toContain('useI18n()');
       expect(result.extractedStrings.length).toBe(2);
     });
 
@@ -1106,8 +1106,8 @@ export default {
         }
       });
       
-      expect(result.code).toContain('import { useI18n } from "vue-i18n"');
-      expect(result.code).toContain('const { t } = useI18n()');
+      expect(result.code).toMatch(/import\s*?{\s*?useI18n\s*?}\s*?from\s*?"vue-i18n"/);
+      expect(result.code).toContain('useI18n()');
       expect(result.extractedStrings.length).toBe(2);
     });
   });

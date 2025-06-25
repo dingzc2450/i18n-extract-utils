@@ -46,14 +46,7 @@ export default {
       }
     });
     
-    // 调试输出
-    console.log("=== 转换结果 ===");
-    console.log(result.code);
-    console.log("=== 提取字符串数量 ===", result.extractedStrings.length);
-    console.log("=== 包含导入检查 ===", result.code.includes('import { useI18n } from "vue-i18n"'));
-    console.log("=== 包含模板调用检查 ===", result.code.includes('{{ t('));
-    console.log("=== 包含setup调用检查 ===", result.code.includes('const { t } = useI18n()'));
-    
+
     // 基本检查
     expect(result.extractedStrings.length).toBe(2);
     expect(result.code).toContain('import { useI18n } from "vue-i18n"');
