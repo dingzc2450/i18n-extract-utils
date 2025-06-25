@@ -20,7 +20,12 @@ import { formatGeneratedCode } from "./code-formatter";
 import * as tg from "./babel-type-guards"; // 引入类型辅助工具
 import { fallbackTransform } from "./fallback-transform"; // 新增
 import { replaceStringsWithTCalls } from "./ast-replacer";
-import { createFrameworkTransformer, detectFramework, mergeWithFrameworkDefaults, createFrameworkCodeGenerator } from "./frameworks/framework-factory";
+import {
+  createFrameworkTransformer,
+  detectFramework,
+  mergeWithFrameworkDefaults,
+  createFrameworkCodeGenerator,
+} from "./frameworks/framework-factory";
 
 /**
  * Traverses the AST to add the translation hook import and call if necessary.
@@ -226,9 +231,7 @@ export class ReactTransformer implements I18nTransformer {
     existingValueToKey?: Map<string, string | number>
   ) {
     const translationMethod =
-      options.i18nConfig?.i18nImport?.name ||
-      options.translationMethod ||
-      "t"; // 已废弃，建议通过 options 传递框架配置
+      options.i18nConfig?.i18nImport?.name || options.translationMethod || "t"; // 已废弃，建议通过 options 传递框架配置
     const hookName =
       options.i18nConfig?.i18nImport?.importName ||
       options.hookName ||
@@ -329,7 +332,7 @@ export class ReactTransformer implements I18nTransformer {
  */
 export function transformCode(
   filePath: string,
-  options: TransformOptions,
+  options: Omit<TransformOptions, "existingTranslations">,
   existingValueToKey?: Map<string, string | number>,
   transformer?: I18nTransformer
 ): {
@@ -339,7 +342,7 @@ export function transformCode(
   changes: ChangeDetail[];
 } {
   const code = fs.readFileSync(filePath, "utf8");
-  
+
   // 如果用户提供了 transformer，直接使用
   if (transformer) {
     return transformer.extractAndReplace(
@@ -349,13 +352,13 @@ export function transformCode(
       existingValueToKey
     );
   }
-  
+
   // 自动检测框架（如果配置中没有指定）
   const detectedFramework = detectFramework(code, filePath);
-  
+
   // 合并用户配置和框架默认配置
   const mergedOptions = mergeWithFrameworkDefaults(options, detectedFramework);
-  
+
   // 优先使用新的框架代码生成器
   const codeGenerator = createFrameworkCodeGenerator(mergedOptions);
   if (codeGenerator.canHandle(code, filePath)) {
@@ -366,10 +369,10 @@ export function transformCode(
       existingValueToKey
     );
   }
-  
+
   // 回退到老的 transformer（向后兼容）
   const realTransformer = createFrameworkTransformer(mergedOptions);
-  
+
   return realTransformer.extractAndReplace(
     code,
     filePath,

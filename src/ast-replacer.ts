@@ -8,7 +8,7 @@ import {
   ChangeDetail,
 } from "./types";
 import { getKeyAndRecord } from "./key-manager";
-import { createTranslationCall } from "./ast-utils";
+import { createTranslationCall, attachExtractedCommentToNode, parseJSXTextPlaceholders } from "./ast-utils";
 import { getDefaultPattern } from "./string-extractor";
 import * as tg from "./babel-type-guards";
 import { isJSXAttribute, isJSXExpressionContainer, isJSXText, isJSXElement, isJSXFragment } from './frameworks/react-support';
@@ -109,6 +109,8 @@ export function replaceStringsWithTCalls(
         let match;
         let madeChangeInString = false;
         let firstMatchIndex = -1;
+        let lastMatchedTextWithDelimiters = "";
+        let lastMatch = null;
 
         // 支持自定义调用生成
         const callFactory = (options.i18nConfig && options.i18nConfig.i18nCall) || ((callName, key, rawText) => createTranslationCall(callName, key));
@@ -119,6 +121,8 @@ export function replaceStringsWithTCalls(
             }
             const matchStartIndex = match.index;
             const matchedTextWithDelimiters = match[0];
+            lastMatchedTextWithDelimiters = matchedTextWithDelimiters;
+            lastMatch = match;
 
             if (matchStartIndex > lastIndex) {
             stringParts.push(nodeValue.slice(lastIndex, matchStartIndex));
@@ -144,7 +148,6 @@ export function replaceStringsWithTCalls(
               : new RegExp(getDefaultPattern().source);
             const rawTextMatch = pattern.exec(matchedTextWithDelimiters);
             const rawText = rawTextMatch ? rawTextMatch[1] : matchedTextWithDelimiters;
-            
             expressions.push(
                 callFactory(effectiveMethodName, translationKey, rawText)
             );
@@ -184,6 +187,21 @@ export function replaceStringsWithTCalls(
 
         if (isFullReplacement) {
             replacementNode = expressions[0];
+            // 插入注释
+            if (options.appendExtractedComment && expressions.length === 1) {
+              // 修复：使用最后一次匹配到的内容
+              let rawText = "";
+              if (lastMatch && lastMatchedTextWithDelimiters) {
+                const pattern = options?.pattern
+                  ? new RegExp(options.pattern)
+                  : new RegExp(getDefaultPattern().source);
+                const rawTextMatch = pattern.exec(lastMatchedTextWithDelimiters);
+                rawText = rawTextMatch ? rawTextMatch[1] : lastMatchedTextWithDelimiters;
+              } else {
+                rawText = nodeValue;
+              }
+              attachExtractedCommentToNode(replacementNode, rawText, options.extractedCommentType || "block");
+            }
         } else if (expressions.length > 0) {
             replacementNode = buildTemplateLiteral(stringParts, expressions);
         } else {
@@ -221,6 +239,10 @@ export function replaceStringsWithTCalls(
                     const replacementNode = t.jsxExpressionContainer(
                         callFactory(translationMethod, translationKey, rawText)
                     );
+                    // 插入注释
+                    if (options.appendExtractedComment) {
+                      attachExtractedCommentToNode(replacementNode.expression, rawText, options.extractedCommentType || "block");
+                    }
                     recordChange(path, originalNode, replacementNode);
                     path.node.value = replacementNode;
                 }
@@ -268,11 +290,33 @@ export function replaceStringsWithTCalls(
                 const rawTextMatch = pattern.exec(matchedTextWithDelimiters);
                 const rawText = rawTextMatch ? rawTextMatch[1] : matchedTextWithDelimiters;
                 
-                newNodes.push(
-                    t.jsxExpressionContainer(
-                        callFactory(translationMethod, translationKey, rawText)
-                    )
-                );
+                // Parse JSX text placeholders to generate interpolation
+                const parsedPlaceholders = parseJSXTextPlaceholders(rawText);
+                
+                let translationCall;
+                if (parsedPlaceholders && parsedPlaceholders.interpolationObject) {
+                  // Use canonical text as key and provide interpolation object
+                  translationCall = createTranslationCall(
+                    translationMethod, 
+                    translationKey, 
+                    parsedPlaceholders.interpolationObject
+                  );
+                } else {
+                  // No placeholders, use simple call
+                  translationCall = callFactory(translationMethod, translationKey, rawText);
+                }
+                
+                newNodes.push(t.jsxExpressionContainer(translationCall));
+                
+                if (options.appendExtractedComment) {
+                  // 只对表达式节点插入注释
+                  const lastNode = newNodes[newNodes.length - 1];
+                  if (t.isJSXExpressionContainer(lastNode)) {
+                    // Use the canonical text for comment (with {argN} format)
+                    const commentText = parsedPlaceholders ? parsedPlaceholders.canonicalText : rawText;
+                    attachExtractedCommentToNode(lastNode.expression, commentText, options.extractedCommentType || "block");
+                  }
+                }
                 madeChangeInJSXText = true;
             } else {
                  if (/\S/.test(matchedTextWithDelimiters)) {
@@ -375,6 +419,23 @@ export function replaceStringsWithTCalls(
                 translationKey,
                 interpolations // Pass interpolations object
               );
+              
+              // 插入注释
+              if (options.appendExtractedComment) {
+                // Use the canonical text for comment (with {argN} format)
+                const canonicalText = rawText.replace(/\$\{[^}]+\}/g, (match, offset) => {
+                  const exprIndex = node.expressions.findIndex((expr, i) => {
+                    // This is a simplified approach - in a more complex scenario,
+                    // you might need to track the mapping more precisely
+                    return true; // For now, just use sequential mapping
+                  });
+                  return `{arg${Math.floor(offset / 10) + 1}}`; // Simplified mapping
+                });
+                // Actually, let's use a simpler approach - derive from the translation key
+                const commentText = typeof translationKey === 'string' ? translationKey : String(translationKey);
+                attachExtractedCommentToNode(replacementNode, commentText, options.extractedCommentType || "block");
+              }
+              
               recordChange(path, originalNode, replacementNode);
               path.replaceWith(replacementNode);
             }
@@ -398,6 +459,8 @@ export function replaceStringsWithTCalls(
       let match;
       let madeChangeInTemplate = false;
       let firstMatchIndex = -1;
+      let lastMatchedTextWithDelimiters = "";
+      let lastMatch = null;
 
       while ((match = patternRegex.exec(nodeValue)) !== null) {
         if (firstMatchIndex === -1) {
@@ -405,6 +468,8 @@ export function replaceStringsWithTCalls(
         }
         const matchStartIndex = match.index;
         const matchedTextWithDelimiters = match[0];
+        lastMatchedTextWithDelimiters = matchedTextWithDelimiters;
+        lastMatch = match;
 
         if (matchStartIndex > lastIndex) {
           stringParts.push(nodeValue.slice(lastIndex, matchStartIndex));
@@ -470,6 +535,21 @@ export function replaceStringsWithTCalls(
 
       if (isFullReplacement) {
         replacementNode = expressions[0];
+        // 插入注释
+        if (options.appendExtractedComment && expressions.length === 1) {
+          // 修复：使用最后一次匹配到的内容
+          let rawText = "";
+          if (lastMatch && lastMatchedTextWithDelimiters) {
+            const pattern = options?.pattern
+              ? new RegExp(options.pattern)
+              : new RegExp(getDefaultPattern().source);
+            const rawTextMatch = pattern.exec(lastMatchedTextWithDelimiters);
+            rawText = rawTextMatch ? rawTextMatch[1] : lastMatchedTextWithDelimiters;
+          } else {
+            rawText = nodeValue;
+          }
+          attachExtractedCommentToNode(replacementNode, rawText, options.extractedCommentType || "block");
+        }
       } else if (expressions.length > 0) {
         replacementNode = buildTemplateLiteral(stringParts, expressions);
       } else {

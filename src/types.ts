@@ -5,9 +5,9 @@
 export interface TransformOptions {
   /**
    * The pattern used to match text for extraction.
-   * Default is "___(.+)___".
+   * Default is "___([\s\S]+?)___".
    * 用于匹配要提取文本的模式。
-   * 默认值为 "___(.+)___"。
+   * 默认值为 "___([\s\S]+?)___"。
    */
   pattern?: string;
 
@@ -67,6 +67,19 @@ export interface TransformOptions {
    * 预期的格式（文件和对象相同）为 { key: value }。
    */
   existingTranslations?: string | Record<string, string | number>; // Renamed and updated type
+
+  /**
+   * 是否在执行函数后添加待翻译文本注释，方便核对。
+   * Whether to append extracted text as a comment after the function call for review.
+   * 默认 false。
+   */
+  appendExtractedComment?: boolean;
+
+  /**
+   * 待翻译文本注释类型：block（多行注释 /* ... *&#47;）或 line（单行注释 // ...）。
+   * Type of comment for extracted text: 'block' (/* ... *&#47;) or 'line' (// ...). Default is 'block'.
+   */
+  extractedCommentType?: "block" | "line";
 
   /**
    * 多语言相关配置（框架、导入、调用等）
@@ -214,6 +227,8 @@ export interface I18nConfig {
    * @default 'react'
    * @description 'react' 表示 React 16+，'react15' 表示 React 15
    * @description 'vue' 表示 Vue.js，'vue2' 表示 Vue 2.x，'vue3' 表示 Vue 3.x
+   * @future 待实现：支持 appendExtractedComment/extractedCommentType 注释配置
+   * 当前暂未支持自动在执行函数后添加待翻译文本注释，后续版本将实现。
    */
   framework?: "react" | "react15" | "vue" | "vue2" | "vue3";
   /** 国际化导入配置，支持自定义，兼容 translationMethod/hookName/hookImport */

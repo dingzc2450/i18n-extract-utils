@@ -39,19 +39,20 @@ export function getKeyAndRecord(
 
   // --- FIX: Determine the canonical value for key generation/lookup ---
   let canonicalValue = rawExtractedValue;
-  // Check if the raw extracted value likely contains template literal expressions.
-  // A simple check for "${" is usually sufficient for this context.
-  // A more robust check could involve trying to parse it, but that's overkill here.
-  if (rawExtractedValue.includes("${")) {
-      // Convert template literal placeholders like ${expr} to {argN}
+  // Check if the raw extracted value contains template literal expressions or JSX-style placeholders.
+  // Support both ${variable} (template literal) and {variable} (JSX-style placeholder) formats.
+  if (rawExtractedValue.includes("${") || rawExtractedValue.includes("{")) {
       let argIndex = 1;
-      // Replace ${...} with {argN}. We assume the structure is simple ${expr}.
-      // A more complex regex might be needed if patterns allow nested structures,
-      // but the default ___.*?___ pattern keeps it simple.
-      // We replace any occurrence of ${...} regardless of content inside.
+      // First, convert template literal placeholders like ${expr} to {argN}
       canonicalValue = rawExtractedValue.replace(/\$\{[^}]+\}/g, () => `{arg${argIndex++}}`);
+      
+      // Then, convert JSX-style placeholders like {expr} to {argN} (but avoid double-conversion)
+      // Only process {variable} patterns that are not already in {argN} format
+      canonicalValue = canonicalValue.replace(/\{(?!arg\d+\})[^}]+\}/g, () => `{arg${argIndex++}}`);
+      
       // Example: "Select ${label}" becomes "Select {arg1}"
-      // Example: "Hi ${a}, ${b}" becomes "Hi {arg1}, {arg2}"
+      // Example: "Welcome {userName}" becomes "Welcome {arg1}"
+      // Example: "Hi ${a}, {b}" becomes "Hi {arg1}, {arg2}"
   }
   // Now canonicalValue holds the version like "Select {arg1}" or just "Hello"
   // --- End FIX ---
