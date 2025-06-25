@@ -11,7 +11,7 @@ import { getKeyAndRecord } from "./key-manager";
 import { createTranslationCall, attachExtractedCommentToNode, parseJSXTextPlaceholders } from "./ast-utils";
 import { getDefaultPattern } from "./string-extractor";
 import * as tg from "./babel-type-guards";
-import { isJSXAttribute, isJSXExpressionContainer, isJSXText, isJSXElement, isJSXFragment } from './frameworks/react-support';
+import { isJSXAttribute } from './frameworks/react-support';
 
 /**
  * Traverses the AST to replace matched strings/JSX/templates with translation function calls.

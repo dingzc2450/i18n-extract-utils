@@ -1,4 +1,3 @@
-// vue-code-generator.ts
 // Vue框架专用的代码生成器，处理Vue单文件组件的完整解析和代码生成
 
 import { parse } from "@babel/parser";
@@ -23,39 +22,6 @@ import { attachExtractedCommentToNode } from "../ast-utils";
 export class VueCodeGenerator implements FrameworkCodeGenerator {
   name = "vue";
 
-  /**
-   * 将提取的注释附加到 AST 节点。
-   * @param node 要附加注释的节点。
-   * @param commentText 注释的文本。
-   * @param commentType 注释类型，'line' 或 'block'。
-   */
-  private attachExtractedCommentToNode(
-    node: t.Node,
-    commentText: string,
-    commentType: "line" | "block" = "line"
-  ) {
-    if (!node) return;
-
-    if (commentType === "block") {
-      const comment: t.CommentBlock = {
-        type: "CommentBlock",
-        value: ` ${commentText.replace(/\*\//g, "* /")} `,
-      };
-      const comments = (node.trailingComments || []) as t.Comment[];
-      if (!comments.some((c) => c.value.trim() === commentText.trim())) {
-        node.trailingComments = [...comments, comment];
-      }
-    } else {
-      const comment: t.CommentLine = {
-        type: "CommentLine",
-        value: ` ${commentText.replace(/\*\//g, "* /")} `,
-      };
-      const comments = (node.trailingComments || []) as t.Comment[];
-      if (!comments.some((c) => c.value.trim() === commentText.trim())) {
-        node.trailingComments = [...comments, comment];
-      }
-    }
-  }
 
   canHandle(code: string, filePath: string): boolean {
     return (
@@ -75,9 +41,6 @@ export class VueCodeGenerator implements FrameworkCodeGenerator {
     options: TransformOptions,
     existingValueToKey?: Map<string, string | number>
   ) {
-    const extractedStrings: ExtractedString[] = [];
-    const usedExistingKeysList: UsedExistingKey[] = [];
-    const changes: ChangeDetail[] = [];
 
     // 获取i18n配置
     const i18nConfig = options.i18nConfig || {};
@@ -87,9 +50,6 @@ export class VueCodeGenerator implements FrameworkCodeGenerator {
       source: "vue-i18n",
     };
 
-    const translationMethod = i18nImportConfig.name;
-    const hookName = i18nImportConfig.importName || "useI18n";
-    const hookImport = i18nImportConfig.source;
 
     // 检查是否为Vue单文件组件
     const isVueSFC =
@@ -287,7 +247,6 @@ export class VueCodeGenerator implements FrameworkCodeGenerator {
     sectionName: string
   ): string | undefined {
     const startTag = new RegExp(`<${sectionName}[^>]*>`, "i");
-    const endTag = new RegExp(`<\/${sectionName}>`, "i");
 
     const startMatch = code.match(startTag);
     if (!startMatch) return undefined;

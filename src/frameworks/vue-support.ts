@@ -1,4 +1,3 @@
-// vue-support.ts
 // Vue 框架的多语言提取与替换实现
 
 import { parse } from "@babel/parser";
@@ -7,7 +6,6 @@ import * as t from "@babel/types";
 import generate from "@babel/generator";
 import { I18nTransformer, TransformOptions, ExtractedString, UsedExistingKey, ChangeDetail } from "../types";
 import { formatGeneratedCode } from "../code-formatter";
-import { fallbackTransform } from "../fallback-transform";
 import { vueFallbackTransform } from "./vue-fallback-transform";
 import { replaceStringsWithTCalls } from "../ast-replacer";
 import { getKeyAndRecord } from "../key-manager";

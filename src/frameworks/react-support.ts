@@ -1,9 +1,8 @@
-// react-support.ts
 // 本文件集中管理与 React/JSX 相关的 AST 处理、hook 检查、类型判断等逻辑，便于后续扩展 Vue/低版本 React 支持。
 
 import * as t from "@babel/types";
 import { parse } from "@babel/parser";
-import traverse, { NodePath } from "@babel/traverse";
+import traverse from "@babel/traverse";
 
 /**
  * 检查代码中是否已存在指定的 React 翻译 hook 调用（如 useTranslation）。

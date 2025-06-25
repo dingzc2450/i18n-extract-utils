@@ -1,4 +1,3 @@
-// vue-fallback-transform.ts
 // Vue 专用兜底替换与导入逻辑，仅用于 Vue 代码的 fallback 处理
 import { ExtractedString, TransformOptions } from "../types";
 

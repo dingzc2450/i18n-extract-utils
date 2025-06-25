@@ -228,7 +228,7 @@ class TransformerWrapper implements FrameworkCodeGenerator {
     public name: string
   ) {}
 
-  canHandle(code: string, filePath: string): boolean {
+  canHandle(_code: string, _filePath: string): boolean {
     // 简单的框架检测逻辑
     return true; // 默认都能处理
   }

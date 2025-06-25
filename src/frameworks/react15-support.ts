@@ -33,7 +33,7 @@ export class React15Transformer implements I18nTransformer {
         errorRecovery: true,
       });
       // 1. 替换文本为 t('key')，支持自定义调用生成
-      const { modified, changes: replacementChanges } = replaceStringsWithTCalls(
+      const { changes: replacementChanges } = replaceStringsWithTCalls(
         ast,
         existingValueToKey || new Map(),
         extractedStrings,
