@@ -38,9 +38,17 @@ export function collectReplacementInfo(
     ? new RegExp(options.pattern, "g")
     : new RegExp(getDefaultPattern().source, "g");
 
-  // 支持自定义调用生成
-  const callFactory = (options.i18nConfig && options.i18nConfig.i18nCall) || 
-    ((callName, key, rawText) => createTranslationCall(callName, key));
+
+  // 智能调用工厂函数，根据是否有自定义 i18nCall 来决定参数
+  const smartCallFactory = (callName: string, key: string | number, rawText: string, interpolations?: t.ObjectExpression) => {
+    if (options.i18nConfig && options.i18nConfig.i18nCall) {
+      // 使用自定义的 i18nCall，只传递原来的3个参数
+      return options.i18nConfig.i18nCall(callName, key, rawText);
+    } else {
+      // 使用默认的 createTranslationCall，支持 interpolations
+      return createTranslationCall(callName, key, interpolations);
+    }
+  };
 
   const recordChange = (
     path: NodePath<t.Node>,
@@ -49,11 +57,17 @@ export function collectReplacementInfo(
     originalText?: string
   ) => {
     if (originalNode.loc) {
+      const generatorOptions = { 
+        jsescOption: { minimal: true },
+        // compact: true,  // 生成紧凑的单行代码
+        minified: false, // 不压缩变量名，保持可读性
+        concise: true   // 使用简洁格式
+      };
       const replacementCode = Array.isArray(replacementNode)
-        ? replacementNode.map((n) => generate(n).code).join("")
-        : generate(replacementNode).code;
+        ? generateJSXElementsCode(replacementNode, generatorOptions)
+        : generate(replacementNode, generatorOptions).code;
       
-      const originalNodeCode = originalText || generate(originalNode).code;
+      const originalNodeCode = originalText || generate(originalNode, generatorOptions).code;
       
       // 从原始代码中提取真实的原始文本
       const realOriginalText = extractOriginalText(
@@ -182,7 +196,7 @@ export function collectReplacementInfo(
 
         if (key === undefined) return;
 
-        const callExpression = callFactory(effectiveMethodName, key, extractedValue);
+        const callExpression = smartCallFactory(effectiveMethodName, key, extractedValue);
         
         // 如果需要添加注释
         if (options.appendExtractedComment) {
@@ -226,7 +240,7 @@ export function collectReplacementInfo(
 
         if (key === undefined) continue;
 
-        const callExpression = callFactory(effectiveMethodName, key, extractedValue);
+        const callExpression = smartCallFactory(effectiveMethodName, key, extractedValue);
         expressions.push(callExpression);
         parts.push(""); // 为表达式占位
 
@@ -277,7 +291,7 @@ export function collectReplacementInfo(
 
         if (key === undefined) return;
 
-        const callExpression = callFactory(effectiveMethodName, key, extractedValue);
+        const callExpression = smartCallFactory(effectiveMethodName, key, extractedValue);
         
         if (options.appendExtractedComment) {
           attachExtractedCommentToNode(
@@ -321,7 +335,7 @@ export function collectReplacementInfo(
 
         if (key === undefined) continue;
 
-        const callExpression = callFactory(effectiveMethodName, key, extractedValue);
+        const callExpression = smartCallFactory(effectiveMethodName, key, extractedValue);
         expressions.push(callExpression);
         parts.push("");
 
@@ -382,12 +396,29 @@ export function collectReplacementInfo(
 
         if (key === undefined) continue;
 
-        const callExpression = callFactory(effectiveMethodName, key, extractedValue);
+        // Parse JSX text placeholders to generate interpolation
+        const parsedPlaceholders = parseJSXTextPlaceholders(extractedValue);
+        
+        let callExpression;
+        if (parsedPlaceholders && parsedPlaceholders.interpolationObject) {
+          // Use canonical text as key and provide interpolation object
+          callExpression = smartCallFactory(
+            effectiveMethodName, 
+            key, 
+            extractedValue,
+            parsedPlaceholders.interpolationObject
+          );
+        } else {
+          // No placeholders, use simple call
+          callExpression = smartCallFactory(effectiveMethodName, key, extractedValue);
+        }
         
         if (options.appendExtractedComment) {
+          // Use the canonical text for comment (with {argN} format)
+          const commentText = parsedPlaceholders ? parsedPlaceholders.canonicalText : extractedValue;
           attachExtractedCommentToNode(
             callExpression,
-            extractedValue,
+            commentText,
             options.extractedCommentType || "block"
           );
         }
@@ -407,13 +438,11 @@ export function collectReplacementInfo(
       if (elements.length === 1) {
         recordChange(path, path.node, elements[0]);
       } else if (elements.length > 1) {
-        // 对于多个元素，我们需要特殊处理
-        // 这里先记录第一个元素的替换，其他元素作为插入处理
-        recordChange(path, path.node, elements[0]);
-        // TODO: 处理多个元素的插入逻辑
+        // 对于多个元素，我们需要替换整个JSX元素的children
+        // 记录一个特殊的多元素替换
+        recordChange(path, path.node, elements, nodeValue);
       }
     },
-
     TemplateLiteral(path) {
       const quasis = path.node.quasis;
       const expressions = path.node.expressions;
@@ -468,10 +497,23 @@ export function collectReplacementInfo(
 
       if (key === undefined) return;
 
+      // 检查是否有表达式需要处理为 interpolations
+      let interpolations: t.ObjectExpression | undefined;
+      if (expressions.length > 0) {
+        // 构建 interpolation 对象 { arg1: expr1, arg2: expr2 }
+        const properties = expressions.map((expr, i) =>
+          t.objectProperty(
+            t.identifier(`arg${i + 1}`),
+            expr as t.Expression
+          )
+        );
+        interpolations = t.objectExpression(properties);
+      }
+
       // 从 extractedStrings 中获取标准化后的值用于注释
       const standardizedValue = extractedStrings.find(s => s.key === key)?.value || extractedValue;
 
-      const callExpression = callFactory(effectiveMethodName, key, standardizedValue);
+      const callExpression = smartCallFactory(effectiveMethodName, key, standardizedValue, interpolations);
       
       if (options.appendExtractedComment) {
         attachExtractedCommentToNode(
@@ -488,3 +530,24 @@ export function collectReplacementInfo(
 
   return { modified, changes };
 }
+
+/**
+ * 正确生成 JSX 元素数组的代码
+ * 处理 JSX 文本节点和表达式容器的正确连接
+ */
+function generateJSXElementsCode(elements: t.Node[], generatorOptions: any): string {
+  if (elements.length === 0) return "";
+  if (elements.length === 1) return generate(elements[0], generatorOptions).code;
+  
+  // 对于多个元素，需要特殊处理 JSX 文本和表达式的连接
+  return elements.map(node => {
+    if (t.isJSXText(node)) {
+      // JSX 文本节点直接返回其值，不需要额外的引号或处理
+      return node.value;
+    } else {
+      // 表达式容器和其他节点正常生成
+      return generate(node, generatorOptions).code;
+    }
+  }).join("");
+}
+

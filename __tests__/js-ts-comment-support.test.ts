@@ -253,7 +253,7 @@ const messages = {
       console.log('Extracted strings:', result.extractedStrings);
       console.log('Changes:', result.changes);
       
-      expect(result.code).toContain('t("Hello {arg1}, you have {arg2} items") /* Hello {arg1}, you have {arg2} items */');
+      expect(result.code).toContain('t("Hello {arg1}, you have {arg2} items", { arg1: name, arg2: count }) /* Hello {arg1}, you have {arg2} items */');
       expect(result.extractedStrings).toHaveLength(1);
       expect(result.extractedStrings[0].value).toBe('Hello {arg1}, you have {arg2} items');
     });

@@ -170,8 +170,8 @@ function createNotification(user: string, count: number, type: string) {
       extractedCommentType: 'line'
     });
 
-    expect(result.code).toContain('t("Hello {arg1}, you have {arg2} notifications") // Hello {arg1}, you have {arg2} notifications');
-    expect(result.code).toContain('t("{arg1}: {arg2} items remaining") // {arg1}: {arg2} items remaining');
+    expect(result.code).toContain('t("Hello {arg1}, you have {arg2} notifications", { arg1: user, arg2: count }) // Hello {arg1}, you have {arg2} notifications');
+    expect(result.code).toContain('t("{arg1}: {arg2} items remaining", { arg1: type, arg2: count }) // {arg1}: {arg2} items remaining');
 
     console.log('Complex Template Literals Result:');
     console.log(result.code);

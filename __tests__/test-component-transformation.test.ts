@@ -42,7 +42,7 @@ describe("Test Component Transformation", () => {
     });
 
     // Verify transformations were applied correctly
-    expect(result.code).toContain('import { useTranslation } from \'react-i18next\';');
+    expect(result.code).toMatch(/import { useTranslation } from ['"]react-i18next['"];/);
     expect(result.code).toContain('const { t } = useTranslation();');
     
     // Check specific transformations with comments
@@ -156,7 +156,7 @@ describe("Test Component Transformation", () => {
     });
 
     // Count occurrences of import and hook
-    const importCount = (result.code.match(/import \{ useTranslation \} from 'react-i18next';/g) || []).length;
+    const importCount = (result.code.match(/import \{ useTranslation \} from ['"]react-i18next['"];/g) || []).length;
     const hookCount = (result.code.match(/const \{ t \} = useTranslation\(\);/g) || []).length;
 
     expect(importCount).toBe(1);

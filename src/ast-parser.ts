@@ -360,8 +360,12 @@ export function transformCode(
   // 合并用户配置和框架默认配置
   const mergedOptions = mergeWithFrameworkDefaults(options, detectedFramework);
   // 优先使用新的框架代码生成器
+  // BUG 还未跑完所有测试用例
   const codeGenerator = createFrameworkCodeGenerator(mergedOptions);
-  if (codeGenerator.canHandle(code, filePath)) {
+  if (
+    codeGenerator.canHandle(code, filePath) &&
+    !["vue", "vue2", "vue3"].includes(detectedFramework)
+  ) {
     return codeGenerator.processCode(
       code,
       filePath,
@@ -402,7 +406,9 @@ export function transformCodeEnhanced(
 
   try {
     // 创建增强的代码生成器，使用智能框架检测
-    const codeGenerator = createEnhancedCodeGenerator(code, filePath, { ...options });
+    const codeGenerator = createEnhancedCodeGenerator(code, filePath, {
+      ...options,
+    });
 
     // 使用增强的代码生成器处理
     const result = codeGenerator.processCode(

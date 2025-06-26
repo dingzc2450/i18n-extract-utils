@@ -1,7 +1,13 @@
 import fs from "fs";
 import path from "path";
 import { glob } from "glob";
-import { ExtractedString, TransformOptions, UsedExistingKey, FileModificationRecord, ChangeDetail } from "./types";
+import {
+  ExtractedString,
+  TransformOptions,
+  UsedExistingKey,
+  FileModificationRecord,
+  ChangeDetail,
+} from "./types";
 import { transformCode, transformCodeEnhanced } from "./ast-parser";
 
 function ensureDirectoryExistence(filePath: string): void {
@@ -129,18 +135,43 @@ export async function processFiles(
   let processedFileCount = 0;
 
   // 加载现有翻译映射
-  const { existingValueToKey, sourceJsonObject } = loadExistingTranslations(options);
+  const { existingValueToKey, sourceJsonObject } =
+    loadExistingTranslations(options);
 
-  // 自动检测是否应该使用增强模式
+  // 自动检测是否应该使用增强模式 - 对于向后兼容，优先保持原有行为
   if (useEnhanced === undefined) {
-    // 如果配置了 nonReactConfig，或者明确指定了框架配置，使用增强模式
-    useEnhanced = !!(options.i18nConfig?.nonReactConfig || options.i18nConfig?.framework);
+    // 如果有新的i18nConfig配置或明确要求增强功能，使用增强模式
+    useEnhanced = !!(
+      options.i18nConfig?.nonReactConfig ||
+      options.i18nConfig?.framework ||
+      options.preserveFormatting ||
+      options.useStringReplacement
+    );
+
+    // 对于传统配置，保持使用增强模式
+    if (
+      !useEnhanced &&
+      (options.hookName || options.hookImport || options.translationMethod)
+    ) {
+      useEnhanced = true;
+    }
+
+    // 如果完全没有配置，默认使用增强模式
+    if (
+      !useEnhanced &&
+      !options.hookName &&
+      !options.hookImport &&
+      !options.translationMethod &&
+      !options.i18nConfig
+    ) {
+      useEnhanced = true;
+    }
   }
 
   // 处理每个文件
   for (const file of files) {
     try {
-      const transformFn = useEnhanced ? transformCodeEnhanced : transformCode;
+      const transformFn = transformCode;
       const result = transformFn(file, options, existingValueToKey);
 
       if (result.extractedStrings.length > 0 || result.changes.length > 0) {

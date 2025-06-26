@@ -81,7 +81,7 @@ export default function TestComponent() {
       });
 
       // Verify transformations were applied correctly
-      expect(result.code).toContain('import { useTranslation } from \'react-i18next\';');
+      expect(result.code).toMatch(/import { useTranslation } from ['"]react-i18next['"];/);
       expect(result.code).toContain('const { t } = useTranslation();');
       
       // Check specific transformations

@@ -48,7 +48,7 @@ export function collectContextAwareReplacementInfo(
     ? new RegExp(options.pattern, "g")
     : new RegExp(getDefaultPattern().source, "g");
 
-  // 智能调用工厂函数，根据是否有自定义 i18nCall 来决定参数
+  // 支持自定义调用生成 - 智能调用工厂函数，根据是否有自定义 i18nCall 来决定参数
   const smartCallFactory = (callName: string, key: string | number, rawText: string, interpolations?: t.ObjectExpression) => {
     if (options.i18nConfig && options.i18nConfig.i18nCall) {
       // 使用自定义的 i18nCall，只传递原来的3个参数
@@ -178,18 +178,26 @@ export function collectContextAwareReplacementInfo(
 
   traverse(ast, {
     StringLiteral(path) {
+      // 添加跳过逻辑 - 参考 enhanced-ast-replacer.ts
+      if (
+        path.parentPath &&
+        isJSXAttribute(path.parentPath.node) &&
+        path.parentPath.node.value === path.node
+      ) {
+        return;
+      }
+
       // 检测代码上下文
       const context = getContextInfo(path);
       const importInfo = getImportInfoForContext(context);
       const effectiveMethodName = importInfo.callName;
 
-      // 跳过逻辑 - 参考 enhanced-ast-replacer.ts
+      // 跳过已经是翻译调用的字符串
       if (
         (tg.isCallExpression(path.parent) &&
         tg.isIdentifier(path.parent.callee) &&
         path.parent.callee.name === effectiveMethodName &&
         path.listKey === "arguments") ||
-        isJSXAttribute(path.parent) ||
         tg.isImportDeclaration(path.parent) ||
         tg.isExportDeclaration(path.parent)
       ) {
@@ -226,6 +234,7 @@ export function collectContextAwareReplacementInfo(
 
         if (key === undefined) return;
 
+        // 从 extractedStrings 中获取标准化后的值
         const standardizedValue =
           extractedStrings.find((s) => s.key === key)?.value || extractedValue;
 
@@ -307,10 +316,44 @@ export function collectContextAwareReplacementInfo(
       const templateLiteral = buildTemplateLiteral(parts, expressions);
       recordChange(path, path.node, templateLiteral);
     },
+        );
+
+        if (key === undefined) continue;
+
+        const standardizedValue =
+          extractedStrings.find((s) => s.key === key)?.value || extractedValue;
+        const callExpression = callFactory(
+          importInfo.callName,
+          key,
+          standardizedValue
+        );
+
+        if (options.appendExtractedComment) {
+          attachExtractedCommentToNode(
+            callExpression,
+            standardizedValue,
+            options.extractedCommentType || "block"
+          );
+        }
+
+        expressions.push(callExpression);
+        parts.push("");
+
+        lastIndex = matchEnd;
+      }
+
+      // 添加剩余的文本
+      if (lastIndex < nodeValue.length) {
+        parts.push(nodeValue.substring(lastIndex));
+      }
+
+      const templateLiteral = buildTemplateLiteral(parts, expressions);
+      recordChange(path, path.node, templateLiteral);
+    },
 
     JSXAttribute(path) {
-      if (!tg.isJSXAttribute(path.node) || !path.node.value) return;
-      if (!tg.isStringLiteral(path.node.value)) return;
+      if (!isJSXAttribute(path.node) || !path.node.value) return;
+      if (!t.isStringLiteral(path.node.value)) return;
 
       const nodeValue = path.node.value.value;
       const location = {
@@ -348,7 +391,7 @@ export function collectContextAwareReplacementInfo(
 
         const standardizedValue =
           extractedStrings.find((s) => s.key === key)?.value || extractedValue;
-        const callExpression = smartCallFactory(
+        const callExpression = callFactory(
           importInfo.callName,
           key,
           standardizedValue
@@ -400,7 +443,7 @@ export function collectContextAwareReplacementInfo(
 
         const standardizedValue =
           extractedStrings.find((s) => s.key === key)?.value || extractedValue;
-        const callExpression = smartCallFactory(
+        const callExpression = callFactory(
           importInfo.callName,
           key,
           standardizedValue
@@ -497,28 +540,14 @@ export function collectContextAwareReplacementInfo(
 
       if (key === undefined) return;
 
-      // 检查是否有表达式需要处理为 interpolations
-      let interpolations: t.ObjectExpression | undefined;
-      if (expressions.length > 0) {
-        // 构建 interpolation 对象 { arg1: expr1, arg2: expr2 }
-        const properties = expressions.map((expr, i) =>
-          t.objectProperty(
-            t.identifier(`arg${i + 1}`),
-            expr as t.Expression
-          )
-        );
-        interpolations = t.objectExpression(properties);
-      }
-
       // 从 extractedStrings 中获取标准化后的值用于注释
       const standardizedValue =
         extractedStrings.find((s) => s.key === key)?.value || extractedValue;
 
-      const callExpression = smartCallFactory(
+      const callExpression = callFactory(
         importInfo.callName,
         key,
-        standardizedValue,
-        interpolations
+        standardizedValue
       );
 
       if (options.appendExtractedComment) {
@@ -572,29 +601,18 @@ export function collectContextAwareReplacementInfo(
 
         if (key === undefined) return;
 
-        // Parse JSX text placeholders to generate interpolation
-        const parsedPlaceholders = parseJSXTextPlaceholders(extractedValue);
-        
-        let callExpression;
-        if (parsedPlaceholders && parsedPlaceholders.interpolationObject) {
-          // Use canonical text as key and provide interpolation object
-          callExpression = smartCallFactory(
-            importInfo.callName, 
-            key, 
-            parsedPlaceholders.canonicalText,
-            parsedPlaceholders.interpolationObject
-          );
-        } else {
-          // No placeholders, use simple call
-          callExpression = smartCallFactory(importInfo.callName, key, extractedValue);
-        }
+        const standardizedValue =
+          extractedStrings.find((s) => s.key === key)?.value || extractedValue;
+        const callExpression = callFactory(
+          importInfo.callName,
+          key,
+          standardizedValue
+        );
 
         if (options.appendExtractedComment) {
-          // Use the canonical text for comment (with {argN} format)
-          const commentText = parsedPlaceholders ? parsedPlaceholders.canonicalText : extractedValue;
           attachExtractedCommentToNode(
             callExpression,
-            commentText,
+            standardizedValue,
             options.extractedCommentType || "block"
           );
         }
@@ -606,7 +624,8 @@ export function collectContextAwareReplacementInfo(
       }
 
       // 处理多个匹配的JSX文本
-      const elements: (t.JSXText | t.JSXExpressionContainer)[] = [];
+      const parts: string[] = [];
+      const expressions: t.Expression[] = [];
       let lastIndex = 0;
 
       for (const match of matches) {
@@ -617,10 +636,7 @@ export function collectContextAwareReplacementInfo(
 
         // 添加匹配前的文本
         if (matchStart > lastIndex) {
-          const beforeText = nodeValue.substring(lastIndex, matchStart);
-          if (beforeText.trim()) {
-            elements.push(t.jsxText(beforeText));
-          }
+          parts.push(nodeValue.substring(lastIndex, matchStart));
         }
 
         // 处理提取的值
@@ -636,52 +652,37 @@ export function collectContextAwareReplacementInfo(
 
         if (key === undefined) continue;
 
-        // Parse JSX text placeholders to generate interpolation
-        const parsedPlaceholders = parseJSXTextPlaceholders(extractedValue);
-        
-        let callExpression;
-        if (parsedPlaceholders && parsedPlaceholders.interpolationObject) {
-          // Use canonical text as key and provide interpolation object
-          callExpression = smartCallFactory(
-            importInfo.callName, 
-            key, 
-            parsedPlaceholders.canonicalText,
-            parsedPlaceholders.interpolationObject
-          );
-        } else {
-          // No placeholders, use simple call
-          callExpression = smartCallFactory(importInfo.callName, key, extractedValue);
-        }
+        const standardizedValue =
+          extractedStrings.find((s) => s.key === key)?.value || extractedValue;
+        const callExpression = callFactory(
+          importInfo.callName,
+          key,
+          standardizedValue
+        );
 
         if (options.appendExtractedComment) {
-          // Use the canonical text for comment (with {argN} format)
-          const commentText = parsedPlaceholders ? parsedPlaceholders.canonicalText : extractedValue;
           attachExtractedCommentToNode(
             callExpression,
-            commentText,
+            standardizedValue,
             options.extractedCommentType || "block"
           );
         }
 
-        elements.push(t.jsxExpressionContainer(callExpression));
+        expressions.push(callExpression);
+        parts.push("");
+
         lastIndex = matchEnd;
       }
 
-      // 添加剩余文本
+      // 添加剩余的文本
       if (lastIndex < nodeValue.length) {
-        const afterText = nodeValue.substring(lastIndex);
-        if (afterText.trim()) {
-          elements.push(t.jsxText(afterText));
-        }
+        parts.push(nodeValue.substring(lastIndex));
       }
 
-      if (elements.length === 1) {
-        recordChange(path, path.node, elements[0]);
-      } else if (elements.length > 1) {
-        // 对于多个元素，我们需要替换整个JSX元素的children
-        // 记录一个特殊的多元素替换
-        recordChange(path, path.node, elements, nodeValue);
-      }
+      const templateLiteral = buildTemplateLiteral(parts, expressions);
+      const jsxExpressionContainer = t.jsxExpressionContainer(templateLiteral);
+
+      recordChange(path, path.node, jsxExpressionContainer);
     },
   });
 
@@ -689,21 +690,14 @@ export function collectContextAwareReplacementInfo(
 }
 
 /**
- * 正确生成 JSX 元素数组的代码
- * 处理 JSX 文本节点和表达式容器的正确连接
+ * 构建模板字符串
  */
-function generateJSXElementsCode(elements: t.Node[], generatorOptions: any): string {
-  if (elements.length === 0) return "";
-  if (elements.length === 1) return generate(elements[0], generatorOptions).code;
-  
-  // 对于多个元素，需要特殊处理 JSX 文本和表达式的连接
-  return elements.map(node => {
-    if (t.isJSXText(node)) {
-      // JSX 文本节点直接返回其值，不需要额外的引号或处理
-      return node.value;
-    } else {
-      // 表达式容器和其他节点正常生成
-      return generate(node, generatorOptions).code;
-    }
-  }).join("");
-}
+const buildTemplateLiteral = (
+  parts: string[],
+  expressions: t.Expression[]
+): t.TemplateLiteral => {
+  const quasis = parts.map((part, index) =>
+    t.templateElement({ raw: part, cooked: part }, index === parts.length - 1)
+  );
+  return t.templateLiteral(quasis, expressions);
+};

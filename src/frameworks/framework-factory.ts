@@ -5,9 +5,7 @@ import { TransformOptions, I18nTransformer, FrameworkCodeGenerator } from "../ty
 import { ReactTransformer } from "../ast-parser";
 import { React15Transformer } from "./react15-support";
 import { VueTransformer } from "./vue-support";
-import { VueCodeGenerator } from "./vue-code-generator";
-import { UnifiedReactCodeGenerator } from "./unified-react-support";
-import { EnhancedGenericCodeGenerator } from "./enhanced-generic-support";
+import { UniversalCodeGenerator } from "./universal-code-generator";
 
 /**
  * 根据 i18nConfig.framework 创建对应的 transformer
@@ -206,51 +204,16 @@ export function mergeWithFrameworkDefaults(
  * 创建框架特定的代码生成器（新架构）
  */
 export function createFrameworkCodeGenerator(options: TransformOptions, useEnhanced: boolean = false): FrameworkCodeGenerator {
-  const framework = options.i18nConfig?.framework || "react";
-  
-  switch (framework.toLowerCase()) {
-    case "react":
-      if (useEnhanced) {
-        // 使用统一的React代码生成器，保持原始代码格式
-        return new UnifiedReactCodeGenerator();
-      } else {
-        // 使用原始的React转换器，保持向后兼容性
-        const transformer = createFrameworkTransformer(options);
-        return new TransformerWrapper(transformer, framework);
-      }
-    
-    case "vue":
-    case "vue3":
-    case "vue2":
-      return new VueCodeGenerator();
-    
-    default:
-      // 其他框架暂时返回包装过的 transformer
-      const transformer = createFrameworkTransformer(options);
-      return new TransformerWrapper(transformer, framework);
-  }
+  // 现在统一使用 UniversalCodeGenerator 处理所有情况
+  return new UniversalCodeGenerator();
 }
 
 /**
  * 创建增强的代码生成器，支持智能框架检测
  */
 export function createEnhancedCodeGenerator(code: string, filePath: string, options: TransformOptions): FrameworkCodeGenerator {
-  // 对于 React 相关文件，使用统一的 React 代码生成器
-  if (/\.(jsx|tsx|js|ts)$/.test(filePath)) {
-    const unifiedGenerator = new UnifiedReactCodeGenerator();
-    if (unifiedGenerator.canHandle(code, filePath)) {
-      return unifiedGenerator;
-    }
-  }
-
-  // 尝试Vue生成器
-  const vueGenerator = new VueCodeGenerator();
-  if (vueGenerator.canHandle(code, filePath)) {
-    return vueGenerator;
-  }
-
-  // 回退到通用增强生成器
-  return new EnhancedGenericCodeGenerator();
+  // 现在统一使用 UniversalCodeGenerator 处理所有情况
+  return new UniversalCodeGenerator();
 }
 
 /**
