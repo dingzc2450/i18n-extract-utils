@@ -130,6 +130,19 @@ export interface ChangeDetail {
   endLine: number;
   /** The ending column number of the original node. 原始节点的结束列号 */
   endColumn: number;
+  /** The exact start position in the source code (0-based) for string replacement. 源代码中的精确起始位置（从0开始）*/
+  start?: number;
+  /** The exact end position in the source code (0-based) for string replacement. 源代码中的精确结束位置（从0开始）*/
+  end?: number;
+  /** 用于字符串匹配的上下文信息，包含前后若干字符 */
+  matchContext?: {
+    /** 替换点前的上下文字符串 */
+    before: string;
+    /** 替换点后的上下文字符串 */
+    after: string;
+    /** 完整的匹配字符串（包含前后上下文） */
+    fullMatch: string;
+  };
 }
 
 /**

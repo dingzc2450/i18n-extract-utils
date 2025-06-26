@@ -358,7 +358,6 @@ export function transformCode(
 
   // 合并用户配置和框架默认配置
   const mergedOptions = mergeWithFrameworkDefaults(options, detectedFramework);
-
   // 优先使用新的框架代码生成器
   const codeGenerator = createFrameworkCodeGenerator(mergedOptions);
   if (codeGenerator.canHandle(code, filePath)) {
@@ -369,8 +368,7 @@ export function transformCode(
       existingValueToKey
     );
   }
-
-  // 回退到老的 transformer（向后兼容）
+  // 回退到老的 transformer（保持向后兼容）
   const realTransformer = createFrameworkTransformer(mergedOptions);
 
   return realTransformer.extractAndReplace(
@@ -379,4 +377,52 @@ export function transformCode(
     mergedOptions,
     existingValueToKey
   );
+}
+
+/**
+ * 使用增强框架代码生成器的转换函数
+ * 支持字符串替换，保持原始代码格式
+ * @param filePath 文件路径
+ * @param options 转换配置
+ * @param existingValueToKey 现有 value->key 映射
+ * @returns { code, extractedStrings, usedExistingKeysList, changes }
+ */
+export function transformCodeEnhanced(
+  filePath: string,
+  options: Omit<TransformOptions, "existingTranslations">,
+  existingValueToKey?: Map<string, string | number>
+): {
+  code: string;
+  extractedStrings: ExtractedString[];
+  usedExistingKeysList: UsedExistingKey[];
+  changes: ChangeDetail[];
+} {
+  const code = fs.readFileSync(filePath, "utf8");
+
+  try {
+    // 创建增强的框架代码生成器，明确启用增强模式
+    const codeGenerator = createFrameworkCodeGenerator({ ...options }, true);
+
+    // 检查是否支持该文件
+    if (!codeGenerator.canHandle(code, filePath)) {
+      console.warn(
+        `[${filePath}] Framework code generator cannot handle this file, falling back to original transformer`
+      );
+      return transformCode(filePath, options, existingValueToKey);
+    }
+
+    // 使用增强的代码生成器处理
+    const result = codeGenerator.processCode(
+      code,
+      filePath,
+      { ...options },
+      existingValueToKey
+    );
+
+    return result;
+  } catch (error) {
+    console.error(`[${filePath}] Error during enhanced transformation:`, error);
+    // 回退到原始转换方法
+    return transformCode(filePath, options, existingValueToKey);
+  }
 }

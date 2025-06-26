@@ -6,6 +6,7 @@ import { ReactTransformer } from "../ast-parser";
 import { React15Transformer } from "./react15-support";
 import { VueTransformer } from "./vue-support";
 import { VueCodeGenerator } from "./vue-code-generator";
+import { EnhancedReactCodeGenerator } from "./enhanced-react-support";
 
 /**
  * 根据 i18nConfig.framework 创建对应的 transformer
@@ -203,10 +204,20 @@ export function mergeWithFrameworkDefaults(
 /**
  * 创建框架特定的代码生成器（新架构）
  */
-export function createFrameworkCodeGenerator(options: TransformOptions): FrameworkCodeGenerator {
+export function createFrameworkCodeGenerator(options: TransformOptions, useEnhanced: boolean = false): FrameworkCodeGenerator {
   const framework = options.i18nConfig?.framework || "react";
   
   switch (framework.toLowerCase()) {
+    case "react":
+      if (useEnhanced) {
+        // 使用增强的React代码生成器，保持原始代码格式
+        return new EnhancedReactCodeGenerator();
+      } else {
+        // 使用原始的React转换器，保持向后兼容性
+        const transformer = createFrameworkTransformer(options);
+        return new TransformerWrapper(transformer, framework);
+      }
+    
     case "vue":
     case "vue3":
     case "vue2":
