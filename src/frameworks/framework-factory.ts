@@ -7,6 +7,7 @@ import { React15Transformer } from "./react15-support";
 import { VueTransformer } from "./vue-support";
 import { VueCodeGenerator } from "./vue-code-generator";
 import { EnhancedReactCodeGenerator } from "./enhanced-react-support";
+import { EnhancedGenericCodeGenerator } from "./enhanced-generic-support";
 
 /**
  * 根据 i18nConfig.framework 创建对应的 transformer
@@ -228,6 +229,26 @@ export function createFrameworkCodeGenerator(options: TransformOptions, useEnhan
       const transformer = createFrameworkTransformer(options);
       return new TransformerWrapper(transformer, framework);
   }
+}
+
+/**
+ * 创建增强的代码生成器，支持智能框架检测
+ */
+export function createEnhancedCodeGenerator(code: string, filePath: string, options: TransformOptions): FrameworkCodeGenerator {
+  // 尝试React增强生成器
+  const reactGenerator = new EnhancedReactCodeGenerator();
+  if (reactGenerator.canHandle(code, filePath)) {
+    return reactGenerator;
+  }
+
+  // 尝试Vue生成器
+  const vueGenerator = new VueCodeGenerator();
+  if (vueGenerator.canHandle(code, filePath)) {
+    return vueGenerator;
+  }
+
+  // 回退到通用增强生成器
+  return new EnhancedGenericCodeGenerator();
 }
 
 /**

@@ -25,6 +25,7 @@ import {
   detectFramework,
   mergeWithFrameworkDefaults,
   createFrameworkCodeGenerator,
+  createEnhancedCodeGenerator,
 } from "./frameworks/framework-factory";
 
 /**
@@ -400,16 +401,8 @@ export function transformCodeEnhanced(
   const code = fs.readFileSync(filePath, "utf8");
 
   try {
-    // 创建增强的框架代码生成器，明确启用增强模式
-    const codeGenerator = createFrameworkCodeGenerator({ ...options }, true);
-
-    // 检查是否支持该文件
-    if (!codeGenerator.canHandle(code, filePath)) {
-      console.warn(
-        `[${filePath}] Framework code generator cannot handle this file, falling back to original transformer`
-      );
-      return transformCode(filePath, options, existingValueToKey);
-    }
+    // 创建增强的代码生成器，使用智能框架检测
+    const codeGenerator = createEnhancedCodeGenerator(code, filePath, { ...options });
 
     // 使用增强的代码生成器处理
     const result = codeGenerator.processCode(

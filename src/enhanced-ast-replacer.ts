@@ -417,106 +417,72 @@ export function collectReplacementInfo(
     TemplateLiteral(path) {
       const quasis = path.node.quasis;
       const expressions = path.node.expressions;
-      let hasMatch = false;
-      const newQuasis: t.TemplateElement[] = [];
-      const newExpressions: t.Expression[] = [];
-
+      
+      // 重构模板字符串成完整字符串以进行模式匹配
+      let fullText = "";
+      const textParts: { text: string; isExpression: boolean; index: number }[] = [];
+      
       for (let i = 0; i < quasis.length; i++) {
         const quasi = quasis[i];
-        const nodeValue = quasi.value.raw;
-        const location = {
-          filePath,
-          line: quasi.loc?.start.line ?? 0,
-          column: quasi.loc?.start.column ?? 0,
-        };
-
-        patternRegex.lastIndex = 0;
-        const matches = Array.from(nodeValue.matchAll(patternRegex));
-
-        if (matches.length === 0) {
-          newQuasis.push(quasi);
-          if (i < expressions.length) {
-            const expr = expressions[i];
-            if (t.isExpression(expr)) {
-              newExpressions.push(expr);
-            }
-          }
-          continue;
-        }
-
-        hasMatch = true;
-        let lastIndex = 0;
-
-        for (const match of matches) {
-          const matchStart = match.index!;
-          const matchEnd = matchStart + match[0].length;
-          const fullMatch = match[0];
-          const extractedValue = match[1];
-
-          // 添加匹配前的文本
-          if (matchStart > lastIndex) {
-            const beforeText = nodeValue.substring(lastIndex, matchStart);
-            const newQuasi = t.templateElement(
-              { raw: beforeText, cooked: beforeText },
-              false
-            );
-            newQuasis.push(newQuasi);
-          }
-
-          // 处理提取的值
-          const key = getKeyAndRecord(
-            fullMatch,
-            location,
-            existingValueToKey,
-            generatedKeysMap,
-            extractedStrings,
-            usedExistingKeysList,
-            options
-          );
-
-          if (key === undefined) continue;
-
-          const callExpression = callFactory(effectiveMethodName, key, extractedValue);
-          
-          if (options.appendExtractedComment) {
-            attachExtractedCommentToNode(
-              callExpression,
-              extractedValue,
-              options.extractedCommentType || "block"
-            );
-          }
-
-          newExpressions.push(callExpression);
-          
-          // 添加空的模板元素作为占位符
-          const emptyQuasi = t.templateElement({ raw: "", cooked: "" }, false);
-          newQuasis.push(emptyQuasi);
-
-          lastIndex = matchEnd;
-        }
-
-        // 添加剩余文本
-        const remainingText = nodeValue.substring(lastIndex);
-        const isTail = i === quasis.length - 1;
-        const finalQuasi = t.templateElement(
-          { raw: remainingText, cooked: remainingText },
-          isTail
-        );
-        newQuasis.push(finalQuasi);
-
-        // 添加原有的表达式
+        const quasiText = quasi.value.raw;
+        fullText += quasiText;
+        textParts.push({ text: quasiText, isExpression: false, index: i });
+        
         if (i < expressions.length) {
           const expr = expressions[i];
-          if (t.isExpression(expr)) {
-            newExpressions.push(expr);
-          }
+          const placeholderText = `\${${generate(expr).code}}`;
+          fullText += placeholderText;
+          textParts.push({ text: placeholderText, isExpression: true, index: i });
         }
       }
 
-      if (hasMatch) {
-        const newTemplateLiteral = t.templateLiteral(newQuasis, newExpressions);
-        recordChange(path, path.node, newTemplateLiteral);
+      // 在完整文本中查找匹配
+      patternRegex.lastIndex = 0;
+      const matches = Array.from(fullText.matchAll(patternRegex));
+      
+      if (matches.length === 0) {
+        return; // 没有匹配，保持原样
       }
+
+      // 如果有匹配，处理第一个匹配（简化处理）
+      const match = matches[0];
+      const fullMatch = match[0];
+      const extractedValue = match[1];
+      
+      const location = {
+        filePath,
+        line: path.node.loc?.start.line ?? 0,
+        column: path.node.loc?.start.column ?? 0,
+      };
+
+      // 处理提取的值 - 让 key-manager 处理标准化
+      const key = getKeyAndRecord(
+        fullMatch,
+        location,
+        existingValueToKey,
+        generatedKeysMap,
+        extractedStrings,
+        usedExistingKeysList,
+        options
+      );
+
+      if (key === undefined) return;
+
+      // 从 extractedStrings 中获取标准化后的值用于注释
+      const standardizedValue = extractedStrings.find(s => s.key === key)?.value || extractedValue;
+
+      const callExpression = callFactory(effectiveMethodName, key, standardizedValue);
+      
+      if (options.appendExtractedComment) {
+        attachExtractedCommentToNode(
+          callExpression,
+          standardizedValue, // 使用标准化后的内容作为注释
+          options.extractedCommentType || "block"
+        );
+      }
+
+      // 替换整个模板字符串为调用表达式
+      recordChange(path, path.node, callExpression);
     },
   });
 
