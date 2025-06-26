@@ -7,24 +7,28 @@ import {
   ChangeDetail,
   FrameworkCodeGenerator,
 } from "../types";
+import { collectReplacementInfo } from "../enhanced-ast-replacer";
 import { collectContextAwareReplacementInfo } from "../context-aware-ast-replacer";
 import { StringReplacer } from "../string-replacer";
 import { SmartImportManager } from "../smart-import-manager";
+import {
+  hasTranslationHook,
+  isJSXElement,
+  isJSXFragment,
+} from "./react-support";
 
 /**
- * 上下文感知的 React 代码生成器
- * 根据代码上下文智能选择使用 Hook 或普通导入
+ * 统一的 React 代码生成器
+ * 自动选择使用上下文感知模式或传统模式
  */
-export class ContextAwareReactCodeGenerator implements FrameworkCodeGenerator {
-  name = "react-context-aware";
+export class UnifiedReactCodeGenerator implements FrameworkCodeGenerator {
+  name = "react-unified";
 
   canHandle(code: string, filePath: string): boolean {
-    // 对于上下文感知的代码生成器，如果配置了 nonReactConfig，
-    // 我们支持所有 TypeScript/JavaScript 文件
+    // 支持所有 JS/TS 相关文件
     if (/\.(jsx|tsx|js|ts)$/.test(filePath)) {
       return true;
     }
-
     return false;
   }
 
@@ -47,28 +51,46 @@ export class ContextAwareReactCodeGenerator implements FrameworkCodeGenerator {
         strictMode: false,
       });
 
-      // 2. 创建智能导入管理器
-      const importManager = new SmartImportManager(
-        options.i18nConfig?.i18nImport,
-        options.i18nConfig?.nonReactConfig
-      );
-
-      // 3. 收集上下文感知的替换信息
       const extractedStrings: ExtractedString[] = [];
       const usedExistingKeysList: UsedExistingKey[] = [];
 
-      const result = collectContextAwareReplacementInfo(
-        ast,
-        code,
-        existingValueToKey || new Map(),
-        extractedStrings,
-        usedExistingKeysList,
-        importManager,
-        options,
-        filePath
-      );
+      // 2. 决定使用哪种模式
+      const useContextAware = this.shouldUseContextAwareMode(options);
 
-      // 4. 如果没有任何修改，直接返回原代码
+      let result;
+      if (useContextAware) {
+        // 使用上下文感知模式
+        const importManager = new SmartImportManager(
+          options.i18nConfig?.i18nImport,
+          options.i18nConfig?.nonReactConfig
+        );
+
+        result = collectContextAwareReplacementInfo(
+          ast,
+          code,
+          existingValueToKey || new Map(),
+          extractedStrings,
+          usedExistingKeysList,
+          importManager,
+          options,
+          filePath
+        );
+      } else {
+        // 使用传统增强模式
+        const translationMethod = options.i18nConfig?.i18nImport?.name || options.translationMethod || "t";
+        result = collectReplacementInfo(
+          ast,
+          code,
+          existingValueToKey || new Map(),
+          extractedStrings,
+          usedExistingKeysList,
+          translationMethod,
+          options,
+          filePath
+        );
+      }
+
+      // 3. 如果没有任何修改，直接返回原代码
       if (!result.modified || result.changes.length === 0) {
         return {
           code,
@@ -78,15 +100,24 @@ export class ContextAwareReactCodeGenerator implements FrameworkCodeGenerator {
         };
       }
 
-      // 5. 使用字符串替换应用修改
+      // 4. 使用字符串替换应用修改
       let modifiedCode = StringReplacer.applyChanges(code, result.changes);
 
-      // 6. 添加必要的导入
-      modifiedCode = this.addImportsIfNeeded(
-        modifiedCode,
-        result.requiredImports,
-        filePath
-      );
+      // 5. 添加必要的导入（仅限上下文感知模式）
+      if (useContextAware && 'requiredImports' in result) {
+        modifiedCode = this.addImportsIfNeeded(
+          modifiedCode,
+          result.requiredImports as Set<string>,
+          filePath
+        );
+      } else if (!useContextAware) {
+        // 传统模式的 Hook 处理
+        modifiedCode = this.addTraditionalHookIfNeeded(
+          modifiedCode,
+          options,
+          filePath
+        );
+      }
 
       return {
         code: modifiedCode,
@@ -107,7 +138,15 @@ export class ContextAwareReactCodeGenerator implements FrameworkCodeGenerator {
   }
 
   /**
-   * 添加必要的导入和 Hook 调用
+   * 判断是否应该使用上下文感知模式
+   */
+  private shouldUseContextAwareMode(options: TransformOptions): boolean {
+    // 如果配置了 nonReactConfig，使用上下文感知模式
+    return !!(options.i18nConfig?.nonReactConfig);
+  }
+
+  /**
+   * 添加必要的导入和 Hook 调用（上下文感知模式）
    */
   private addImportsIfNeeded(
     code: string,
@@ -155,6 +194,36 @@ export class ContextAwareReactCodeGenerator implements FrameworkCodeGenerator {
   }
 
   /**
+   * 传统模式的 Hook 处理
+   */
+  private addTraditionalHookIfNeeded(
+    code: string,
+    options: TransformOptions,
+    filePath: string
+  ): string {
+    try {
+      const hookName = options.i18nConfig?.i18nImport?.importName || options.hookName || "useTranslation";
+      const hookImport = options.i18nConfig?.i18nImport?.source || options.hookImport || "react-i18next";
+      const translationMethod = options.i18nConfig?.i18nImport?.name || options.translationMethod || "t";
+
+      // 检查是否已经有 hook 导入
+      if (!this.hasHookImport(code, hookName, hookImport)) {
+        code = this.addHookImport(code, hookName, hookImport);
+      }
+
+      // 检查是否已经有 hook 调用
+      if (!hasTranslationHook(code, hookName)) {
+        code = this.addHookCall(code, hookName, translationMethod);
+      }
+
+      return code;
+    } catch (error) {
+      console.warn(`Failed to add traditional hook to ${filePath}:`, error);
+      return code;
+    }
+  }
+
+  /**
    * 检查是否已存在导入
    */
   private hasExistingImport(code: string, importInfo: any): boolean {
@@ -190,6 +259,16 @@ export class ContextAwareReactCodeGenerator implements FrameworkCodeGenerator {
   }
 
   /**
+   * 检查是否已有 Hook 导入（传统模式）
+   */
+  private hasHookImport(code: string, hookName: string, source: string): boolean {
+    const pattern = new RegExp(
+      `import\\s+.*\\b${this.escapeRegex(hookName)}\\b.*from\\s+['"]${this.escapeRegex(source)}['"]`
+    );
+    return pattern.test(code);
+  }
+
+  /**
    * 添加导入语句
    */
   private addImportStatement(code: string, importInfo: any): string {
@@ -197,7 +276,21 @@ export class ContextAwareReactCodeGenerator implements FrameworkCodeGenerator {
       ? importInfo.hookImport.importStatement || importInfo.importStatement
       : importInfo.importStatement;
 
-    // 查找合适的插入位置
+    return this.insertImportAtTop(code, importStatement);
+  }
+
+  /**
+   * 添加 Hook 导入（传统模式）
+   */
+  private addHookImport(code: string, hookName: string, source: string): string {
+    const importStatement = `import { ${hookName} } from '${source}';`;
+    return this.insertImportAtTop(code, importStatement);
+  }
+
+  /**
+   * 在代码顶部插入导入语句
+   */
+  private insertImportAtTop(code: string, importStatement: string): string {
     const lines = code.split("\n");
     let insertIndex = 0;
 
@@ -246,6 +339,14 @@ export class ContextAwareReactCodeGenerator implements FrameworkCodeGenerator {
     }
 
     // 查找 React 函数组件并添加 Hook 调用
+    return this.addHookCallToComponents(code, hookCall);
+  }
+
+  /**
+   * 添加 Hook 调用（传统模式）
+   */
+  private addHookCall(code: string, hookName: string, translationMethod: string): string {
+    const hookCall = `const { ${translationMethod} } = ${hookName}();`;
     return this.addHookCallToComponents(code, hookCall);
   }
 

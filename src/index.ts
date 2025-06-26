@@ -1,25 +1,29 @@
-import { processFiles, processFilesEnhanced } from "./transformer";
+import { processFiles, processFilesLegacy, processFilesEnhanced } from "./transformer";
 import { TransformOptions } from "./types";
 
-export { processFiles, processFilesEnhanced, TransformOptions };
+export { processFiles, processFilesLegacy, processFilesEnhanced, TransformOptions };
 export { extractStringsFromCode } from "./string-extractor";
 export { transformCode, transformCodeEnhanced } from "./ast-parser";
 
-// 以编程方式使用库的主函数
-async function extractI18n(
+/**
+ * 统一的 i18n 提取主函数
+ * 自动检测是否使用增强模式（基于配置）
+ */
+export async function extractI18n(
   pattern: string = "src/**/*.{jsx,tsx}",
   options: TransformOptions = {}
 ) {
   return processFiles(pattern, options);
 }
 
-// 使用增强框架的主函数，保持原始代码格式
-async function extractI18nEnhanced(
+/**
+ * @deprecated 使用 extractI18n 代替，该函数会自动检测模式
+ */
+export async function extractI18nEnhanced(
   pattern: string = "src/**/*.{jsx,tsx}",
   options: TransformOptions = {}
 ) {
-  return processFilesEnhanced(pattern, options);
+  return processFiles(pattern, options, true);
 }
 
-export { extractI18n, extractI18nEnhanced };
 export default extractI18n;

@@ -102,10 +102,3 @@ export class EnhancedGenericCodeGenerator implements FrameworkCodeGenerator {
     return "t";
   }
 }
-
-/**
- * 工厂函数 - 创建通用的增强代码生成器
- */
-export function createEnhancedGenericCodeGenerator(): EnhancedGenericCodeGenerator {
-  return new EnhancedGenericCodeGenerator();
-}
