@@ -47,13 +47,17 @@ export default SearchForm;
     const importLineIndex = lines.findIndex(
       (line) => line.trim() === 'import { useTranslations } from "next-intl";'
     );
-    expect(importLineIndex).toBeGreaterThan(-1);
-    if (importLineIndex > 0) {
-      expect(lines[importLineIndex - 1].trim()).not.toMatch(/[^;]$/);
-    }
-    if (importLineIndex < lines.length - 1) {
-      expect(lines[importLineIndex + 1].trim()).not.toMatch(/^import /);
-    }
+    const useClientIndex = lines.findIndex((line) =>
+      line.includes("use client")
+    );
+    expect(useClientIndex).not.toBe(-1);
+    expect(importLineIndex).toBeGreaterThan(useClientIndex);
+
+    const otherImportIndex = lines.findIndex(
+      (line, i) => i !== importLineIndex && line.trim().includes("import ")
+    );
+    expect(otherImportIndex).not.toBe(-1);
+    expect(importLineIndex).toBeGreaterThan(otherImportIndex);
 
     const hookLine = "const { t } = useTranslations();";
     const hookLineIndex = lines.findIndex((line) => line.trim() === hookLine);
