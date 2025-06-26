@@ -232,6 +232,40 @@ export interface FrameworkCodeGenerator {
 }
 
 /**
+ * 非React组件上下文的国际化配置
+ */
+export interface NonReactI18nConfig {
+  /** 
+   * 翻译函数名，如 't', '$t' 等
+   * @default 't'
+   */
+  functionName?: string;
+  /** 
+   * 导入类型：'default' | 'named' | 'namespace'
+   * @default 'named'
+   * @example 
+   * - 'default': import t from 'i18n-lib'
+   * - 'named': import { t } from 'i18n-lib'  
+   * - 'namespace': import * as i18n from 'i18n-lib'; i18n.t()
+   */
+  importType?: 'default' | 'named' | 'namespace';
+  /** 
+   * 导入源，如 'react-i18n-plus', 'i18next' 等
+   */
+  source?: string;
+  /** 
+   * 命名空间名称（当 importType 为 'namespace' 时使用）
+   * @default 'i18n'
+   */
+  namespace?: string;
+  /**
+   * 完全自定义的导入语句（可选，会覆盖上述所有配置）
+   * @example "import { translate as t } from 'custom-i18n'"
+   */
+  customImport?: string;
+}
+
+/**
  * 多语言配置总入口
  */
 export interface I18nConfig {
@@ -240,12 +274,15 @@ export interface I18nConfig {
    * @default 'react'
    * @description 'react' 表示 React 16+，'react15' 表示 React 15
    * @description 'vue' 表示 Vue.js，'vue2' 表示 Vue 2.x，'vue3' 表示 Vue 3.x
-   * @future 待实现：支持 appendExtractedComment/extractedCommentType 注释配置
-   * 当前暂未支持自动在执行函数后添加待翻译文本注释，后续版本将实现。
    */
   framework?: "react" | "react15" | "vue" | "vue2" | "vue3";
   /** 国际化导入配置，支持自定义，兼容 translationMethod/hookName/hookImport */
   i18nImport?: I18nImportConfig;
+  /**
+   * 非React组件场景下的国际化配置（仅在 framework 为 'react' 时生效）
+   * 用于处理普通函数、工具函数等非组件场景
+   */
+  nonReactConfig?: NonReactI18nConfig;
   /**
    * 自定义生成调用表达式的方法（返回 t.CallExpression）
    * (callName, key, rawText) => t.CallExpression

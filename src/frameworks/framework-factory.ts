@@ -8,6 +8,7 @@ import { VueTransformer } from "./vue-support";
 import { VueCodeGenerator } from "./vue-code-generator";
 import { EnhancedReactCodeGenerator } from "./enhanced-react-support";
 import { EnhancedGenericCodeGenerator } from "./enhanced-generic-support";
+import { ContextAwareReactCodeGenerator } from "./context-aware-react-support";
 
 /**
  * 根据 i18nConfig.framework 创建对应的 transformer
@@ -235,6 +236,14 @@ export function createFrameworkCodeGenerator(options: TransformOptions, useEnhan
  * 创建增强的代码生成器，支持智能框架检测
  */
 export function createEnhancedCodeGenerator(code: string, filePath: string, options: TransformOptions): FrameworkCodeGenerator {
+  // 如果是 React 框架且配置了 nonReactConfig，使用上下文感知生成器
+  if (options.i18nConfig?.framework === 'react' && options.i18nConfig?.nonReactConfig) {
+    const contextAwareGenerator = new ContextAwareReactCodeGenerator();
+    if (contextAwareGenerator.canHandle(code, filePath)) {
+      return contextAwareGenerator;
+    }
+  }
+
   // 尝试React增强生成器
   const reactGenerator = new EnhancedReactCodeGenerator();
   if (reactGenerator.canHandle(code, filePath)) {
