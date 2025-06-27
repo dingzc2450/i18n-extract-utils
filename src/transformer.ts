@@ -9,6 +9,8 @@ import {
   ChangeDetail,
 } from "./types";
 import { transformCode, transformCodeEnhanced } from "./ast-parser";
+// 导入新的CoreProcessor相关功能
+import { processFilesWithCoreProcessor, transformCodeWithCoreProcessor } from "./core-transformer";
 
 function ensureDirectoryExistence(filePath: string): void {
   const dirname = path.dirname(filePath);
@@ -122,12 +124,24 @@ function generateTranslationOutput(
 export async function processFiles(
   pattern: string,
   options: TransformOptions,
-  useEnhanced?: boolean
+  useEnhanced?: boolean,
+  useCoreProcessor?: boolean
 ): Promise<{
   extractedStrings: ExtractedString[];
   usedExistingKeys?: UsedExistingKey[];
   modifiedFiles: FileModificationRecord[];
 }> {
+  // 如果明确指定使用CoreProcessor，则使用新的处理器
+  if (useCoreProcessor) {
+    const result = await processFilesWithCoreProcessor(pattern, options);
+    return {
+      extractedStrings: result.extractedStrings,
+      usedExistingKeys: result.usedExistingKeysList,
+      modifiedFiles: result.fileModifications,
+    };
+  }
+
+  // 以下是原有的处理逻辑
   const files = await glob.glob(pattern, { absolute: true });
   let allExtractedStrings: ExtractedString[] = [];
   let allUsedExistingKeys: UsedExistingKey[] = [];
@@ -171,7 +185,8 @@ export async function processFiles(
   // 处理每个文件
   for (const file of files) {
     try {
-      const transformFn = transformCode;
+      // 根据是否使用增强模式选择转换函数
+      const transformFn = useEnhanced ? transformCodeEnhanced : transformCode;
       const result = transformFn(file, options, existingValueToKey);
 
       if (result.extractedStrings.length > 0 || result.changes.length > 0) {
@@ -234,4 +249,20 @@ export async function processFilesEnhanced(
   modifiedFiles: FileModificationRecord[];
 }> {
   return processFiles(pattern, options, true);
+}
+
+/**
+ * 使用新的CoreProcessor处理文件（实验性功能）
+ * @param pattern 文件匹配模式
+ * @param options 转换选项
+ */
+export async function processFilesWithNewCoreProcessor(
+  pattern: string,
+  options: TransformOptions = {}
+): Promise<{
+  extractedStrings: ExtractedString[];
+  usedExistingKeys?: UsedExistingKey[];
+  modifiedFiles: FileModificationRecord[];
+}> {
+  return processFiles(pattern, options, undefined, true);
 }

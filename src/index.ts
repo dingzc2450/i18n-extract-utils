@@ -1,7 +1,14 @@
-import { processFiles, processFilesLegacy, processFilesEnhanced } from "./transformer";
+import { processFiles, processFilesLegacy, processFilesEnhanced, processFilesWithNewCoreProcessor } from "./transformer";
 import { TransformOptions } from "./types";
 
-export { processFiles, processFilesLegacy, processFilesEnhanced, TransformOptions };
+// 导出重构后的核心模块
+export { CoreProcessor, createProcessorWithDefaultPlugins } from "./core";
+export { ReactPlugin, VuePlugin, GenericJSPlugin } from "./plugins";
+
+// 导出兼容性适配器
+export { CoreProcessorCompat, coreProcessor } from "./core-processor-compat";
+
+export { processFiles, processFilesLegacy, processFilesEnhanced, processFilesWithNewCoreProcessor, TransformOptions };
 export { extractStringsFromCode } from "./string-extractor";
 export { transformCode, transformCodeEnhanced } from "./ast-parser";
 
@@ -14,6 +21,16 @@ export async function extractI18n(
   options: TransformOptions = {}
 ) {
   return processFiles(pattern, options);
+}
+
+/**
+ * 使用新CoreProcessor的i18n提取函数（实验性）
+ */
+export async function extractI18nWithCoreProcessor(
+  pattern: string = "src/**/*.{jsx,tsx}",
+  options: TransformOptions = {}
+) {
+  return processFilesWithNewCoreProcessor(pattern, options);
 }
 
 /**

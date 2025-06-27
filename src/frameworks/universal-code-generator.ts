@@ -10,7 +10,7 @@ import {
   ChangeDetail,
   FrameworkCodeGenerator,
 } from "../types";
-import { CoreProcessor } from "../core-processor";
+import { CoreProcessorCompat } from "../core-processor-compat";
 
 /**
  * 新的统一代码生成器
@@ -18,7 +18,7 @@ import { CoreProcessor } from "../core-processor";
  */
 export class UniversalCodeGenerator implements FrameworkCodeGenerator {
   name = "universal";
-  private processor = new CoreProcessor();
+  private processor = new CoreProcessorCompat();
 
   canHandle(code: string, filePath: string): boolean {
     //TODO  处理所有JS/TS相关文件 vue 暂时文件不处理 后续做
