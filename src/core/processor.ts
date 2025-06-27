@@ -292,7 +292,8 @@ export class CoreProcessor {
         modifiedCode = this.addImportsAndHooksWithAST(
           modifiedCode,
           requirements.imports,
-          requirements.hooks
+          requirements.hooks,
+          context.filePath
         );
         return modifiedCode; // 使用新的统一格式，跳过老的逻辑
       }
@@ -315,31 +316,46 @@ export class CoreProcessor {
   private addImportsAndHooksWithAST(
     code: string,
     importRequirements: ImportRequirement[],
-    hookRequirements: HookRequirement[]
+    hookRequirements: HookRequirement[],
+    filePath: string = ""
   ): string {
     if (importRequirements.length === 0 && hookRequirements.length === 0) {
       return code;
     }
 
     try {
-      const ast = ASTParserUtils.parseCode(code, "");
-      const importInserts: Array<{ position: number; content: string }> = [];
-      const hookInserts: Array<{ position: number; content: string }> = [];
+      // 如果没有提供文件路径，尝试从代码特征推断类型
+      let inferredPath = filePath;
+      if (!inferredPath) {
+        if (code.includes("jsx") || /<[A-Z]/.test(code) || /<[a-z]+/.test(code)) {
+          inferredPath = "file.tsx"; // JSX/TSX 文件
+        } else if (code.includes("typescript") || /:\s*\w+/.test(code)) {
+          inferredPath = "file.ts"; // TypeScript 文件
+        } else {
+          inferredPath = "file.js"; // 默认 JavaScript 文件
+        }
+      }
 
-      // 使用工具类方法处理导入和hook插入
-      // ... 这里可以调用 ImportHookUtils 的方法 ...
-
-      // 应用所有插入（从后往前避免位置偏移）
-      const allInserts = [...importInserts, ...hookInserts].sort(
-        (a, b) => b.position - a.position
-      );
-
+      const ast = ASTParserUtils.parseCode(code, inferredPath);
       let modifiedCode = code;
-      for (const insert of allInserts) {
-        modifiedCode =
-          modifiedCode.slice(0, insert.position) +
-          insert.content +
-          modifiedCode.slice(insert.position);
+
+      // 处理导入
+      if (importRequirements.length > 0) {
+        for (const importReq of importRequirements) {
+          if (!this.hasExistingImport(modifiedCode, importReq)) {
+            const importStatement = ImportHookUtils.generateImportStatement(importReq);
+            modifiedCode = this.addImportToCode(modifiedCode, importStatement);
+          }
+        }
+      }
+
+      // 处理 Hook 调用
+      if (hookRequirements.length > 0) {
+        for (const hookReq of hookRequirements) {
+          if (!this.hasExistingHookCall(modifiedCode, hookReq)) {
+            modifiedCode = this.addHookCallToCode(modifiedCode, hookReq);
+          }
+        }
       }
 
       return modifiedCode;
@@ -404,67 +420,13 @@ export class CoreProcessor {
   }
 
   /**
-   * 添加导入语句（遗留方法）
+   * 检查是否已存在导入（简化版本）
    */
-  private addImportStatementLegacy(code: string, importInfo: any): string {
-    const importStatement =
-      importInfo.needsHook && importInfo.hookImport
-        ? importInfo.hookImport.importStatement || importInfo.importStatement
-        : importInfo.importStatement;
-
-    // 这里可以使用简单的字符串插入，因为是上下文感知导入的fallback
-    const lines = code.split("\n");
-    let insertIndex = 0;
-
-    // 简单查找最后一个导入位置
-    let lastImportIndex = -1;
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (line.startsWith("import ")) {
-        lastImportIndex = i;
-      } else if (line && !line.startsWith("//") && !line.startsWith("/*")) {
-        break;
-      }
-    }
-
-    if (lastImportIndex !== -1) {
-      insertIndex = lastImportIndex + 1;
-    }
-
-    lines.splice(insertIndex, 0, importStatement);
-    return lines.join("\n");
-  }
-
-  /**
-   * 添加 Hook 调用（遗留方法）
-   */
-  private addHookCallIfNeededLegacy(code: string, hookInfo: any): string {
-    const hookCall = hookInfo.hookCall;
-
-    // 检查是否已经存在 Hook 调用
-    if (code.includes(hookCall)) {
-      return code;
-    }
-
-    // 简单的组件检测和hook添加
-    const functionComponentPattern =
-      /^(\s*)(export\s+)?(default\s+)?function\s+([A-Z][a-zA-Z0-9]*)\s*\([^)]*\)\s*\{/gm;
-    const match = functionComponentPattern.exec(code);
-    if (match) {
-      const indent = match[1];
-      const insertIndex = match.index + match[0].length;
-      return (
-        code.slice(0, insertIndex) +
-        "\n" +
-        indent +
-        "  " +
-        hookCall +
-        "\n" +
-        code.slice(insertIndex)
-      );
-    }
-
-    return code;
+  private hasExistingImport(code: string, importReq: ImportRequirement): boolean {
+    const importPattern = new RegExp(
+      `import\\s+.*\\b${this.escapeRegex(importReq.specifiers[0].name)}\\b.*from\\s+['"]${this.escapeRegex(importReq.source)}['"]`
+    );
+    return importPattern.test(code);
   }
 
   /**
@@ -508,6 +470,266 @@ export class CoreProcessor {
       // 回退检查：检查是否包含类似的导入语句
       return code.includes(normalizedStatement);
     }
+  }
+
+  /**
+   * 添加导入到代码中
+   */
+  private addImportToCode(code: string, importStatement: string): string {
+    const lines = code.split('\n');
+    let insertIndex = 0;
+
+    // 查找最后一个导入的位置
+    let lastImportIndex = -1;
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (line.startsWith('import ')) {
+        lastImportIndex = i;
+      } else if (line && !line.startsWith('//') && !line.startsWith('/*') && !line.startsWith('"use') && !line.startsWith("'use")) {
+        break;
+      }
+    }
+
+    if (lastImportIndex !== -1) {
+      insertIndex = lastImportIndex + 1;
+    }
+
+    lines.splice(insertIndex, 0, importStatement);
+    return lines.join('\n');
+  }
+
+  /**
+   * 添加导入语句（遗留方法）
+   */
+  private addImportStatementLegacy(code: string, importInfo: any): string {
+    const importStatement =
+      importInfo.needsHook && importInfo.hookImport
+        ? importInfo.hookImport.importStatement || importInfo.importStatement
+        : importInfo.importStatement;
+
+    // 这里可以使用简单的字符串插入，因为是上下文感知导入的fallback
+    const lines = code.split("\n");
+    let insertIndex = 0;
+
+    // 简单查找最后一个导入位置
+    let lastImportIndex = -1;
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (line.startsWith("import ")) {
+        lastImportIndex = i;
+      } else if (line && !line.startsWith("//") && !line.startsWith("/*")) {
+        break;
+      }
+    }
+
+    if (lastImportIndex !== -1) {
+      insertIndex = lastImportIndex + 1;
+    }
+
+    lines.splice(insertIndex, 0, importStatement);
+    return lines.join("\n");
+  }
+
+  /**
+   * 检查是否已存在Hook调用
+   */
+  private hasExistingHookCall(code: string, hookReq: HookRequirement): boolean {
+    return code.includes(hookReq.callExpression) || 
+           code.includes(`${hookReq.hookName}()`);
+  }
+
+  /**
+   * 添加Hook调用到代码中
+   */
+  private addHookCallToCode(code: string, hookReq: HookRequirement): string {
+    let modifiedCode = code;
+    
+    // 处理所有函数，支持React组件和自定义Hook
+    // 1. 查找React组件函数
+    modifiedCode = this.addHookToFunctions(
+      modifiedCode, 
+      hookReq, 
+      /^(\s*)(export\s+)?(default\s+)?function\s+([A-Z][a-zA-Z0-9]*)\s*\([^)]*\)\s*\{/gm,
+      false // 不是自定义Hook
+    );
+    
+    // 2. 查找React组件箭头函数
+    modifiedCode = this.addHookToFunctions(
+      modifiedCode, 
+      hookReq, 
+      /^(\s*)(export\s+)?(default\s+)?const\s+([A-Z][a-zA-Z0-9]*)\s*=\s*\([^)]*\)\s*=>\s*\{/gm,
+      false // 不是自定义Hook
+    );
+    
+    // 3. 查找自定义Hook函数
+    modifiedCode = this.addHookToFunctions(
+      modifiedCode, 
+      hookReq, 
+      /^(\s*)(export\s+)?(default\s+)?function\s+(use[A-Z][a-zA-Z0-9]*)\s*\([^)]*\)\s*\{/gm,
+      true // 是自定义Hook
+    );
+    
+    // 4. 查找自定义Hook箭头函数
+    modifiedCode = this.addHookToFunctions(
+      modifiedCode, 
+      hookReq, 
+      /^(\s*)(export\s+)?(default\s+)?const\s+(use[A-Z][a-zA-Z0-9]*)\s*=\s*\([^)]*\)\s*=>\s*\{/gm,
+      true // 是自定义Hook
+    );
+
+    return modifiedCode;
+  }
+
+  /**
+   * 为匹配指定模式的函数添加Hook调用
+   */
+  private addHookToFunctions(
+    code: string, 
+    hookReq: HookRequirement, 
+    pattern: RegExp, 
+    isCustomHook: boolean
+  ): string {
+    const matches = Array.from(code.matchAll(pattern));
+    let modifiedCode = code;
+    let totalOffset = 0;
+
+    // 倒序处理避免位置偏移问题
+    matches.reverse().forEach(match => {
+      const functionName = match[4];
+      const indent = match[1];
+      const openBracePos = (match.index || 0) + match[0].length;
+      
+      // 检查是否已经有Hook调用
+      if (modifiedCode.includes(`${hookReq.hookName}()`)) {
+        const functionStart = match.index || 0;
+        const functionEnd = this.findFunctionEnd(modifiedCode, openBracePos);
+        const functionContent = modifiedCode.slice(functionStart, functionEnd);
+        
+        if (functionContent.includes(`${hookReq.hookName}()`)) {
+          return; // 这个函数已经有Hook调用了
+        }
+      }
+      
+      // 对于自定义Hook，检查是否有t()调用
+      if (isCustomHook) {
+        const functionStart = match.index || 0;
+        const functionEnd = this.findFunctionEnd(modifiedCode, openBracePos);
+        const functionContent = modifiedCode.slice(functionStart, functionEnd);
+        
+        if (!functionContent.includes('t(')) {
+          return; // 自定义Hook没有使用t()，跳过
+        }
+      }
+      
+      // 插入Hook调用
+      const hookCallLine = '\n' + indent + '  ' + hookReq.callExpression;
+      const insertPosition = openBracePos + totalOffset;
+      
+      modifiedCode = 
+        modifiedCode.slice(0, insertPosition) + 
+        hookCallLine + 
+        modifiedCode.slice(insertPosition);
+      
+      totalOffset += hookCallLine.length;
+    });
+
+    return modifiedCode;
+  }
+
+  /**
+   * 找到函数的结束位置
+   */
+  private findFunctionEnd(code: string, openBracePos: number): number {
+    let braceCount = 1;
+    let pos = openBracePos;
+    
+    while (pos < code.length && braceCount > 0) {
+      pos++;
+      if (code[pos] === '{') {
+        braceCount++;
+      } else if (code[pos] === '}') {
+        braceCount--;
+      }
+    }
+    
+    return pos + 1;
+  }
+
+  /**
+   * 提取函数体内容（简化版本，用于检查是否有t()调用）
+   */
+  private extractFunctionBody(code: string, functionStartPos: number): string {
+    let braceCount = 0;
+    let start = functionStartPos;
+    let end = code.length;
+    
+    // 找到函数体开始的大括号位置
+    // 注意 functionStartPos 应该已经在 { 之后了
+    start = functionStartPos;
+    
+    // 从当前位置往前找到 {
+    while (start > 0 && code[start - 1] !== '{') {
+      start--;
+    }
+    
+    if (start === 0) {
+      // 无法找到开始的大括号，从 functionStartPos 开始
+      start = functionStartPos;
+      while (start < code.length && code[start] !== '{') {
+        start++;
+      }
+    }
+    
+    if (start >= code.length) return '';
+    
+    braceCount = 1; // 开始时已经有一个开放的大括号
+    
+    // 找到匹配的结束大括号
+    for (let i = start + 1; i < code.length; i++) {
+      if (code[i] === '{') {
+        braceCount++;
+      } else if (code[i] === '}') {
+        braceCount--;
+        if (braceCount === 0) {
+          end = i;
+          break;
+        }
+      }
+    }
+    
+    return code.slice(start, end + 1);
+  }
+
+  /**
+   * 添加 Hook 调用（遗留方法）
+   */
+  private addHookCallIfNeededLegacy(code: string, hookInfo: any): string {
+    const hookCall = hookInfo.hookCall;
+
+    // 检查是否已经存在 Hook 调用
+    if (code.includes(hookCall)) {
+      return code;
+    }
+
+    // 简单的组件检测和hook添加
+    const functionComponentPattern =
+      /^(\s*)(export\s+)?(default\s+)?function\s+([A-Z][a-zA-Z0-9]*)\s*\([^)]*\)\s*\{/gm;
+    const match = functionComponentPattern.exec(code);
+    if (match) {
+      const indent = match[1];
+      const insertIndex = match.index + match[0].length;
+      return (
+        code.slice(0, insertIndex) +
+        "\n" +
+        indent +
+        "  " +
+        hookCall +
+        "\n" +
+        code.slice(insertIndex)
+      );
+    }
+
+    return code;
   }
 
   /**
