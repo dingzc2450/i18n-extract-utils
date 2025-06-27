@@ -116,65 +116,6 @@ export function collectContextAwareReplacementInfo(
     }
   };
 
-  const recordChange = (
-    path: NodePath<t.Node>,
-    originalNode: t.Node,
-    replacementNode: t.Node | t.Node[],
-    originalText?: string
-  ) => {
-    if (originalNode.loc) {
-      const generatorOptions = { 
-        jsescOption: { minimal: true },
-        minified: false, // 不压缩变量名，保持可读性
-        concise: true   // 使用简洁格式
-      };
-      const replacementCode = Array.isArray(replacementNode)
-        ? generateJSXElementsCode(replacementNode, generatorOptions)
-        : generate(replacementNode, generatorOptions).code;
-
-      const originalNodeCode = originalText || generate(originalNode, generatorOptions).code;
-
-      // 从原始代码中提取真实的原始文本
-      const realOriginalText = extractOriginalText(
-        originalCode,
-        originalNode.loc.start.line,
-        originalNode.loc.start.column,
-        originalNode.loc.end.line,
-        originalNode.loc.end.column
-      );
-
-      // 计算精确位置
-      const { start, end } = StringReplacer.calculatePosition(
-        originalCode,
-        originalNode.loc.start.line,
-        originalNode.loc.start.column,
-        realOriginalText.length
-      );
-
-      // 生成上下文匹配信息
-      const matchContext = StringReplacer.generateMatchContext(
-        originalCode,
-        originalNode.loc.start.line,
-        originalNode.loc.start.column,
-        realOriginalText
-      );
-
-      changes.push({
-        filePath,
-        original: realOriginalText,
-        replacement: replacementCode,
-        line: originalNode.loc.start.line,
-        column: originalNode.loc.start.column,
-        endLine: originalNode.loc.end.line,
-        endColumn: originalNode.loc.end.column,
-        start,
-        end,
-        matchContext,
-      });
-      modified = true;
-    }
-  };
-
   const buildTemplateLiteral = (
     parts: string[],
     expressions: t.Expression[]
