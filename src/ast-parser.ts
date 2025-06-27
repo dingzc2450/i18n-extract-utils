@@ -359,13 +359,14 @@ export function transformCode(
 
   // 合并用户配置和框架默认配置
   const mergedOptions = mergeWithFrameworkDefaults(options, detectedFramework);
+  
   // 优先使用新的框架代码生成器
   // BUG 还未跑完所有测试用例
   const codeGenerator = createFrameworkCodeGenerator(mergedOptions);
-  if (
-    codeGenerator.canHandle(code, filePath) &&
-    !["vue", "vue2", "vue3"].includes(detectedFramework)
-  ) {
+  const canHandle = codeGenerator.canHandle(code, filePath);
+  const isNotVue = !["vue", "vue2", "vue3"].includes(detectedFramework);
+  
+  if (canHandle && isNotVue) {
     return codeGenerator.processCode(
       code,
       filePath,

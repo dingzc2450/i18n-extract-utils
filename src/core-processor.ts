@@ -13,7 +13,7 @@ import {
   ChangeDetail,
 } from "./types";
 import { collectContextAwareReplacementInfo } from "./context-aware-ast-replacer";
-import { collectReplacementInfo } from "./enhanced-ast-replacer";
+// import { collectReplacementInfo } from "./enhanced-ast-replacer";
 import { StringReplacer } from "./string-replacer";
 import { SmartImportManager } from "./smart-import-manager";
 import * as tg from "./babel-type-guards";
@@ -106,7 +106,7 @@ export interface HookRequirement {
  */
 export enum ProcessingMode {
   CONTEXT_AWARE = "context-aware", // 上下文感知模式（默认，推荐）
-  AST_TRANSFORM = "ast-transform", // AST转换模式（可能破坏格式，但更稳妥）
+  AST_TRANSFORM = "ast-transform", // AST转换模式（可能破坏格式，但更稳妥） 是原有的老模式 暂时在此不启用
 }
 
 /**
@@ -234,6 +234,7 @@ export class CoreProcessor {
 
   /**
    * 确定处理模式
+   * 暂时只支持 CONTEXT_AWARE   其余模式不支持
    */
   private determineProcessingMode(options: TransformOptions): ProcessingMode {
     // 如果用户明确指定了字符串替换模式
@@ -247,10 +248,12 @@ export class CoreProcessor {
 
     // 如果用户明确指定了AST转换模式
     if (options.useASTTransform === true) {
-      return ProcessingMode.AST_TRANSFORM;
+      throw new Error('AST转换模式暂不支持');
+      // return ProcessingMode.AST_TRANSFORM;
     }
-    // 默认ast
-    return ProcessingMode.AST_TRANSFORM;
+    
+    // 默认使用AST转换模式
+    return ProcessingMode.CONTEXT_AWARE;
   }
 
   /**
@@ -357,35 +360,35 @@ export class CoreProcessor {
         requiredImports: result.requiredImports,
       };
     }
-    if (mode === ProcessingMode.AST_TRANSFORM) {
-      // 使用AST转换模式
-      // 就是以前旧的方式 暂时不应用 TODO 待做
-      console.log("Using AST transform mode (legacy)");
-      // 使用传统字符串替换模式
-      const translationMethod =
-        options.i18nConfig?.i18nImport?.name ||
-        options.translationMethod ||
-        "t";
+    // if (mode === ProcessingMode.AST_TRANSFORM) {
+    //   // 使用AST转换模式
+    //   // 就是以前旧的方式 暂时不应用 TODO 待做
+    //   console.log("Using AST transform mode (legacy)");
+    //   // 使用传统字符串替换模式
+    //   const translationMethod =
+    //     options.i18nConfig?.i18nImport?.name ||
+    //     options.translationMethod ||
+    //     "t";
 
-      const result = collectReplacementInfo(
-        ast,
-        code,
-        existingValueToKey,
-        extractedStrings,
-        usedExistingKeysList,
-        translationMethod,
-        options,
-        filePath
-      );
+    //   const result = collectReplacementInfo(
+    //     ast,
+    //     code,
+    //     existingValueToKey,
+    //     extractedStrings,
+    //     usedExistingKeysList,
+    //     translationMethod,
+    //     options,
+    //     filePath
+    //   );
 
-      return {
-        extractedStrings,
-        usedExistingKeysList,
-        changes: result.changes,
-        modified: result.modified,
-        requiredImports: undefined,
-      };
-    }
+    //   return {
+    //     extractedStrings,
+    //     usedExistingKeysList,
+    //     changes: result.changes,
+    //     modified: result.modified,
+    //     requiredImports: undefined,
+    //   };
+    // }
     console.error("Unknown processing mode:", mode);
     return {
       // 使用AST转换模式
