@@ -576,15 +576,7 @@ export class CoreProcessor {
 
     let modifiedCode = code;
 
-    // 处理上下文感知的导入（新格式）
-    if (context.requiredImports && context.requiredImports.size > 0) {
-      modifiedCode = this.addContextAwareImportsLegacy(
-        modifiedCode,
-        context.requiredImports
-      );
-    }
-
-    // 处理插件定义的导入和hook需求（统一格式）
+    // 优先处理插件定义的导入和hook需求（统一格式）
     if (plugin.getRequiredImportsAndHooks) {
       const requirements = plugin.getRequiredImportsAndHooks(
         extractedStrings,
@@ -597,7 +589,16 @@ export class CoreProcessor {
           requirements.imports,
           requirements.hooks
         );
+        return modifiedCode; // 使用新的统一格式，跳过老的逻辑
       }
+    }
+
+    // 回退到处理上下文感知的导入（老格式）
+    if (context.requiredImports && context.requiredImports.size > 0) {
+      modifiedCode = this.addContextAwareImportsLegacy(
+        modifiedCode,
+        context.requiredImports
+      );
     }
 
     return modifiedCode;
@@ -813,23 +814,57 @@ export class CoreProcessor {
       isCustomHook = true;
     }
 
-    // 检查是否使用了翻译函数
-    let usesTranslation = false;
-    for (const hookReq of hookRequirements) {
+    // 对于React组件，始终添加hook（如果返回JSX）
+    if (returnsJSX) {
+      return true;
+    }
+
+    // 对于自定义hook，检查是否使用了翻译函数或包含可提取的字符串
+    if (isCustomHook) {
+      // 检查是否已经使用了翻译函数
+      let usesTranslation = false;
+      for (const hookReq of hookRequirements) {
+        path.traverse({
+          CallExpression(callPath: any) {
+            if (
+              tg.isIdentifier(callPath.node.callee) &&
+              callPath.node.callee.name === hookReq.variableName
+            ) {
+              usesTranslation = true;
+              callPath.stop();
+            }
+          },
+        });
+      }
+
+      // 如果已经使用了翻译函数，添加hook
+      if (usesTranslation) {
+        return true;
+      }
+
+      // 如果没有使用翻译函数，检查是否包含可提取的字符串
+      let hasExtractableStrings = false;
+      const patternRegex = /___(.+?)___/g;
       path.traverse({
-        CallExpression(callPath: any) {
-          if (
-            tg.isIdentifier(callPath.node.callee) &&
-            callPath.node.callee.name === hookReq.variableName
-          ) {
-            usesTranslation = true;
-            callPath.stop();
+        StringLiteral(stringPath: any) {
+          if (patternRegex.test(stringPath.node.value)) {
+            hasExtractableStrings = true;
+            stringPath.stop();
+          }
+        },
+        TemplateLiteral(templatePath: any) {
+          const nodeValue = templatePath.node.quasis.map((q: any) => q.value.raw).join("");
+          if (patternRegex.test(nodeValue)) {
+            hasExtractableStrings = true;
+            templatePath.stop();
           }
         },
       });
+
+      return hasExtractableStrings;
     }
 
-    return returnsJSX || (isCustomHook && usesTranslation);
+    return false;
   }
 
   /**
@@ -930,47 +965,67 @@ class ReactPlugin implements FrameworkPlugin {
     };
   }
 
+  getRequiredImportsAndHooks(
+    extractedStrings: ExtractedString[],
+    options: TransformOptions,
+    context: ProcessingContext
+  ): {
+    imports: ImportRequirement[];
+    hooks: HookRequirement[];
+  } {
+    if (extractedStrings.length === 0) {
+      return { imports: [], hooks: [] };
+    }
+
+    // 检查是否有非React配置，如果有，则回退到上下文感知逻辑
+    if (options.i18nConfig?.nonReactConfig) {
+      return { imports: [], hooks: [] }; // 让上下文感知逻辑处理
+    }
+
+    const hookName =
+      options.i18nConfig?.i18nImport?.importName ||
+      options.hookName ||
+      "useTranslation";
+    const hookSource =
+      options.i18nConfig?.i18nImport?.source ||
+      options.hookImport ||
+      "react-i18next";
+    const translationMethod =
+      options.i18nConfig?.i18nImport?.name ||
+      options.translationMethod ||
+      "t";
+
+    const imports: ImportRequirement[] = [
+      {
+        source: hookSource,
+        specifiers: [{ name: hookName }],
+        isDefault: false,
+      },
+    ];
+
+    const hooks: HookRequirement[] = [
+      {
+        hookName,
+        variableName: translationMethod,
+        isDestructured: translationMethod !== "default",
+        callExpression:
+          translationMethod === "default"
+            ? `const ${translationMethod} = ${hookName}();`
+            : `const { ${translationMethod} } = ${hookName}();`,
+      },
+    ];
+
+    return { imports, hooks };
+  }
+
   postProcess(
     code: string,
     extractedStrings: ExtractedString[],
     options: TransformOptions,
     context: ProcessingContext
   ): string {
-    if (extractedStrings.length === 0) return code;
-
-    let modifiedCode = code;
-
-    // 如果有上下文感知的必要导入，添加它们
-    if (context.requiredImports && context.requiredImports.size > 0) {
-      modifiedCode = this.addContextAwareImports(
-        modifiedCode,
-        context.requiredImports
-      );
-    } else {
-      // 回退到传统的React hook处理，使用AST解析
-      const hookName =
-        options.i18nConfig?.i18nImport?.importName ||
-        options.hookName ||
-        "useTranslation";
-      const hookSource =
-        options.i18nConfig?.i18nImport?.source ||
-        options.hookImport ||
-        "react-i18next";
-      const translationMethod =
-        options.i18nConfig?.i18nImport?.name ||
-        options.translationMethod ||
-        "t";
-
-      // 使用AST处理导入和hook调用
-      modifiedCode = this.addHookAndImportWithAST(
-        modifiedCode,
-        hookName,
-        hookSource,
-        translationMethod
-      );
-    }
-
-    return modifiedCode;
+    // 新的统一格式已经在 processImportsAndHooks 中处理，这里跳过后处理
+    return code;
   }
 
   /**

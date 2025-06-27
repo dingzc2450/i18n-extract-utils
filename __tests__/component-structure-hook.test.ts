@@ -36,7 +36,7 @@ describe("Component Structure and Hook Insertion", () => {
     });
     expect(result.code).toBeDefined();
     expect(result.extractedStrings.length).toBeGreaterThan(0);
-    expect(result.code).toContain('import { useTranslations } from "next-intl";');
+    expect(result.code).toMatch(/import { useTranslations } from ['"]next-intl['"];/);
     expect(result.code).toContain('const { t } = useTranslations();');
     expect(result.code).toMatch(/placeholder=\{t\(['"]请输入名称['"]\)\}/);
   });

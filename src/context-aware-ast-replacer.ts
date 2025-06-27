@@ -775,9 +775,106 @@ export function collectContextAwareReplacementInfo(
       }
       patternRegex.lastIndex = 0;
 
-      // 其余的无表达式模板字符串处理逻辑保持不变...
-      // 这里可以添加原来的无表达式处理逻辑
-      // 为了简化，我们先跳过这部分
+      // 处理无表达式的模板字符串
+      const matches = Array.from(nodeValue.matchAll(patternRegex));
+      
+      if (matches.length === 1) {
+        // 单个匹配
+        const match = matches[0];
+        const fullMatch = match[0];
+        const extractedValue = match[1];
+
+        const key = getKeyAndRecord(
+          fullMatch,
+          location,
+          existingValueToKey,
+          generatedKeysMap,
+          extractedStrings,
+          usedExistingKeysList,
+          options
+        );
+
+        if (key !== undefined) {
+          const callExpression = smartCallFactory(importInfo.callName, key, extractedValue);
+
+          if (options.appendExtractedComment) {
+            attachExtractedCommentToNode(
+              callExpression,
+              extractedValue,
+              options.extractedCommentType || "block"
+            );
+          }
+
+          recordPendingReplacement(path, path.node, callExpression);
+        }
+      } else if (matches.length > 1) {
+        // 多个匹配，构建混合的模板字面量
+        const parts: string[] = [];
+        const expressions: t.Expression[] = [];
+        let lastIndex = 0;
+
+        for (const match of matches) {
+          const matchStart = match.index!;
+          const matchEnd = matchStart + match[0].length;
+          const fullMatch = match[0];
+          const extractedValue = match[1];
+
+          // 添加匹配前的文本
+          if (matchStart > lastIndex) {
+            const beforeText = nodeValue.substring(lastIndex, matchStart);
+            parts.push(beforeText);
+          } else if (parts.length === 0) {
+            parts.push('');
+          }
+
+          // 处理提取的值
+          const key = getKeyAndRecord(
+            fullMatch,
+            location,
+            existingValueToKey,
+            generatedKeysMap,
+            extractedStrings,
+            usedExistingKeysList,
+            options
+          );
+
+          if (key !== undefined) {
+            const callExpression = smartCallFactory(importInfo.callName, key, extractedValue);
+
+            if (options.appendExtractedComment) {
+              attachExtractedCommentToNode(
+                callExpression,
+                extractedValue,
+                options.extractedCommentType || "block"
+              );
+            }
+
+            expressions.push(callExpression);
+            parts.push('');
+          } else {
+            // 如果无法生成key，保留原文本
+            const currentPart = parts[parts.length - 1] || '';
+            parts[parts.length - 1] = currentPart + fullMatch;
+          }
+
+          lastIndex = matchEnd;
+        }
+
+        // 添加剩余文本
+        if (lastIndex < nodeValue.length) {
+          const afterText = nodeValue.substring(lastIndex);
+          if (parts.length > 0) {
+            parts[parts.length - 1] += afterText;
+          } else {
+            parts.push(afterText);
+          }
+        }
+
+        if (expressions.length > 0) {
+          const templateLiteral = buildTemplateLiteral(parts, expressions);
+          recordPendingReplacement(path, path.node, templateLiteral);
+        }
+      }
       return;
     },
 
@@ -807,6 +904,8 @@ export function collectContextAwareReplacementInfo(
         const match = matches[0];
         const fullMatch = match[0];
         const extractedValue = match[1];
+        const matchStart = match.index!;
+        const matchEnd = matchStart + fullMatch.length;
 
         const key = getKeyAndRecord(
           fullMatch,
@@ -849,7 +948,31 @@ export function collectContextAwareReplacementInfo(
 
         const jsxExpressionContainer = t.jsxExpressionContainer(callExpression);
 
-        recordPendingReplacement(path, path.node, jsxExpressionContainer);
+        // 检查是否有前后文本需要保留
+        const beforeText = nodeValue.substring(0, matchStart);
+        const afterText = nodeValue.substring(matchEnd);
+        const hasBeforeText = /\S/.test(beforeText);
+        const hasAfterText = /\S/.test(afterText);
+
+        if (!hasBeforeText && !hasAfterText) {
+          // 没有前后文本，直接替换
+          recordPendingReplacement(path, path.node, jsxExpressionContainer);
+        } else {
+          // 有前后文本，构建多元素数组
+          const elements: (t.JSXText | t.JSXExpressionContainer)[] = [];
+          
+          if (hasBeforeText) {
+            elements.push(t.jsxText(beforeText));
+          }
+          
+          elements.push(jsxExpressionContainer);
+          
+          if (hasAfterText) {
+            elements.push(t.jsxText(afterText));
+          }
+
+          recordPendingReplacement(path, path.node, elements, nodeValue);
+        }
         return;
       }
 
@@ -866,7 +989,7 @@ export function collectContextAwareReplacementInfo(
         // 添加匹配前的文本
         if (matchStart > lastIndex) {
           const beforeText = nodeValue.substring(lastIndex, matchStart);
-          if (beforeText.trim()) {
+          if (/\S/.test(beforeText)) {
             elements.push(t.jsxText(beforeText));
           }
         }
@@ -918,7 +1041,7 @@ export function collectContextAwareReplacementInfo(
       // 添加剩余文本
       if (lastIndex < nodeValue.length) {
         const afterText = nodeValue.substring(lastIndex);
-        if (afterText.trim()) {
+        if (/\S/.test(afterText)) {
           elements.push(t.jsxText(afterText));
         }
       }
@@ -1012,7 +1135,15 @@ export function collectContextAwareReplacementInfo(
  */
 function generateJSXElementsCode(elements: t.Node[], generatorOptions: any): string {
   if (elements.length === 0) return "";
-  if (elements.length === 1) return generate(elements[0], generatorOptions).code;
+  if (elements.length === 1) {
+    if (t.isJSXText(elements[0])) {
+      // 单个文本节点直接返回其值
+      return elements[0].value;
+    } else {
+      // 表达式容器和其他节点正常生成
+      return generate(elements[0], generatorOptions).code;
+    }
+  }
   
   // 对于多个元素，需要特殊处理 JSX 文本和表达式的连接
   return elements.map(node => {
