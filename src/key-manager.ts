@@ -39,22 +39,18 @@ export function getKeyAndRecord(
 
   // --- FIX: Determine the canonical value for key generation/lookup ---
   let canonicalValue = rawExtractedValue;
-  // Check if the raw extracted value contains template literal expressions or JSX-style placeholders.
-  // Support both ${variable} (template literal) and {variable} (JSX-style placeholder) formats.
-  if (rawExtractedValue.includes("${") || rawExtractedValue.includes("{")) {
+  // Only convert template literal expressions (${...}) to {argN} format.
+  // DO NOT convert simple {variable} placeholders as they are user content.
+  if (rawExtractedValue.includes("${")) {
       let argIndex = 1;
-      // First, convert template literal placeholders like ${expr} to {argN}
+      // Only convert template literal placeholders like ${expr} to {argN}
       canonicalValue = rawExtractedValue.replace(/\$\{[^}]+\}/g, () => `{arg${argIndex++}}`);
       
-      // Then, convert JSX-style placeholders like {expr} to {argN} (but avoid double-conversion)
-      // Only process {variable} patterns that are not already in {argN} format
-      canonicalValue = canonicalValue.replace(/\{(?!arg\d+\})[^}]+\}/g, () => `{arg${argIndex++}}`);
-      
       // Example: "Select ${label}" becomes "Select {arg1}"
-      // Example: "Welcome {userName}" becomes "Welcome {arg1}"
-      // Example: "Hi ${a}, {b}" becomes "Hi {arg1}, {arg2}"
+      // Example: "Hi ${a}, ${b}" becomes "Hi {arg1}, {arg2}"
+      // But "User: {userName}" stays as "User: {userName}" (no conversion)
   }
-  // Now canonicalValue holds the version like "Select {arg1}" or just "Hello"
+  // Now canonicalValue holds the version like "Select {arg1}" or preserves "User: {userName}"
   // --- End FIX ---
 
 

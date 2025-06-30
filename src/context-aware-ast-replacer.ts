@@ -60,10 +60,16 @@ export function collectContextAwareReplacementInfo(
     : new RegExp(getDefaultPattern().source, "g");
 
   // 智能调用工厂函数，根据是否有自定义 i18nCall 来决定参数
-  const smartCallFactory = (callName: string, key: string | number, rawText: string, interpolations?: t.ObjectExpression) => {
+  const smartCallFactory = (callName: string, key: string | number, rawText: string, interpolations?: t.ObjectExpression, originalText?: string) => {
     if (options.i18nConfig && options.i18nConfig.i18nCall) {
-      // 使用自定义的 i18nCall，只传递原来的3个参数
-      return options.i18nConfig.i18nCall(callName, key, rawText);
+      // 使用自定义的 i18nCall，传递合适的原始文本
+      // 对于有插值的情况，使用 originalText 并替换实际表达式为 ${...}
+      let textForCustomCall = originalText || rawText;
+      if (originalText && originalText.includes("${")) {
+        // 将具体的变量表达式替换为 ${...} 占位符
+        textForCustomCall = originalText.replace(/\$\{[^}]+\}/g, "${...}");
+      }
+      return options.i18nConfig.i18nCall(callName, key, textForCustomCall);
     } else {
       // 使用默认的 createTranslationCall，支持 interpolations
       return createTranslationCall(callName, key, interpolations);
@@ -176,10 +182,12 @@ export function collectContextAwareReplacementInfo(
       if (matches.length === 0) return;
 
       if (matches.length === 1) {
-        // 单个匹配的情况
+        // 单个匹配的情况 - 检查是否是完整替换还是部分替换
         const match = matches[0];
         const fullMatch = match[0];
         const extractedValue = match[1];
+        const matchStart = match.index!;
+        const matchEnd = matchStart + fullMatch.length;
 
         const key = getKeyAndRecord(
           fullMatch,
@@ -211,7 +219,36 @@ export function collectContextAwareReplacementInfo(
           );
         }
 
-        recordPendingReplacement(path, path.node, callExpression);
+        // 检查是否是完整替换（整个字符串就是模式）
+        const isFullReplacement = matchStart === 0 && matchEnd === nodeValue.length;
+
+        if (isFullReplacement) {
+          // 完整替换，直接使用callExpression
+          recordPendingReplacement(path, path.node, callExpression);
+        } else {
+          // 部分替换，需要保留周围的文本，转换为模板字符串
+          const parts: string[] = [];
+          const expressions: t.Expression[] = [];
+
+          // 添加匹配前的文本
+          if (matchStart > 0) {
+            parts.push(nodeValue.substring(0, matchStart));
+          } else {
+            parts.push('');
+          }
+
+          // 添加翻译调用
+          expressions.push(callExpression);
+          parts.push('');
+
+          // 添加匹配后的文本
+          if (matchEnd < nodeValue.length) {
+            parts[parts.length - 1] = nodeValue.substring(matchEnd);
+          }
+
+          const templateLiteral = buildTemplateLiteral(parts, expressions);
+          recordPendingReplacement(path, path.node, templateLiteral);
+        }
         return;
       }
 
@@ -689,7 +726,8 @@ export function collectContextAwareReplacementInfo(
               importInfo.callName,
               translationKey,
               standardizedValue,
-              interpolations // 传递 interpolations 对象
+              interpolations, // 传递 interpolations 对象
+              rawText // 传递原始未处理的文本用于自定义 i18nCall
             );
             
             // 插入注释
@@ -720,10 +758,12 @@ export function collectContextAwareReplacementInfo(
       const matches = Array.from(nodeValue.matchAll(patternRegex));
       
       if (matches.length === 1) {
-        // 单个匹配
+        // 单个匹配 - 检查是否是完整替换还是部分替换
         const match = matches[0];
         const fullMatch = match[0];
         const extractedValue = match[1];
+        const matchStart = match.index!;
+        const matchEnd = matchStart + fullMatch.length;
 
         const key = getKeyAndRecord(
           fullMatch,
@@ -746,7 +786,36 @@ export function collectContextAwareReplacementInfo(
             );
           }
 
-          recordPendingReplacement(path, path.node, callExpression);
+          // 检查是否是完整替换（整个模板字符串就是模式）
+          const isFullReplacement = matchStart === 0 && matchEnd === nodeValue.length;
+
+          if (isFullReplacement) {
+            // 完整替换，直接使用callExpression
+            recordPendingReplacement(path, path.node, callExpression);
+          } else {
+            // 部分替换，需要保留周围的文本
+            const parts: string[] = [];
+            const expressions: t.Expression[] = [];
+
+            // 添加匹配前的文本
+            if (matchStart > 0) {
+              parts.push(nodeValue.substring(0, matchStart));
+            } else {
+              parts.push('');
+            }
+
+            // 添加翻译调用
+            expressions.push(callExpression);
+            parts.push('');
+
+            // 添加匹配后的文本
+            if (matchEnd < nodeValue.length) {
+              parts[parts.length - 1] = nodeValue.substring(matchEnd);
+            }
+
+            const templateLiteral = buildTemplateLiteral(parts, expressions);
+            recordPendingReplacement(path, path.node, templateLiteral);
+          }
         }
       } else if (matches.length > 1) {
         // 多个匹配，构建混合的模板字面量

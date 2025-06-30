@@ -30,8 +30,8 @@ describe("Test Component Transformation", () => {
     const expectedStrings = [
       'Hello World',
       'Welcome to our application',
-      'User: {arg1}',
-      'You have {arg1} items',
+      'User: {userName}',
+      'You have {count} items',
       'Click me',
       'Submit',
       'This is a tooltip'
@@ -48,8 +48,8 @@ describe("Test Component Transformation", () => {
     // Check specific transformations with comments
     expect(result.code).toContain('t("Hello World") /* Hello World */');
     expect(result.code).toContain('t("Welcome to our application") /* Welcome to our application */');
-    expect(result.code).toContain('t("User: {arg1}") /* User: {userName} */');
-    expect(result.code).toContain('t("You have {arg1} items") /* You have {count} items */');
+    expect(result.code).toContain('t("User: {userName}") /* User: {userName} */');
+    expect(result.code).toContain('t("You have {count} items") /* You have {count} items */');
     expect(result.code).toContain('alert(t("Click me") /* Click me */)');
     expect(result.code).toContain('t("Submit") /* Submit */');
     expect(result.code).toContain('title={t("This is a tooltip") /* This is a tooltip */}');
@@ -130,12 +130,12 @@ describe("Test Component Transformation", () => {
       extractedCommentType: 'block'
     });
 
-    // Check that variable placeholders are normalized
+    // Check that variable placeholders are preserved (not normalized to {argN})
     const userString = result.extractedStrings.find(s => s.value.includes('User:'));
     const countString = result.extractedStrings.find(s => s.value.includes('You have'));
     
-    expect(userString?.value).toBe('User: {arg1}');
-    expect(countString?.value).toBe('You have {arg1} items');
+    expect(userString?.value).toBe('User: {userName}');
+    expect(countString?.value).toBe('You have {count} items');
     
     // Verify that the transformation preserves the variable usage context
     expect(result.code).toContain('/* User: {userName} */');

@@ -246,8 +246,8 @@ export default function Component() {
       });
 
       expect(result.extractedStrings.length).toBe(1);
-      expect(result.extractedStrings[0].value).toBe('Hello {arg1}');
-      expect(result.code).toContain('t("Hello {arg1}")');
+      expect(result.extractedStrings[0].value).toBe('Hello {name}');
+      expect(result.code).toContain('t("Hello {name}")');
     });
 
     test("should add imports and hooks only when needed", () => {

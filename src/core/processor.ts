@@ -192,10 +192,30 @@ export class CoreProcessor {
     return {
       name: 'default-react',
       shouldApply: () => true,
-      processCode: (code: string, filePath: string, options: TransformOptions) => {
-        // 使用现有的transformCode逻辑作为fallback
-        const { transformCode } = require('../ast-parser');
-        return transformCode(filePath, options);
+      getRequiredImportsAndHooks: (extractedStrings, options, context) => {
+        // 默认使用React hooks方式
+        if (extractedStrings.length === 0) {
+          return { imports: [], hooks: [] };
+        }
+
+        const imports: ImportRequirement[] = [
+          {
+            source: "react-i18next",
+            specifiers: [{ name: "useTranslation" }],
+            isDefault: false,
+          },
+        ];
+
+        const hooks: HookRequirement[] = [
+          {
+            hookName: "useTranslation",
+            variableName: "t",
+            isDestructured: true,
+            callExpression: "const { t } = useTranslation();",
+          },
+        ];
+
+        return { imports, hooks };
       }
     };
   }
