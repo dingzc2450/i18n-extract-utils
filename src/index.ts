@@ -4,10 +4,14 @@ import { TransformOptions } from "./types";
 // 导出核心模块
 export { CoreProcessor, createProcessorWithDefaultPlugins } from "./core";
 export { ReactPlugin, VuePlugin, GenericJSPlugin } from "./plugins";
+export { transformCodeWithCoreProcessor } from "./core-transformer";
 
-export { processFiles, TransformOptions };
+export { TransformOptions };
 export { extractStringsFromCode } from "./string-extractor";
-export { transformCode } from "./ast-parser";
+export { transformCode, transformCodeString } from "./processor";
+
+// 导出传统处理器以保持向后兼容
+export { transformCodeLegacy } from "./frameworks/legacy-transformer";
 
 /**
  * 统一的 i18n 提取主函数

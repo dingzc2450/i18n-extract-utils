@@ -18,7 +18,7 @@ import { createProcessorWithDefaultPlugins } from "./plugins";
 /**
  * 使用新的CoreProcessor处理单个文件
  */
-function transformCodeWithCoreProcessor(
+export function transformCodeWithCoreProcessor(
   code: string,
   filePath: string,
   options: TransformOptions = {},

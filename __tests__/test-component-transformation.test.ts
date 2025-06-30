@@ -1,5 +1,5 @@
 import { expect, test, describe } from "vitest";
-import { transformCodeEnhanced } from "../src/ast-parser";
+import { transformCode } from "./test-helpers";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -10,7 +10,7 @@ describe("Test Component Transformation", () => {
     // Verify the test component file exists
     expect(fs.existsSync(testComponentPath)).toBe(true);
 
-    const result = transformCodeEnhanced(testComponentPath, {
+    const result = transformCode(testComponentPath, {
       pattern: '___(.*?)___',
       i18nConfig: {
         framework: 'react',
@@ -85,7 +85,7 @@ describe("Test Component Transformation", () => {
   });
 
   test("should preserve code formatting and structure", () => {
-    const result = transformCodeEnhanced(testComponentPath, {
+    const result = transformCode(testComponentPath, {
       pattern: '___(.*?)___',
       i18nConfig: {
         framework: 'react',
@@ -116,7 +116,7 @@ describe("Test Component Transformation", () => {
   });
 
   test("should handle variable interpolation in test component", () => {
-    const result = transformCodeEnhanced(testComponentPath, {
+    const result = transformCode(testComponentPath, {
       pattern: '___(.*?)___',
       i18nConfig: {
         framework: 'react',
@@ -143,7 +143,7 @@ describe("Test Component Transformation", () => {
   });
 
   test("should only add imports and hooks once", () => {
-    const result = transformCodeEnhanced(testComponentPath, {
+    const result = transformCode(testComponentPath, {
       pattern: '___(.*?)___',
       i18nConfig: {
         framework: 'react',

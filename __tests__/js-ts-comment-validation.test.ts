@@ -1,5 +1,5 @@
 import { expect, test, describe, afterEach } from "vitest";
-import { transformCodeEnhanced } from "../src/ast-parser";
+import { transformCode } from "./test-helpers";
 import * as fs from "fs";
 import * as path from "path";
 import { tmpdir } from "os";
@@ -47,7 +47,7 @@ function displayMessage() {
     tempFiles.push(tempFile);
 
     // 测试块注释
-    const blockResult = transformCodeEnhanced(tempFile, {
+    const blockResult = transformCode(tempFile, {
       pattern: '___(.*?)___',
       i18nConfig: {
         framework: 'react',
@@ -67,7 +67,7 @@ function displayMessage() {
     expect(blockResult.code).toContain('t("Success") /* Success */');
 
     // 测试行注释
-    const lineResult = transformCodeEnhanced(tempFile, {
+    const lineResult = transformCode(tempFile, {
       pattern: '___(.*?)___',
       i18nConfig: {
         framework: 'react',
@@ -120,7 +120,7 @@ enum Status {
     const tempFile = createTempFile(tsCode, "ts");
     tempFiles.push(tempFile);
 
-    const result = transformCodeEnhanced(tempFile, {
+    const result = transformCode(tempFile, {
       pattern: '___(.*?)___',
       i18nConfig: {
         framework: 'react',
@@ -156,7 +156,7 @@ function createNotification(user: string, count: number, type: string) {
     const tempFile = createTempFile(complexCode, "ts");
     tempFiles.push(tempFile);
 
-    const result = transformCodeEnhanced(tempFile, {
+    const result = transformCode(tempFile, {
       pattern: '___(.*?)___',
       i18nConfig: {
         framework: 'react',

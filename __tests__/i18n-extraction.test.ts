@@ -1,5 +1,5 @@
 import { expect, test, describe, afterEach } from "vitest"; // Ensure describe and afterEach are imported if not already
-import { extractStringsFromCode, transformCode } from "../src/index.js";
+import { extractStringsFromCode, transformCode } from "./test-helpers";
 import * as fs from "fs";
 import * as path from "path";
 import { tmpdir } from "os";

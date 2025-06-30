@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { transformCode } from "../src/index";
+import { transformCode } from "./test-helpers";
 import { TransformOptions } from "../src/types";
 import * as fs from "fs";
 import * as path from "path";

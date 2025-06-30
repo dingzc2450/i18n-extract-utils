@@ -1,5 +1,5 @@
 import { expect, test, describe } from "vitest";
-import { transformCodeEnhanced } from "../src/ast-parser";
+import { transformCode } from "./test-helpers";
 import { StringReplacer } from "../src/string-replacer";
 
 describe("Real Component Transformation Test", () => {
@@ -49,7 +49,7 @@ export default function TestComponent() {
     };
 
     try {
-      const result = transformCodeEnhanced(mockFilePath, {
+      const result = transformCode(mockFilePath, {
         pattern: '___(.*?)___',
         i18nConfig: {
           framework: 'react',
@@ -131,7 +131,7 @@ export default function TestComponent() {
     };
 
     try {
-      const result = transformCodeEnhanced('/mock/test-component.tsx', {
+      const result = transformCode('/mock/test-component.tsx', {
         pattern: '___(.*?)___',
         i18nConfig: {
           framework: 'react',
@@ -165,7 +165,7 @@ export default function TestComponent() {
     };
 
     try {
-      const result = transformCodeEnhanced('/mock/test-component.tsx', {
+      const result = transformCode('/mock/test-component.tsx', {
         pattern: '___(.*?)___',
         i18nConfig: {
           framework: 'react',

@@ -1,5 +1,5 @@
 import { expect, test, describe } from "vitest";
-import { transformCode } from "../src/index.js";
+import { transformCode } from "./test-helpers";
 import * as fs from "fs";
 import * as path from "path";
 import { tmpdir } from "os";

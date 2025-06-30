@@ -1,5 +1,5 @@
 import { expect, test, describe, afterEach, beforeEach } from "vitest";
-import { transformCodeEnhanced } from "../src/ast-parser";
+import { transformCode } from "./test-helpers";
 import { StringReplacer } from "../src/string-replacer";
 import { processFiles } from "../src/transformer";
 import * as fs from "fs";
@@ -164,7 +164,7 @@ export default function Component() {
       const tempFile = createTempFile(originalCode);
       tempFiles.push(tempFile);
 
-      const result = transformCodeEnhanced(tempFile, {
+      const result = transformCode(tempFile, {
         pattern: '___(.*?)___',
         i18nConfig: {
           framework: 'react',
@@ -201,7 +201,7 @@ export default function Component() {
       const tempFile = createTempFile(originalCode);
       tempFiles.push(tempFile);
 
-      const result = transformCodeEnhanced(tempFile, {
+      const result = transformCode(tempFile, {
         pattern: '___(.*?)___',
         i18nConfig: {
           framework: 'react',
@@ -233,7 +233,7 @@ export default function Component() {
       const tempFile = createTempFile(originalCode);
       tempFiles.push(tempFile);
 
-      const result = transformCodeEnhanced(tempFile, {
+      const result = transformCode(tempFile, {
         pattern: '___(.*?)___',
         i18nConfig: {
           framework: 'react',
@@ -264,7 +264,7 @@ export default function Component() {
       const tempFile = createTempFile(originalCode);
       tempFiles.push(tempFile);
 
-      const result = transformCodeEnhanced(tempFile, {
+      const result = transformCode(tempFile, {
         pattern: '___(.*?)___',
         i18nConfig: {
           framework: 'react',
@@ -298,7 +298,7 @@ export default function Component() {
       const tempFile = createTempFile(originalCode);
       tempFiles.push(tempFile);
 
-      const result = transformCodeEnhanced(tempFile, {
+      const result = transformCode(tempFile, {
         pattern: '___(.*?)___',
         i18nConfig: {
           framework: 'react',
@@ -336,7 +336,7 @@ export default function Component() {
       const tempFile = createTempFile(originalCode);
       tempFiles.push(tempFile);
 
-      const result = transformCodeEnhanced(tempFile, {
+      const result = transformCode(tempFile, {
         pattern: '___(.*?)___',
         i18nConfig: {
           framework: 'react',
@@ -485,7 +485,7 @@ export default function Component() {
       tempFiles.push(tempFile);
 
       // Should not throw, should fallback gracefully
-      const result = transformCodeEnhanced(tempFile, {
+      const result = transformCode(tempFile, {
         pattern: '___(.*?)___',
         i18nConfig: {
           framework: 'react',
@@ -511,7 +511,7 @@ export default function Component() {
       const tempFile = createTempFile(nonReactCode, 'js');
       tempFiles.push(tempFile);
 
-      const result = transformCodeEnhanced(tempFile, {
+      const result = transformCode(tempFile, {
         pattern: '___(.*?)___',
         i18nConfig: {
           framework: 'react',
@@ -533,7 +533,7 @@ export default function Component() {
       const tempFile = createTempFile(emptyCode);
       tempFiles.push(tempFile);
 
-      const result = transformCodeEnhanced(tempFile, {
+      const result = transformCode(tempFile, {
         pattern: '___(.*?)___',
         i18nConfig: {
           framework: 'react',
@@ -562,7 +562,7 @@ export default function Component() {
       const tempFile = createTempFile(originalCode);
       tempFiles.push(tempFile);
 
-      const result = transformCodeEnhanced(tempFile, {
+      const result = transformCode(tempFile, {
         pattern: '%%(.*?)%%',
         i18nConfig: {
           framework: 'react',
@@ -588,7 +588,7 @@ export default function Component() {
       const tempFile = createTempFile(originalCode);
       tempFiles.push(tempFile);
 
-      const result = transformCodeEnhanced(tempFile, {
+      const result = transformCode(tempFile, {
         pattern: '___(.*?)___',
         i18nConfig: {
           framework: 'react',

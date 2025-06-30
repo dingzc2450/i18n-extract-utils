@@ -1,5 +1,5 @@
 import { expect, test, describe, afterEach } from "vitest";
-import { transformCodeEnhanced } from "../src/ast-parser";
+import { transformCode } from "./test-helpers";
 import * as fs from "fs";
 import * as path from "path";
 import { tmpdir } from "os";
@@ -82,7 +82,7 @@ export { validateEmail, UserForm, UserProfile };
       const tempFile = createTempFile(mixedCode, "tsx");
       tempFiles.push(tempFile);
 
-      const result = transformCodeEnhanced(tempFile, {
+      const result = transformCode(tempFile, {
         pattern: '___(.*?)___',
         i18nConfig: {
           framework: 'react',
@@ -135,7 +135,7 @@ function processData() {
       tempFiles.push(tempFile);
 
       // 测试默认导入
-      const result = transformCodeEnhanced(tempFile, {
+      const result = transformCode(tempFile, {
         pattern: '___(.*?)___',
         i18nConfig: {
           framework: 'react',
@@ -165,7 +165,7 @@ const config = {
       const tempFile = createTempFile(codeWithNamespace, "js");
       tempFiles.push(tempFile);
 
-      const result = transformCodeEnhanced(tempFile, {
+      const result = transformCode(tempFile, {
         pattern: '___(.*?)___',
         i18nConfig: {
           framework: 'react',
@@ -195,7 +195,7 @@ function showMessage() {
       const tempFile = createTempFile(customCode, "ts");
       tempFiles.push(tempFile);
 
-      const result = transformCodeEnhanced(tempFile, {
+      const result = transformCode(tempFile, {
         pattern: '___(.*?)___',
         i18nConfig: {
           framework: 'react',
@@ -235,7 +235,7 @@ function UserComponent() {
       const tempFile = createTempFile(customHookCode, "tsx");
       tempFiles.push(tempFile);
 
-      const result = transformCodeEnhanced(tempFile, {
+      const result = transformCode(tempFile, {
         pattern: '___(.*?)___',
         i18nConfig: {
           framework: 'react',
@@ -280,7 +280,7 @@ function getMessage() {
       const tempFile = createTempFile(simpleCode, "ts");
       tempFiles.push(tempFile);
 
-      const result = transformCodeEnhanced(tempFile, {
+      const result = transformCode(tempFile, {
         pattern: '___(.*?)___',
         i18nConfig: {
           framework: 'react',
