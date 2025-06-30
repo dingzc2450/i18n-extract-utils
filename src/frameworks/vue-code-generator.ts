@@ -571,6 +571,11 @@ export class VueCodeGenerator implements FrameworkCodeGenerator {
         hookName
       );
     }
+    // 如果既没有setup方法也没有export default，可能是React函数组件被强制设置为Vue
+    // 在这种情况下，需要在函数组件内部添加useI18n调用
+    else if (!hasSetupMethod && !hasExportDefault) {
+      this.addUseI18nToReactComponents(ast, translationMethod, hookName);
+    }
   }
 
   private addUseI18nToSetupMethod(
@@ -729,33 +734,6 @@ export class VueCodeGenerator implements FrameworkCodeGenerator {
   }
 
   /**
-   * 重新组装Vue文件
-   */
-  private assembleVueFile(vueFile: {
-    template?: string;
-    script?: string;
-    style?: string;
-    isSetupScript: boolean;
-  }): string {
-    let result = "";
-
-    if (vueFile.template) {
-      result += `<template>\n${vueFile.template}\n</template>\n\n`;
-    }
-
-    if (vueFile.script) {
-      const scriptTag = vueFile.isSetupScript ? "<script setup>" : "<script>";
-      result += `${scriptTag}\n${vueFile.script}\n</script>\n\n`;
-    }
-
-    if (vueFile.style) {
-      result += `<style>\n${vueFile.style}\n</style>\n`;
-    }
-
-    return result.trim();
-  }
-
-  /**
    * 为Options API组件添加setup方法
    */
   private addSetupMethodToOptionsAPI(
@@ -807,5 +785,116 @@ export class VueCodeGenerator implements FrameworkCodeGenerator {
       // 将setup方法添加到对象的开头
       objectExpression.properties.unshift(setupMethod);
     }
+  }
+
+  /**
+   * 为React函数组件添加Vue的useI18n调用
+   * 当React代码被强制设置为Vue框架时使用
+   */
+  private addUseI18nToReactComponents(
+    ast: t.File,
+    translationMethod: string,
+    hookName: string
+  ) {
+    traverse(ast, {
+      FunctionDeclaration: (path) => {
+        // 检查是否为React函数组件（大写开头）
+        if (
+          path.node.id &&
+          t.isIdentifier(path.node.id) &&
+          /^[A-Z]/.test(path.node.id.name)
+        ) {
+          this.addUseI18nToFunctionBody(path.node.body, translationMethod, hookName);
+        }
+      },
+      
+      VariableDeclarator: (path) => {
+        // 检查箭头函数组件
+        if (
+          t.isIdentifier(path.node.id) &&
+          /^[A-Z]/.test(path.node.id.name) &&
+          (t.isArrowFunctionExpression(path.node.init) || t.isFunctionExpression(path.node.init))
+        ) {
+          const func = path.node.init as t.ArrowFunctionExpression | t.FunctionExpression;
+          if (t.isBlockStatement(func.body)) {
+            this.addUseI18nToFunctionBody(func.body, translationMethod, hookName);
+          }
+        }
+      }
+    });
+  }
+
+  /**
+   * 在函数体中添加useI18n调用
+   */
+  private addUseI18nToFunctionBody(
+    body: t.BlockStatement,
+    translationMethod: string,
+    hookName: string
+  ) {
+    // 检查是否已有useI18n调用
+    let hasUseI18n = false;
+    body.body.forEach((stmt) => {
+      if (t.isVariableDeclaration(stmt)) {
+        stmt.declarations.forEach((decl) => {
+          if (
+            t.isVariableDeclarator(decl) &&
+            t.isCallExpression(decl.init) &&
+            t.isIdentifier(decl.init.callee) &&
+            decl.init.callee.name === hookName
+          ) {
+            hasUseI18n = true;
+          }
+        });
+      }
+    });
+
+    if (!hasUseI18n) {
+      const callExpression = t.callExpression(t.identifier(hookName), []);
+      const variableDeclarator = t.variableDeclarator(
+        t.objectPattern([
+          t.objectProperty(
+            t.identifier(translationMethod),
+            t.identifier(translationMethod),
+            false,
+            true
+          ),
+        ]),
+        callExpression
+      );
+      const variableDeclaration = t.variableDeclaration("const", [
+        variableDeclarator,
+      ]);
+      
+      // 在函数体开头添加useI18n调用
+      body.body.unshift(variableDeclaration);
+    }
+  }
+
+  /**
+   * 重新组装Vue文件
+   */
+  private assembleVueFile(vueFile: {
+    template?: string;
+    script?: string;
+    style?: string;
+    isSetupScript: boolean;
+  }): string {
+    let result = "";
+
+    if (vueFile.template) {
+      result += `<template>\n${vueFile.template}\n</template>\n\n`;
+    }
+
+    if (vueFile.script) {
+      const scriptTag = vueFile.isSetupScript ? "<script setup>" : "<script>";
+      result += `${scriptTag}\n${vueFile.script}\n</script>\n\n`;
+    }
+
+    if (vueFile.style) {
+      result += `<style>\n${vueFile.style}\n</style>\n`;
+    }
+
+    return result.trim();
   }
 }

@@ -208,13 +208,6 @@ export function createFrameworkCodeGenerator(options: TransformOptions, useEnhan
   return new UniversalCodeGenerator();
 }
 
-/**
- * 创建增强的代码生成器，支持智能框架检测
- */
-export function createEnhancedCodeGenerator(code: string, filePath: string, options: TransformOptions): FrameworkCodeGenerator {
-  // 现在统一使用 UniversalCodeGenerator 处理所有情况
-  return new UniversalCodeGenerator();
-}
 
 /**
  * 包装器，将老的 I18nTransformer 适配为新的 FrameworkCodeGenerator

@@ -18,7 +18,7 @@ import { createProcessorWithDefaultPlugins } from "./plugins";
 /**
  * 使用新的CoreProcessor处理单个文件
  */
-export function transformCodeWithCoreProcessor(
+function transformCodeWithCoreProcessor(
   code: string,
   filePath: string,
   options: TransformOptions = {},
@@ -30,13 +30,8 @@ export function transformCodeWithCoreProcessor(
   changes: ChangeDetail[];
 } {
   const processor = createProcessorWithDefaultPlugins();
-  
-  return processor.processCode(
-    code,
-    filePath,
-    options,
-    existingValueToKey
-  );
+
+  return processor.processCode(code, filePath, options, existingValueToKey);
 }
 
 /**
@@ -83,9 +78,7 @@ function loadExistingTranslations(options: TransformOptions): {
           );
         }
       } else {
-        console.warn(
-          `Existing translations file not found: ${filePath}`
-        );
+        console.warn(`Existing translations file not found: ${filePath}`);
       }
     } else {
       // It's a direct object
@@ -93,7 +86,12 @@ function loadExistingTranslations(options: TransformOptions): {
     }
 
     if (sourceJsonObject) {
-      existingValueToKey = new Map(Object.entries(sourceJsonObject).map(([key, value]) => [String(value), key]));
+      existingValueToKey = new Map(
+        Object.entries(sourceJsonObject).map(([key, value]) => [
+          String(value),
+          key,
+        ])
+      );
     }
   }
 
@@ -112,7 +110,8 @@ export async function processFilesWithCoreProcessor(
   fileModifications: FileModificationRecord[];
   sourceJsonObject?: Record<string, string | number>;
 }> {
-  const { existingValueToKey, sourceJsonObject } = loadExistingTranslations(options);
+  const { existingValueToKey, sourceJsonObject } =
+    loadExistingTranslations(options);
 
   const filePaths = await glob(pattern);
   console.log(`Found ${filePaths.length} files to process.`);
@@ -124,7 +123,7 @@ export async function processFilesWithCoreProcessor(
   for (const filePath of filePaths) {
     try {
       const originalContent = fs.readFileSync(filePath, "utf8");
-      
+
       const result = transformCodeWithCoreProcessor(
         originalContent,
         filePath,
@@ -160,7 +159,10 @@ export async function processFilesWithCoreProcessor(
       return acc;
     }, {} as Record<string, string>);
 
-    writeFileContent(options.outputPath, JSON.stringify(translationJson, null, 2));
+    writeFileContent(
+      options.outputPath,
+      JSON.stringify(translationJson, null, 2)
+    );
     console.log(`Extracted translations saved to: ${options.outputPath}`);
   }
 

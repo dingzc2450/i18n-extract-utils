@@ -21,7 +21,7 @@ import {
  */
 export class ReactPlugin implements FrameworkPlugin {
   name = "react";
-
+  static readonly defaultTranslationMethod = "t";
   /**
    * 检测是否应该应用React插件
    */
@@ -158,7 +158,7 @@ export class ReactPlugin implements FrameworkPlugin {
    */
   private generateHookCallExpression(hookName: string, translationMethod: string): string {
     if (translationMethod === "default") {
-      return `const ${translationMethod} = ${hookName}();`;
+      return `const ${ReactPlugin.defaultTranslationMethod} = ${hookName}();`;
     } else {
       return `const { ${translationMethod} } = ${hookName}();`;
     }

@@ -25,7 +25,6 @@ import {
   detectFramework,
   mergeWithFrameworkDefaults,
   createFrameworkCodeGenerator,
-  createEnhancedCodeGenerator,
 } from "./frameworks/framework-factory";
 
 /**
@@ -359,13 +358,15 @@ export function transformCode(
 
   // 合并用户配置和框架默认配置
   const mergedOptions = mergeWithFrameworkDefaults(options, detectedFramework);
-  
+
   // 优先使用新的框架代码生成器
   // BUG 还未跑完所有测试用例
   const codeGenerator = createFrameworkCodeGenerator(mergedOptions);
   const canHandle = codeGenerator.canHandle(code, filePath);
-  const isNotVue = !["vue", "vue2", "vue3"].includes(detectedFramework);
-  
+  const isNotVue = !["vue", "vue2", "vue3"].includes(
+    mergedOptions.i18nConfig?.framework || detectedFramework
+  );
+
   if (canHandle && isNotVue) {
     return codeGenerator.processCode(
       code,
@@ -384,45 +385,7 @@ export function transformCode(
     existingValueToKey
   );
 }
-
 /**
- * 使用增强框架代码生成器的转换函数
- * 支持字符串替换，保持原始代码格式
- * @param filePath 文件路径
- * @param options 转换配置
- * @param existingValueToKey 现有 value->key 映射
- * @returns { code, extractedStrings, usedExistingKeysList, changes }
+ * @deprecated 使用 transformCode 代替
  */
-export function transformCodeEnhanced(
-  filePath: string,
-  options: Omit<TransformOptions, "existingTranslations">,
-  existingValueToKey?: Map<string, string | number>
-): {
-  code: string;
-  extractedStrings: ExtractedString[];
-  usedExistingKeysList: UsedExistingKey[];
-  changes: ChangeDetail[];
-} {
-  const code = fs.readFileSync(filePath, "utf8");
-
-  try {
-    // 创建增强的代码生成器，使用智能框架检测
-    const codeGenerator = createEnhancedCodeGenerator(code, filePath, {
-      ...options,
-    });
-
-    // 使用增强的代码生成器处理
-    const result = codeGenerator.processCode(
-      code,
-      filePath,
-      { ...options },
-      existingValueToKey
-    );
-
-    return result;
-  } catch (error) {
-    console.error(`[${filePath}] Error during enhanced transformation:`, error);
-    // 回退到原始转换方法
-    return transformCode(filePath, options, existingValueToKey);
-  }
-}
+export const transformCodeEnhanced = transformCode;

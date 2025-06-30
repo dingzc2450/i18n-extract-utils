@@ -150,7 +150,7 @@ export function collectContextAwareReplacementInfo(
       const importInfo = getImportInfoForContext(context);
       const effectiveMethodName = importInfo.callName;
 
-      // 跳过逻辑 - 参考 enhanced-ast-replacer.ts
+      // 跳过逻辑 
       if (
         (tg.isCallExpression(path.parent) &&
         tg.isIdentifier(path.parent.callee) &&

@@ -6,11 +6,10 @@ import {
   TransformOptions,
   UsedExistingKey,
   FileModificationRecord,
-  ChangeDetail,
 } from "./types";
-import { transformCode, transformCodeEnhanced } from "./ast-parser";
+import { transformCode } from "./ast-parser";
 // 导入新的CoreProcessor相关功能
-import { processFilesWithCoreProcessor, transformCodeWithCoreProcessor } from "./core-transformer";
+import { processFilesWithCoreProcessor } from "./core-transformer";
 
 function ensureDirectoryExistence(filePath: string): void {
   const dirname = path.dirname(filePath);
@@ -119,12 +118,10 @@ function generateTranslationOutput(
  * 通用的文件处理函数
  * @param pattern 文件匹配模式
  * @param options 转换选项
- * @param useEnhanced 是否使用增强模式（默认自动检测）
  */
 export async function processFiles(
   pattern: string,
   options: TransformOptions,
-  useEnhanced?: boolean,
   useCoreProcessor?: boolean
 ): Promise<{
   extractedStrings: ExtractedString[];
@@ -152,42 +149,10 @@ export async function processFiles(
   const { existingValueToKey, sourceJsonObject } =
     loadExistingTranslations(options);
 
-  // 自动检测是否应该使用增强模式 - 对于向后兼容，优先保持原有行为
-  if (useEnhanced === undefined) {
-    // 如果有新的i18nConfig配置或明确要求增强功能，使用增强模式
-    useEnhanced = !!(
-      options.i18nConfig?.nonReactConfig ||
-      options.i18nConfig?.framework ||
-      options.preserveFormatting ||
-      options.useStringReplacement
-    );
-
-    // 对于传统配置，保持使用增强模式
-    if (
-      !useEnhanced &&
-      (options.hookName || options.hookImport || options.translationMethod)
-    ) {
-      useEnhanced = true;
-    }
-
-    // 如果完全没有配置，默认使用增强模式
-    if (
-      !useEnhanced &&
-      !options.hookName &&
-      !options.hookImport &&
-      !options.translationMethod &&
-      !options.i18nConfig
-    ) {
-      useEnhanced = true;
-    }
-  }
-
   // 处理每个文件
   for (const file of files) {
     try {
-      // 根据是否使用增强模式选择转换函数
-      const transformFn = useEnhanced ? transformCodeEnhanced : transformCode;
-      const result = transformFn(file, options, existingValueToKey);
+      const result = transformCode(file, options, existingValueToKey);
 
       if (result.extractedStrings.length > 0 || result.changes.length > 0) {
         processedFileCount++;
@@ -238,20 +203,6 @@ export async function processFilesLegacy(
 }
 
 /**
- * @deprecated 使用 processFiles(pattern, options, true) 或 processFiles(pattern, options) 代替
- */
-export async function processFilesEnhanced(
-  pattern: string,
-  options: TransformOptions
-): Promise<{
-  extractedStrings: ExtractedString[];
-  usedExistingKeys?: UsedExistingKey[];
-  modifiedFiles: FileModificationRecord[];
-}> {
-  return processFiles(pattern, options, true);
-}
-
-/**
  * 使用新的CoreProcessor处理文件（实验性功能）
  * @param pattern 文件匹配模式
  * @param options 转换选项
@@ -264,5 +215,9 @@ export async function processFilesWithNewCoreProcessor(
   usedExistingKeys?: UsedExistingKey[];
   modifiedFiles: FileModificationRecord[];
 }> {
-  return processFiles(pattern, options, undefined, true);
+  return processFiles(pattern, options, undefined);
 }
+/**
+ * @deprecated 使用 processFilesWithNewCoreProcessor(pattern, options) 代替
+ */
+export const processFilesEnhanced = processFilesWithNewCoreProcessor;
