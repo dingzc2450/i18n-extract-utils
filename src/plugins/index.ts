@@ -8,7 +8,6 @@ export { React15Plugin } from "./react15-plugin";
 export { VuePlugin } from "./vue-plugin";
 export { GenericJSPlugin } from "./generic-js-plugin";
 
-// 插件注册工厂函数
 import { CoreProcessor } from "../core/processor";
 import { ReactPlugin } from "./react-plugin";
 import { React15Plugin } from "./react15-plugin";

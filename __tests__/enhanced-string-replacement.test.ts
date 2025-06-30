@@ -1,7 +1,7 @@
 import { expect, test, describe, afterEach, beforeEach } from "vitest";
 import { transformCodeEnhanced } from "../src/ast-parser";
 import { StringReplacer } from "../src/string-replacer";
-import { processFilesEnhanced } from "../src/transformer";
+import { processFiles } from "../src/transformer";
 import * as fs from "fs";
 import * as path from "path";
 import { tmpdir } from "os";
@@ -391,7 +391,7 @@ export default function Component2() {
         }
 
         // Process files
-        const result = await processFilesEnhanced(
+        const result = await processFiles(
           path.join(testDir, '*.tsx'),
           {
             pattern: '___(.*?)___',
@@ -447,7 +447,7 @@ export default function Component() {
       const outputFile = path.join(tmpdir(), `translations-${Date.now()}.json`);
       tempFiles.push(outputFile);
 
-      const result = await processFilesEnhanced(tempFile, {
+      const result = await processFiles(tempFile, {
         pattern: '___(.*?)___',
         outputPath: outputFile,
         i18nConfig: {

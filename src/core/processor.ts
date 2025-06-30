@@ -151,7 +151,6 @@ export class CoreProcessor {
     // 如果用户明确指定了字符串替换模式
     if (
       options.preserveFormatting === true ||
-      options.useStringReplacement === true ||
       options.i18nConfig?.nonReactConfig
     ) {
       return ProcessingMode.CONTEXT_AWARE;

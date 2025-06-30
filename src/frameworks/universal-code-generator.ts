@@ -1,5 +1,5 @@
 /**
- * 新的统一代码生成器 - 使用核心处理器架构
+ * 统一代码生成器 - 使用核心处理器架构
  * 所有框架都使用这个统一的生成器，通过插件系统处理框架特异性
  */
 
@@ -10,15 +10,19 @@ import {
   ChangeDetail,
   FrameworkCodeGenerator,
 } from "../types";
-import { CoreProcessorCompat } from "../core-processor-compat";
+import { CoreProcessor, createProcessorWithDefaultPlugins } from "../core";
 
 /**
- * 新的统一代码生成器
+ * 统一代码生成器
  * 替代所有现有的框架特定生成器
  */
 export class UniversalCodeGenerator implements FrameworkCodeGenerator {
   name = "universal";
-  private processor = new CoreProcessorCompat();
+  private processor: CoreProcessor;
+
+  constructor() {
+    this.processor = createProcessorWithDefaultPlugins();
+  }
 
   canHandle(code: string, filePath: string): boolean {
     //TODO  处理所有JS/TS相关文件 vue 暂时文件不处理 后续做

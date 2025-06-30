@@ -4,7 +4,6 @@
  */
 
 import { parse } from "@babel/parser";
-import traverse from "@babel/traverse";
 import * as t from "@babel/types";
 import * as tg from "../babel-type-guards";
 import { ImportRequirement, HookRequirement } from "./types";

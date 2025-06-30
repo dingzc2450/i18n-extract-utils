@@ -11,15 +11,10 @@ import {
   UsedExistingKey,
   ChangeDetail,
 } from "../types";
-import { getKeyAndRecord } from "../key-manager";
 import {
   createTranslationCall,
-  attachExtractedCommentToNode,
-  parseJSXTextPlaceholders,
 } from "../ast-utils";
 import { getDefaultPattern } from "../string-extractor";
-import * as tg from "../babel-type-guards";
-import { isJSXAttribute } from "../frameworks/react-support";
 import { detectCodeContext, ContextInfo } from "../context-detector";
 import { SmartImportManager, ImportInfo } from "../smart-import-manager";
 import { ExtractionResult } from "./types";

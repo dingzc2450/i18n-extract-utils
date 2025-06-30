@@ -96,27 +96,12 @@ export interface TransformOptions {
    * 默认 false
    */
   preserveFormatting?: boolean;
-
-  /**
-   * 是否使用字符串替换模式（等同于 preserveFormatting）
-   * Whether to use string replacement mode (equivalent to preserveFormatting)
-   * 默认 false
-   */
-  useStringReplacement?: boolean;
-
   /**
    * 是否强制使用AST转换模式（可能破坏格式，但更稳妥）
    * Whether to force AST transformation mode (may break formatting but more robust)
    * 默认 false
    */
   useASTTransform?: boolean;
-
-  /**
-   * 是否强制使用传统模式（禁用增强功能）
-   * Whether to force legacy mode (disable enhanced features)
-   * 默认 false - 建议使用默认的增强模式
-   */
-  useLegacyMode?: boolean;
 }
 
 export interface ExtractedString {

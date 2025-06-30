@@ -8,5 +8,5 @@ export { CoreExtractor } from "./extractor";
 export { ASTParserUtils, ImportHookUtils, StringUtils } from "./utils";
 export * from "./types";
 
-// 导出兼容性接口
+// 导出处理器工厂函数
 export { createProcessorWithDefaultPlugins } from "../plugins";

@@ -209,31 +209,3 @@ export function createFrameworkCodeGenerator(options: TransformOptions, useEnhan
 }
 
 
-/**
- * 包装器，将老的 I18nTransformer 适配为新的 FrameworkCodeGenerator
- */
-class TransformerWrapper implements FrameworkCodeGenerator {
-  constructor(
-    private transformer: I18nTransformer,
-    public name: string
-  ) {}
-
-  canHandle(_code: string, _filePath: string): boolean {
-    // 简单的框架检测逻辑
-    return true; // 默认都能处理
-  }
-
-  processCode(
-    code: string,
-    filePath: string,
-    options: TransformOptions,
-    existingValueToKey?: Map<string, string | number>
-  ) {
-    return this.transformer.extractAndReplace(
-      code,
-      filePath,
-      options,
-      existingValueToKey
-    );
-  }
-}
