@@ -197,20 +197,33 @@ export class CoreProcessor {
           return { imports: [], hooks: [] };
         }
 
+        // 回退逻辑：如果没有 i18nConfig，使用旧的选项
+        const hookName = options.i18nConfig?.i18nImport?.importName || 
+                        options.hookName || 
+                        "useTranslation";
+        
+        const hookSource = options.i18nConfig?.i18nImport?.source || 
+                          options.hookImport || 
+                          "react-i18next";
+        
+        const translationMethod = options.i18nConfig?.i18nImport?.name || 
+                                 options.translationMethod || 
+                                 "t";
+
         const imports: ImportRequirement[] = [
           {
-            source: "react-i18next",
-            specifiers: [{ name: "useTranslation" }],
+            source: hookSource,
+            specifiers: [{ name: hookName }],
             isDefault: false,
           },
         ];
 
         const hooks: HookRequirement[] = [
           {
-            hookName: "useTranslation",
-            variableName: "t",
+            hookName,
+            variableName: translationMethod,
             isDestructured: true,
-            callExpression: "const { t } = useTranslation();",
+            callExpression: `const { ${translationMethod} } = ${hookName}();`,
           },
         ];
 
@@ -252,8 +265,20 @@ export class CoreProcessor {
 
     if (mode === ProcessingMode.CONTEXT_AWARE) {
       // 使用上下文感知模式 - 暂时保持使用原有的方法，后续可以迁移到新的extractor
+      
+      // 创建兼容的导入配置，回退到旧选项
+      let reactConfig = options.i18nConfig?.i18nImport;
+      if (!reactConfig && (options.translationMethod || options.hookName || options.hookImport)) {
+        // 如果没有新配置但有旧选项，创建兼容配置
+        reactConfig = {
+          name: options.translationMethod || "t",
+          importName: options.hookName || "useTranslation", 
+          source: options.hookImport || "react-i18next"
+        };
+      }
+      
       const importManager = new SmartImportManager(
-        options.i18nConfig?.i18nImport,
+        reactConfig,
         options.i18nConfig?.nonReactConfig
       );
 

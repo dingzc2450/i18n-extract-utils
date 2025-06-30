@@ -31,7 +31,7 @@ export function transformCodeFromFile(
 /**
  * transformCode 的别名，用于向后兼容
  */
-export const transformCode = transformCodeFromFile;
+export const transformCode = processorTransformCode;
 
 // 导出其他常用的测试工具
 export { transformCodeWithCoreProcessor } from "../src/core-transformer";
