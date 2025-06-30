@@ -30,6 +30,11 @@ export class ReactPlugin implements FrameworkPlugin {
     filePath: string,
     options: TransformOptions
   ): boolean {
+    // 如果明确指定了其他框架，不应该使用React插件
+    if (options.i18nConfig?.framework && options.i18nConfig.framework !== "react") {
+      return false;
+    }
+    
     // 检查是否为React文件
     if (options.i18nConfig?.framework === "react") return true;
 

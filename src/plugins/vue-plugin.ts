@@ -1,6 +1,6 @@
 /**
  * Vue 框架插件
- * 负责Vue相关的处理逻辑
+ * 直接使用VueCodeGenerator的完整实现，提供完整的Vue SFC支持
  */
 
 import {
@@ -12,13 +12,19 @@ import {
 import {
   ExtractedString,
   TransformOptions,
+  UsedExistingKey,
+  ChangeDetail,
 } from "../types";
+import { VueCodeGenerator } from "../frameworks/vue-code-generator";
+import { getDefaultPattern } from "../string-extractor";
 
 /**
  * Vue 插件实现
+ * 直接委托给VueCodeGenerator进行完整的Vue SFC处理
  */
 export class VuePlugin implements FrameworkPlugin {
   name = "vue";
+  private vueCodeGenerator = new VueCodeGenerator();
 
   /**
    * 检测是否应该应用Vue插件
@@ -31,42 +37,8 @@ export class VuePlugin implements FrameworkPlugin {
     // 检查是否明确指定为Vue框架
     if (options.i18nConfig?.framework === "vue") return true;
 
-    // 检查文件扩展名
-    if (/\.vue$/.test(filePath)) return true;
-
-    // 检查是否包含Vue相关导入或语法
-    return (
-      code.includes('from "vue"') ||
-      code.includes("from 'vue'") ||
-      code.includes("import { defineComponent") ||
-      code.includes("import { ref, reactive") ||
-      this.hasVueCompositionAPI(code)
-    );
-  }
-
-  /**
-   * 检查是否包含Vue Composition API
-   */
-  private hasVueCompositionAPI(code: string): boolean {
-    const vueCompositionPatterns = [
-      /\bref\s*\(/,
-      /\breactive\s*\(/,
-      /\bcomputed\s*\(/,
-      /\bwatch\s*\(/,
-      /\bonMounted\s*\(/,
-      /\bsetup\s*\(/,
-    ];
-
-    return vueCompositionPatterns.some(pattern => pattern.test(code));
-  }
-
-  /**
-   * Vue预处理（如果需要特殊处理.vue文件）
-   */
-  preProcess?(code: string, options: TransformOptions): string {
-    // 如果是.vue文件，可能需要特殊处理
-    // 这里可以处理单文件组件的script部分
-    return code;
+    // 使用VueCodeGenerator的canHandle方法进行检测
+    return this.vueCodeGenerator.canHandle(code, filePath);
   }
 
   /**
@@ -74,8 +46,22 @@ export class VuePlugin implements FrameworkPlugin {
    */
   getParserConfig(): object {
     return {
-      plugins: ["typescript"], // Vue通常支持TypeScript
+      plugins: ["typescript", "jsx"], // Vue支持TypeScript和JSX语法
     };
+  }
+
+  /**
+   * Vue插件完全接管处理，返回带匹配字符串的占位符确保postProcess被调用
+   */
+  preProcess(code: string, options: TransformOptions): string {
+    // 对于Vue文件，返回一个包含匹配字符串的占位符
+    // 这确保CoreProcessor会检测到修改并调用postProcess
+    const pattern = options?.pattern
+      ? new RegExp(options.pattern).source
+      : getDefaultPattern().source;
+    
+    // 返回一个匹配模式的占位符，确保会被处理
+    return "const __VUE_PLACEHOLDER__ = '___VUE_PROCESS___';";
   }
 
   /**
@@ -119,7 +105,7 @@ export class VuePlugin implements FrameworkPlugin {
   }
 
   /**
-   * Vue特定的后处理
+   * Vue特定的后处理：直接使用VueCodeGenerator处理
    */
   postProcess(
     code: string,
@@ -127,7 +113,18 @@ export class VuePlugin implements FrameworkPlugin {
     options: TransformOptions,
     context: ProcessingContext
   ): string {
-    // Vue特定的后处理逻辑
-    return code;
+    // 使用VueCodeGenerator直接处理整个文件
+    const result = this.vueCodeGenerator.processCode(
+      context.originalCode,
+      context.filePath,
+      options,
+      new Map() // 暂时不处理existingValueToKey，这可以在后续优化
+    );
+
+    // 清空原有的extractedStrings，使用VueCodeGenerator的结果
+    extractedStrings.length = 0;
+    extractedStrings.push(...result.extractedStrings);
+
+    return result.code;
   }
 }

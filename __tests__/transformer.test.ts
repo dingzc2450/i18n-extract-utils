@@ -7,11 +7,16 @@ import crypto from "crypto";
 import { FileModificationRecord } from "../src/types"; // Import the updated types
 
 // Helper functions (createTempFile, afterEach)
+// Create a unique test directory for each test instance to avoid race conditions
+const testInstanceId = `${Date.now()}-${crypto.randomBytes(8).toString("hex")}`;
+const testTempDir = path.join(tmpdir(), `test-instance-${testInstanceId}`);
+
 function createTempFile(content: string, ext = ".tsx"): string {
-  const tempDir = tmpdir();
+  // Ensure test instance directory exists
+  fs.mkdirSync(testTempDir, { recursive: true });
+  
   const uniqueId = `${Date.now()}-${crypto.randomBytes(6).toString("hex")}`;
-  const tempFile = path.join(tempDir, `test-${uniqueId}${ext}`);
-  fs.mkdirSync(path.dirname(tempFile), { recursive: true });
+  const tempFile = path.join(testTempDir, `test-${uniqueId}${ext}`);
   fs.writeFileSync(tempFile, content, "utf8");
   tempFiles.push(tempFile); // Add to cleanup list
   return tempFile;
@@ -19,6 +24,7 @@ function createTempFile(content: string, ext = ".tsx"): string {
 
 const tempFiles: string[] = [];
 afterEach(() => {
+  // Clean up individual files first
   tempFiles.forEach((file) => {
     if (fs.existsSync(file)) {
       try {
@@ -29,6 +35,18 @@ afterEach(() => {
     }
   });
   tempFiles.length = 0;
+  
+  // Clean up test instance directory if it exists and is empty
+  try {
+    if (fs.existsSync(testTempDir)) {
+      const remainingFiles = fs.readdirSync(testTempDir);
+      if (remainingFiles.length === 0) {
+        fs.rmdirSync(testTempDir);
+      }
+    }
+  } catch (err) {
+    // Ignore directory cleanup errors
+  }
 });
 
 describe("processFiles Functionality", () => {
@@ -54,9 +72,8 @@ describe("processFiles Functionality", () => {
     const fileToModifyPath = createTempFile(codeToModify, "-modify.tsx");
     const fileToSkipPath = createTempFile(codeToSkip, "-skip.tsx");
 
-    // Use a pattern that matches both files in the temp directory
-    const tempDir = path.dirname(fileToModifyPath);
-    const pattern = path.join(tempDir, "test-*-modify.tsx"); // More specific pattern
+    // Use a pattern that matches both files in the isolated test directory  
+    const pattern = path.join(testTempDir, "test-*-modify.tsx");
 
     // 2. Call processFiles
     const result = await processFiles(pattern, {
@@ -107,9 +124,8 @@ describe("processFiles Functionality", () => {
 
     const fileToModifyPath = createTempFile(codeToModify, "-details.tsx");
     const fileToSkipPath = createTempFile(codeToSkip, "-skip-details.tsx");
-    const tempDir = path.dirname(fileToModifyPath);
-    // Use a pattern matching only the file intended for modification
-    const pattern = path.join(tempDir, "test-*-details.tsx");
+    // Use a pattern matching only the file intended for modification in the isolated test directory
+    const pattern = path.join(testTempDir, "test-*-details.tsx");
 
     const result = await processFiles(pattern, {
       translationMethod: "t",

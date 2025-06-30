@@ -18,11 +18,16 @@ export class ASTParserUtils {
   static getDefaultParserPlugins(filePath: string): string[] {
     const plugins = ["decorators-legacy"];
 
-    if (/\.tsx?$/.test(filePath)) {
+    // Vue文件需要TypeScript和JSX支持
+    if (/\.vue$/.test(filePath)) {
+      plugins.push("typescript", "jsx");
+    } else if (/\.tsx?$/.test(filePath)) {
       plugins.push("typescript");
-    }
-
-    if (/\.jsx$/.test(filePath) || /\.tsx$/.test(filePath)) {
+      
+      if (/\.tsx$/.test(filePath)) {
+        plugins.push("jsx");
+      }
+    } else if (/\.jsx$/.test(filePath)) {
       plugins.push("jsx");
     }
 

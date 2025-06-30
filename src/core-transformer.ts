@@ -122,6 +122,12 @@ export async function processFilesWithCoreProcessor(
 
   for (const filePath of filePaths) {
     try {
+      // Check if file exists before reading to avoid race conditions
+      if (!fs.existsSync(filePath)) {
+        console.warn(`File not found, skipping: ${filePath}`);
+        continue;
+      }
+
       const originalContent = fs.readFileSync(filePath, "utf8");
 
       const result = transformCodeWithCoreProcessor(

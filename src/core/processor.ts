@@ -266,19 +266,28 @@ export class CoreProcessor {
     if (mode === ProcessingMode.CONTEXT_AWARE) {
       // 使用上下文感知模式 - 暂时保持使用原有的方法，后续可以迁移到新的extractor
       
-      // 创建兼容的导入配置，回退到旧选项
-      let reactConfig = options.i18nConfig?.i18nImport;
-      if (!reactConfig && (options.translationMethod || options.hookName || options.hookImport)) {
+      // 创建兼容的导入配置，根据框架类型决定
+      let importConfig = options.i18nConfig?.i18nImport;
+      if (!importConfig && (options.translationMethod || options.hookName || options.hookImport)) {
         // 如果没有新配置但有旧选项，创建兼容配置
-        reactConfig = {
+        importConfig = {
           name: options.translationMethod || "t",
           importName: options.hookName || "useTranslation", 
           source: options.hookImport || "react-i18next"
         };
       }
       
+      // 如果没有配置且检测到Vue框架，使用Vue默认配置
+      if (!importConfig && options.i18nConfig?.framework === "vue") {
+        importConfig = {
+          name: "t",
+          importName: "useI18n",
+          source: "vue-i18n"
+        };
+      }
+      
       const importManager = new SmartImportManager(
-        reactConfig,
+        importConfig,
         options.i18nConfig?.nonReactConfig
       );
 

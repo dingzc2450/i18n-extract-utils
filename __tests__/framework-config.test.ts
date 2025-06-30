@@ -175,7 +175,8 @@ describe("Framework Configuration Tests", () => {
       });
 
       expect(result.code).toContain('import { useI18n } from "vue-i18n";');
-      expect(result.code).toContain("const { t } = useI18n();");
+      // 检查 setup 函数下存在 useI18n 的解构
+      expect(result.code).toMatch(/setup\s*\(\)\s*{[^}]*const\s*\{\s*t\s*\}\s*=\s*useI18n\(\);/s);
       expect(result.code).toContain('t("Hello World")');
     });
 

@@ -29,6 +29,11 @@ export class React15Plugin implements FrameworkPlugin {
     filePath: string,
     options: TransformOptions
   ): boolean {
+    // 如果明确指定了其他框架，不应该使用React15插件
+    if (options.i18nConfig?.framework && options.i18nConfig.framework !== "react15") {
+      return false;
+    }
+    
     // 明确指定为React15框架
     if (options.i18nConfig?.framework === "react15") return true;
 
