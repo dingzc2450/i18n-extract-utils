@@ -76,10 +76,10 @@ try {
   
   // Create a test script
   const testScript = `
-    import { processFiles } from 'i18n-extract-utils';
+    import { extractI18n } from 'i18n-extract-utils';
     
     async function runTest() {
-      const result = await processFiles('src/**/*.jsx', {
+      const result = await extractI18n('src/**/*.jsx', {
         outputPath: 'translations.json'
       });
       
