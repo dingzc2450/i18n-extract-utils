@@ -149,9 +149,6 @@ export async function processFilesWithCoreProcessor(
 
         // 写入修改后的文件
         writeFileContent(filePath, result.code);
-        console.log(`Processed: ${filePath}`);
-      } else {
-        console.log(`No changes: ${filePath}`);
       }
     } catch (error) {
       console.error(`Error processing file ${filePath}:`, error);
