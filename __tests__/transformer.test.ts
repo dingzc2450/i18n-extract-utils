@@ -180,5 +180,57 @@ describe("processFiles Functionality", () => {
     expect(skippedContentOnDisk).toBe(codeToSkip); // Should be unchanged
   });
 
+  test("should handle files with multiple components, one already using i18n hooks", async () => {
+    const codeWithMultipleComponents = `
+      import React from 'react';
+      import { useTranslation } from "react-i18next";
+
+      function ComponentA() {
+        const { t } = useTranslation();
+        return <h1>{t("Existing Translation")}</h1>;
+      }
+
+      function ComponentB() {
+        return <h2>___New Translation___</h2>;
+      }
+
+      export { ComponentA, ComponentB };
+    `;
+
+    const filePath = createTempFile(
+      codeWithMultipleComponents,
+      "-multi-component.tsx"
+    );
+    const pattern = path.join(testTempDir, "test-*-multi-component.tsx");
+
+    const result = await processFiles(pattern, {
+      translationMethod: "t",
+      hookName: "useTranslation",
+      hookImport: "react-i18next",
+    });
+
+    expect(result.modifiedFiles.length).toBe(1);
+    const modifiedRecord = result.modifiedFiles[0];
+    const { newContent } = modifiedRecord;
+
+    // 1. Check that no duplicate import was added.
+    const importStatements = (newContent.match(/import { useTranslation } from "react-i18next";/g) || []).length;
+    expect(importStatements).toBe(1);
+
+    // 2. Check that ComponentB was correctly transformed.
+    expect(newContent).toMatch(/function ComponentB\(\) {\s*useTranslation/);
+    expect(newContent).toContain("<h2>{t(\"New Translation\")}</h2>");
+
+    // 3. Check that ComponentA remains untouched.
+    expect(newContent).toContain("<h1>{t(\"Existing Translation\")}</h1>");
+
+    // 4. Verify the detailed change record for ComponentB.
+    expect(modifiedRecord.changes.length).toBe(1);
+    const change = modifiedRecord.changes[0];
+    expect(change.original).toBe("___New Translation___");
+    expect(change.replacement).toBe('{t("New Translation")}');
+    expect(change.line).toBe(11); // Line of "___New Translation___"
+  });
+
   // Add more tests as needed, e.g., for existingTranslations, outputPath, generateKey, template literals etc.
 });
