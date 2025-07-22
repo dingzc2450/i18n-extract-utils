@@ -10,9 +10,6 @@ export { TransformOptions };
 export { extractStringsFromCode } from "./string-extractor";
 export { transformCode, transformCodeString } from "./processor";
 
-// 导出传统处理器以保持向后兼容
-export { transformCodeLegacy } from "./frameworks/legacy-transformer";
-
 /**
  * 统一的 i18n 提取主函数
  */
