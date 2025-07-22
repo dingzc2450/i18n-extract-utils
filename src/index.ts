@@ -8,7 +8,7 @@ export { transformCodeWithCoreProcessor } from "./core-transformer";
 
 export { TransformOptions };
 export { extractStringsFromCode } from "./string-extractor";
-export { transformCode, transformCodeString } from "./processor";
+export { transformCode } from "./processor";
 
 /**
  * 统一的 i18n 提取主函数

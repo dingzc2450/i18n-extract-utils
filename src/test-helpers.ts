@@ -6,4 +6,4 @@
 export { transformCodeWithCoreProcessor } from "./core-transformer";
 
 // 为了兼容性，也导出新的主要 API
-export { transformCode, transformCodeString } from "./processor";
+export { transformCode } from "./processor";

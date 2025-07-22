@@ -3,7 +3,7 @@
  * 为测试用例提供便利的导入和转换函数
  */
 
-import { transformCode as processorTransformCode, transformCodeString } from "../src/processor";
+import { transformCode as processorTransformCode } from "../src/processor";
 import { 
   ExtractedString,
   TransformOptions,
