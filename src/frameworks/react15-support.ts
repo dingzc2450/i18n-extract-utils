@@ -3,7 +3,7 @@ import traverse from "@babel/traverse";
 import * as t from "@babel/types";
 import generate from "@babel/generator";
 import { I18nTransformer, TransformOptions, ExtractedString, UsedExistingKey, ChangeDetail } from "../types";
-import { formatGeneratedCode } from "../code-formatter";
+import { formatGeneratedCode } from "./code-formatter";
 import { fallbackTransform } from "../fallback-transform";
 import { replaceStringsWithTCalls } from "./ast-replacer";
 

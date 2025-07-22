@@ -16,7 +16,7 @@ import { parse } from "@babel/parser";
 import traverse from "@babel/traverse";
 import * as t from "@babel/types";
 import { replaceStringsWithTCalls } from "./ast-replacer";
-import { formatGeneratedCode } from "../code-formatter";
+import { formatGeneratedCode } from "./code-formatter";
 import { fallbackTransform } from "../fallback-transform";
 import {
   ChangeDetail,
