@@ -6,12 +6,12 @@ import {
   TransformOptions,
   UsedExistingKey,
   ChangeDetail,
-} from "./types";
-import { getKeyAndRecord } from "./key-manager";
-import { createTranslationCall, attachExtractedCommentToNode, parseJSXTextPlaceholders } from "./ast-utils";
-import { getDefaultPattern } from "./core/utils";
-import * as tg from "./babel-type-guards";
-import { isJSXAttribute } from "./babel-type-guards";
+} from "../types";
+import { getKeyAndRecord } from "../key-manager";
+import { createTranslationCall, attachExtractedCommentToNode, parseJSXTextPlaceholders } from "../core/ast-utils";
+import { getDefaultPattern } from "../core/utils";
+import * as tg from "../babel-type-guards";
+import { isJSXAttribute } from "../babel-type-guards";
 
 /**
  * Traverses the AST to replace matched strings/JSX/templates with translation function calls.

@@ -1,4 +1,4 @@
-import { processFiles } from "./core-transformer";
+import { processFiles, transformCode } from "./processFiles";
 import { TransformOptions } from "./types";
 
 // 导出核心模块
@@ -6,7 +6,7 @@ export { CoreProcessor, createProcessorWithDefaultPlugins } from "./core";
 export { ReactPlugin, VuePlugin, GenericJSPlugin } from "./plugins";
 
 export { TransformOptions };
-export { transformCode } from "./processor";
+export { transformCode };
 
 /**
  * 统一的 i18n 提取主函数

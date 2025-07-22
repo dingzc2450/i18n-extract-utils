@@ -3,7 +3,7 @@
 import { Command } from 'commander';
 import path from 'path';
 import { TransformOptions } from './types';
-import { processFiles } from './core-transformer';
+import { processFiles } from './processFiles';
 
 const program = new Command();
 

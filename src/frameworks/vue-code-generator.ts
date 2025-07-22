@@ -13,7 +13,7 @@ import {
 } from "../types";
 import { getKeyAndRecord } from "../key-manager";
 import { getDefaultPattern } from "../core/utils";
-import { attachExtractedCommentToNode } from "../ast-utils";
+import { attachExtractedCommentToNode } from "../core/ast-utils";
 
 /**
  * Vue专用代码生成器

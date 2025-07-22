@@ -12,7 +12,7 @@ import {
   createTranslationCall,
   attachExtractedCommentToNode,
   parseJSXTextPlaceholders,
-} from "./ast-utils";
+} from "./core/ast-utils";
 import { getDefaultPattern } from "./core/utils";
 import * as tg from "./babel-type-guards";
 import { StringReplacer } from "./string-replacer";

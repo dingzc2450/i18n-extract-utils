@@ -5,7 +5,7 @@ import generate from "@babel/generator";
 import { I18nTransformer, TransformOptions, ExtractedString, UsedExistingKey, ChangeDetail } from "../types";
 import { formatGeneratedCode } from "../code-formatter";
 import { fallbackTransform } from "../fallback-transform";
-import { replaceStringsWithTCalls } from "../ast-replacer";
+import { replaceStringsWithTCalls } from "./ast-replacer";
 
 /**
  * React 15 版本的多语言提取与替换实现（无 hook，仅全局函数调用）
