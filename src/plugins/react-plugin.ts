@@ -103,7 +103,7 @@ export class ReactPlugin implements FrameworkPlugin {
     const hooks: HookRequirement[] = [
       {
         hookName,
-        variableName: translationMethod,
+        variableName: translationMethod === "default" ? ReactPlugin.defaultTranslationMethod : translationMethod,
         isDestructured: translationMethod !== "default",
         callExpression: this.generateHookCallExpression(hookName, translationMethod),
       },
@@ -304,13 +304,13 @@ function addHookAndImport(
         },
       });
 
-      // 检查函数体内是否有 t(...) 调用
+      // 检查函数体内是否有翻译函数调用
       let hasTCall = false;
       path.traverse({
         CallExpression(callPath) {
           if (
             tg.isIdentifier(callPath.node.callee) &&
-            callPath.node.callee.name === "t"
+            callPath.node.callee.name === translationMethod
           ) {
             hasTCall = true;
             callPath.stop();
@@ -318,9 +318,10 @@ function addHookAndImport(
         },
       });
 
-      // 组件 或 自定义hook且用到t()，都插入hook语句
+      // 只有当组件返回JSX并且实际使用了翻译函数时，才插入hook
       if (
-        (returnsJSX || (isCustomHook && hasTCall)) &&
+        returnsJSX &&
+        hasTCall &&
         tg.isFunction(path.node) &&
         path.node.body &&
         tg.isBlockStatement(path.node.body)
@@ -423,21 +424,15 @@ export class ReactTransformer implements I18nTransformer {
         return { code, extractedStrings, usedExistingKeysList, changes: [] };
       }
       // hook 相关逻辑
-      const hookAlreadyExists = hasTranslationHook(code, hookName);
-      const needsHook =
-        !hookAlreadyExists && (modified || extractedStrings.length > 0);
-      let importAdded = false;
-      let hookCallAdded = false;
-      if (needsHook) {
-        const addResult = addHookAndImport(
-          ast,
-          translationMethod,
-          hookName,
-          hookImport
-        );
-        importAdded = addResult.importAdded;
-        hookCallAdded = addResult.hookCallAdded;
-      }
+      // addHookAndImport 函数足够智能，可以按组件处理现有的 hook，
+      // 因此只要有修改，我们就会调用它。
+      const { importAdded, hookCallAdded } = addHookAndImport(
+        ast,
+        translationMethod,
+        hookName,
+        hookImport
+      );
+
       let { code: generatedCode } = generate(ast, {
         retainLines: true,
         compact: false,
@@ -449,7 +444,9 @@ export class ReactTransformer implements I18nTransformer {
         hookCallAdded,
         hookName,
         hookImport,
-        translationMethod: needsHook ? translationMethod : undefined,
+        // 仅在实际添加了 hook 时才传递 translationMethod，
+        // 以避免在所有组件都已有 hook 的情况下添加未使用的变量。
+        translationMethod: hookCallAdded ? translationMethod : undefined,
       });
       return {
         code: transformedCode,

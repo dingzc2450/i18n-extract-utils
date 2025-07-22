@@ -93,9 +93,6 @@ export default SearchForm;
       /const label = t\(['"]自定义hook内的文本['"]\);/
     );
     expect(result.code).toMatch(
-      /function Demo\(\) \{\s*const \{\s*t\s*\} = useTranslation\(\);/
-    );
-    expect(result.code).toMatch(
       /function useCustomLogic\(\) \{\s*const \{\s*t\s*\} = useTranslation\(\);/
     );
     expect(

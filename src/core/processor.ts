@@ -221,9 +221,11 @@ export class CoreProcessor {
         const hooks: HookRequirement[] = [
           {
             hookName,
-            variableName: translationMethod,
-            isDestructured: true,
-            callExpression: `const { ${translationMethod} } = ${hookName}();`,
+            variableName: translationMethod === "default" ? "t" : translationMethod,
+            isDestructured: translationMethod !== "default",
+            callExpression: translationMethod === "default" 
+              ? `const t = ${hookName}();`
+              : `const { ${translationMethod} } = ${hookName}();`,
           },
         ];
 
@@ -405,9 +407,7 @@ export class CoreProcessor {
       // 处理 Hook 调用
       if (hookRequirements.length > 0) {
         for (const hookReq of hookRequirements) {
-          if (!this.hasExistingHookCall(modifiedCode, hookReq)) {
-            modifiedCode = this.addHookCallToCode(modifiedCode, hookReq);
-          }
+          modifiedCode = this.addHookCallToCode(modifiedCode, hookReq);
         }
       }
 
@@ -587,8 +587,33 @@ export class CoreProcessor {
    * 检查是否已存在Hook调用
    */
   private hasExistingHookCall(code: string, hookReq: HookRequirement): boolean {
-    return code.includes(hookReq.callExpression) || 
-           code.includes(`${hookReq.hookName}()`);
+    // 检查是否包含具体的hook调用表达式
+    if (code.includes(hookReq.callExpression)) {
+      return true;
+    }
+    
+    // 检查是否包含hook函数调用（更宽泛的检查）
+    if (code.includes(`${hookReq.hookName}()`)) {
+      return true;
+    }
+    
+    // 检查是否有类似的解构赋值（针对解构的情况）
+    if (hookReq.isDestructured && hookReq.variableName) {
+      const destructPattern = new RegExp(`const\\s*\\{[^}]*\\b${hookReq.variableName}\\b[^}]*\\}\\s*=\\s*${hookReq.hookName}\\s*\\(`);
+      if (destructPattern.test(code)) {
+        return true;
+      }
+    }
+    
+    // 检查是否有直接赋值（针对非解构的情况）
+    if (!hookReq.isDestructured && hookReq.variableName) {
+      const directPattern = new RegExp(`const\\s+${hookReq.variableName}\\s*=\\s*${hookReq.hookName}\\s*\\(`);
+      if (directPattern.test(code)) {
+        return true;
+      }
+    }
+    
+    return false;
   }
 
   /**
@@ -598,7 +623,7 @@ export class CoreProcessor {
     let modifiedCode = code;
     
     // 处理所有函数，支持React组件和自定义Hook
-    // 1. 查找React组件函数
+    // 1. 查找React组件函数 - 修改正则表达式以匹配任意缩进
     modifiedCode = this.addHookToFunctions(
       modifiedCode, 
       hookReq, 
@@ -647,30 +672,41 @@ export class CoreProcessor {
     let totalOffset = 0;
 
     // 倒序处理避免位置偏移问题
-    matches.reverse().forEach(match => {
+    matches.reverse().forEach((match, index) => {
       const functionName = match[4];
       const indent = match[1];
       const openBracePos = (match.index || 0) + match[0].length;
       
-      // 检查是否已经有Hook调用
-      if (modifiedCode.includes(`${hookReq.hookName}()`)) {
-        const functionStart = match.index || 0;
-        const functionEnd = this.findFunctionEnd(modifiedCode, openBracePos);
-        const functionContent = modifiedCode.slice(functionStart, functionEnd);
+      // 检查这个特定函数是否已经有Hook调用
+      const functionStart = match.index || 0;
+      const functionEnd = this.findFunctionEnd(modifiedCode, openBracePos);
+      const functionContent = modifiedCode.slice(functionStart, functionEnd);
+      
+      // 使用改进的hook检查逻辑
+      if (this.hasExistingHookCall(functionContent, hookReq)) {
+        return; // 这个函数已经有Hook调用了
+      }
+      
+      // 对于React组件，需要检查是否返回JSX且包含翻译调用
+      if (!isCustomHook) {
+        const hasJSX = functionContent.includes('<') && functionContent.includes('>');
+        // 更宽泛的翻译函数检查，支持 t() 和 t.xxx() 模式
+        const hasTCall = functionContent.includes(`${hookReq.variableName}(`) || 
+                        functionContent.includes(`${hookReq.variableName}.`);
         
-        if (functionContent.includes(`${hookReq.hookName}()`)) {
-          return; // 这个函数已经有Hook调用了
+        if (!hasJSX || !hasTCall) {
+          return; // 不是React组件或者没有使用翻译函数
         }
       }
       
       // 对于自定义Hook，检查是否有t()调用
       if (isCustomHook) {
-        const functionStart = match.index || 0;
-        const functionEnd = this.findFunctionEnd(modifiedCode, openBracePos);
-        const functionContent = modifiedCode.slice(functionStart, functionEnd);
+        // 更宽泛的翻译函数检查，支持 t() 和 t.xxx() 模式
+        const hasCall = functionContent.includes(`${hookReq.variableName}(`) || 
+                       functionContent.includes(`${hookReq.variableName}.`);
         
-        if (!functionContent.includes('t(')) {
-          return; // 自定义Hook没有使用t()，跳过
+        if (!hasCall) {
+          return; // 自定义Hook没有使用翻译函数，跳过
         }
       }
       

@@ -218,8 +218,9 @@ describe("processFiles Functionality", () => {
     expect(importStatements).toBe(1);
 
     // 2. Check that ComponentB was correctly transformed.
-    expect(newContent).toMatch(/function ComponentB\(\) {\s*useTranslation/);
-    expect(newContent).toContain("<h2>{t(\"New Translation\")}</h2>");
+    // 确保 useTranslation hook 已被正确地添加到 ComponentB 中。
+    expect(newContent).toMatch(/function ComponentB\(\) {\s*const { t } = useTranslation\(\);/);
+    expect(newContent).toContain('<h2>{t("New Translation")}</h2>');
 
     // 3. Check that ComponentA remains untouched.
     expect(newContent).toContain("<h1>{t(\"Existing Translation\")}</h1>");
