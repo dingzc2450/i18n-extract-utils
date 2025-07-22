@@ -134,6 +134,7 @@ export class CoreProcessor {
       console.error(`Error processing code in ${filePath}:`, error);
       const extractedStrings: ExtractedString[] = [];
       const usedExistingKeysList: UsedExistingKey[] = [];
+      
       return {
         code: fallbackTransform(code, extractedStrings, options),
         extractedStrings,
@@ -181,13 +182,13 @@ export class CoreProcessor {
     }
 
     // 如果没有找到合适的插件，返回默认React插件
-    return this.getDefaultPlugin();
+    return this.getDefaultPlugin(options);
   }
 
   /**
    * 获取默认插件
    */
-  private getDefaultPlugin(): FrameworkPlugin {
+  private getDefaultPlugin(options: TransformOptions): FrameworkPlugin {
     return {
       name: 'default-react',
       shouldApply: () => true,

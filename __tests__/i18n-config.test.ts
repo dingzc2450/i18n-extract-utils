@@ -1,5 +1,5 @@
-import { expect, test, describe, afterEach } from "vitest";
-import { transformCode } from "./test-helpers";
+import { expect, test, describe, afterEach, beforeEach } from "vitest";
+import { transformCode, clearConfigCache } from "./test-helpers";
 import * as fs from "fs";
 import * as path from "path";
 import { tmpdir } from "os";
@@ -266,6 +266,11 @@ describe("i18nConfig Tests", () => {
   });
 
   describe("i18nCall Configuration", () => {
+    beforeEach(() => {
+      // 清理配置缓存，确保每个测试都使用独立的配置
+      clearConfigCache();
+    });
+
     test("should use custom i18nCall function for generating call expressions", () => {
       const code = `
         function MyComponent() {

@@ -207,7 +207,9 @@ export function collectContextAwareReplacementInfo(
         const callExpression = smartCallFactory(
           importInfo.callName,
           key,
-          standardizedValue
+          standardizedValue,
+          undefined,
+          standardizedValue // 传递原始文本用于自定义 i18nCall
         );
 
         // 如果需要添加注释
@@ -286,7 +288,9 @@ export function collectContextAwareReplacementInfo(
         const callExpression = smartCallFactory(
           importInfo.callName,
           key,
-          standardizedValue
+          standardizedValue,
+          undefined,
+          standardizedValue // 传递原始文本用于自定义 i18nCall
         );
 
         if (options.appendExtractedComment) {
@@ -355,7 +359,9 @@ export function collectContextAwareReplacementInfo(
         const callExpression = smartCallFactory(
           importInfo.callName,
           key,
-          standardizedValue
+          standardizedValue,
+          undefined,
+          standardizedValue // 传递原始文本用于自定义 i18nCall
         );
 
         if (options.appendExtractedComment) {
@@ -407,7 +413,9 @@ export function collectContextAwareReplacementInfo(
         const callExpression = smartCallFactory(
           importInfo.callName,
           key,
-          standardizedValue
+          standardizedValue,
+          undefined,
+          standardizedValue // 传递原始文本用于自定义 i18nCall
         );
 
         if (options.appendExtractedComment) {
@@ -722,12 +730,24 @@ export function collectContextAwareReplacementInfo(
             const standardizedValue =
               extractedStrings.find((s) => s.key === translationKey)?.value || rawText;
 
+            // 构造原始模板字符串文本，去除分隔符并将实际的表达式替换为 ${...} 占位符
+            let originalTemplateText = "";
+            node.quasis.forEach((quasi, i) => {
+              originalTemplateText += quasi.value.raw;
+              if (i < node.expressions.length) {
+                originalTemplateText += "${...}";
+              }
+            });
+            
+            // 去除分隔符，得到干净的原始文本
+            const cleanOriginalText = pattern.exec(originalTemplateText)?.[1] || originalTemplateText;
+
             const replacementNode = smartCallFactory(
               importInfo.callName,
               translationKey,
               standardizedValue,
               interpolations, // 传递 interpolations 对象
-              rawText // 传递原始未处理的文本用于自定义 i18nCall
+              cleanOriginalText // 传递去除分隔符的原始文本用于自定义 i18nCall
             );
             
             // 插入注释
@@ -776,7 +796,7 @@ export function collectContextAwareReplacementInfo(
         );
 
         if (key !== undefined) {
-          const callExpression = smartCallFactory(importInfo.callName, key, extractedValue);
+          const callExpression = smartCallFactory(importInfo.callName, key, extractedValue, undefined, extractedValue);
 
           if (options.appendExtractedComment) {
             attachExtractedCommentToNode(
@@ -849,7 +869,7 @@ export function collectContextAwareReplacementInfo(
           );
 
           if (key !== undefined) {
-            const callExpression = smartCallFactory(importInfo.callName, key, extractedValue);
+            const callExpression = smartCallFactory(importInfo.callName, key, extractedValue, undefined, extractedValue);
 
             if (options.appendExtractedComment) {
               attachExtractedCommentToNode(
@@ -943,7 +963,7 @@ export function collectContextAwareReplacementInfo(
           );
         } else {
           // No placeholders, use simple call
-          callExpression = smartCallFactory(importInfo.callName, key, extractedValue);
+          callExpression = smartCallFactory(importInfo.callName, key, extractedValue, undefined, extractedValue);
         }
 
         if (options.appendExtractedComment) {
@@ -1031,7 +1051,7 @@ export function collectContextAwareReplacementInfo(
           );
         } else {
           // No placeholders, use simple call
-          callExpression = smartCallFactory(importInfo.callName, key, extractedValue);
+          callExpression = smartCallFactory(importInfo.callName, key, extractedValue, undefined, extractedValue);
         }
 
         if (options.appendExtractedComment) {

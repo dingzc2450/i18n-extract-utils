@@ -36,3 +36,4 @@ export const transformCode = processorTransformCode;
 // 导出其他常用的测试工具
 export { transformCodeWithCoreProcessor } from "../src/core-transformer";
 export { extractStringsFromCode } from "../src/string-extractor";
+export { clearConfigCache } from "../src/config/config-manager";

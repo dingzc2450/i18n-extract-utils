@@ -6,12 +6,16 @@ import { ReactTransformer } from "../plugins/react-plugin";
 import { React15Transformer } from "./react15-support";
 import { VueTransformer } from "./vue-support";
 import { UniversalCodeGenerator } from "./universal-code-generator";
+import { resolveConfig, ResolvedConfig } from "../config/config-manager";
+import { ConfigAdapter } from "../config/config-adapter";
 
 /**
  * 根据 i18nConfig.framework 创建对应的 transformer
  */
-export function createFrameworkTransformer(options: TransformOptions): I18nTransformer {
-  const framework = options.i18nConfig?.framework || "react";
+export function createFrameworkTransformer(userOptions: TransformOptions): I18nTransformer {
+  // 使用配置管理器解析配置
+  const config = resolveConfig(userOptions);
+  const framework = config.i18nConfig.framework;
   
   switch (framework.toLowerCase()) {
     case "react":
@@ -146,58 +150,17 @@ export function getFrameworkDefaults(framework: string): Partial<TransformOption
 
 /**
  * 合并用户配置和框架默认配置
+ * @deprecated 使用 resolveConfig 代替
  */
 export function mergeWithFrameworkDefaults(
   userOptions: TransformOptions,
   detectedFramework?: string
 ): TransformOptions {
-  // 确定最终使用的框架
-  const framework = userOptions.i18nConfig?.framework || detectedFramework || "react";
+  // 使用新的配置管理器
+  const resolvedConfig = resolveConfig(userOptions, detectedFramework);
   
-  // 获取框架默认配置
-  const defaults = getFrameworkDefaults(framework);
-  
-  // 处理老格式的配置（向后兼容）
-  const legacyCompatibleOptions = { ...userOptions };
-  
-  // 如果用户使用老格式（hookName, hookImport 等），转换为新格式
-  if (!userOptions.i18nConfig && (userOptions.hookName || userOptions.hookImport || userOptions.translationMethod)) {
-    legacyCompatibleOptions.i18nConfig = {
-      framework: framework as any,
-      i18nImport: {
-        name: userOptions.translationMethod || "t",
-        source: userOptions.hookImport || defaults.i18nConfig?.i18nImport?.source || "react-i18next",
-        ...(userOptions.hookName && { importName: userOptions.hookName }),
-      },
-    };
-  }
-  
-  // 深度合并配置
-  const merged: TransformOptions = {
-    ...defaults,
-    ...legacyCompatibleOptions,
-    i18nConfig: {
-      ...defaults.i18nConfig,
-      ...legacyCompatibleOptions.i18nConfig,
-    },
-  };
-
-  // 安全合并 i18nImport 配置
-  if (defaults.i18nConfig?.i18nImport || legacyCompatibleOptions.i18nConfig?.i18nImport) {
-    merged.i18nConfig = merged.i18nConfig || {};
-    merged.i18nConfig.i18nImport = {
-      name: legacyCompatibleOptions.i18nConfig?.i18nImport?.name || defaults.i18nConfig?.i18nImport?.name || "t",
-      source: legacyCompatibleOptions.i18nConfig?.i18nImport?.source || defaults.i18nConfig?.i18nImport?.source || "react-i18next",
-      ...((legacyCompatibleOptions.i18nConfig?.i18nImport?.importName || defaults.i18nConfig?.i18nImport?.importName) && {
-        importName: legacyCompatibleOptions.i18nConfig?.i18nImport?.importName || defaults.i18nConfig?.i18nImport?.importName
-      }),
-      ...((legacyCompatibleOptions.i18nConfig?.i18nImport?.custom || defaults.i18nConfig?.i18nImport?.custom) && {
-        custom: legacyCompatibleOptions.i18nConfig?.i18nImport?.custom || defaults.i18nConfig?.i18nImport?.custom
-      }),
-    };
-  }
-
-  return merged;
+  // 转换回 TransformOptions 格式以保持向后兼容
+  return ConfigAdapter.toTransformOptions(resolvedConfig);
 }
 
 /**
