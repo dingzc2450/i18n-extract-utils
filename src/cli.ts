@@ -2,8 +2,8 @@
 
 import { Command } from 'commander';
 import path from 'path';
-import { processFiles } from './transformer';
 import { TransformOptions } from './types';
+import { processFiles } from './core-transformer';
 
 const program = new Command();
 

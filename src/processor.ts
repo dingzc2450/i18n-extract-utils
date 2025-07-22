@@ -3,7 +3,6 @@
  * 提供基于新 CoreProcessor 架构的代码转换功能
  */
 
-import fs from "fs";
 import {
   ExtractedString,
   TransformOptions,
@@ -11,7 +10,8 @@ import {
   ChangeDetail,
 } from "./types";
 import { createProcessorWithDefaultPlugins } from "./plugins";
-import { enhanceOptionsWithDefaults } from "./config/enhanced-config";
+import { ConfigProxy } from "./config/config-proxy";
+import { FileCacheUtils } from "./core/utils";
 
 /**
  * 使用新的 CoreProcessor 处理单个文件的代码转换
@@ -30,11 +30,11 @@ export function transformCode(
   usedExistingKeysList: UsedExistingKey[];
   changes: ChangeDetail[];
 } {
-  const code = fs.readFileSync(filePath, "utf8");
+  const code = FileCacheUtils.readFileWithCache(filePath);
   const processor = createProcessorWithDefaultPlugins();
 
-  // 使用增强的配置，确保所有默认值都设置好了，并传递代码和文件路径用于框架检测
-  const enhancedOptions = enhanceOptionsWithDefaults(options, code, filePath);
+  // 使用 ConfigProxy 进行框架检测和配置预处理
+  const enhancedOptions = ConfigProxy.preprocessOptions(options, code, filePath);
 
   return processor.processCode(code, filePath, enhancedOptions, existingValueToKey);
 }

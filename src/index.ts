@@ -1,13 +1,11 @@
-import { processFiles } from "./transformer";
+import { processFiles } from "./core-transformer";
 import { TransformOptions } from "./types";
 
 // 导出核心模块
 export { CoreProcessor, createProcessorWithDefaultPlugins } from "./core";
 export { ReactPlugin, VuePlugin, GenericJSPlugin } from "./plugins";
-export { transformCodeWithCoreProcessor } from "./core-transformer";
 
 export { TransformOptions };
-export { extractStringsFromCode } from "./string-extractor";
 export { transformCode } from "./processor";
 
 /**

@@ -4,18 +4,20 @@
  */
 
 import * as tg from "../babel-type-guards";
-import { isJSXElement, isJSXFragment } from "../frameworks/react-support";
 import {
   FrameworkPlugin,
-  ProcessingContext,
-  ImportRequirement,
   HookRequirement,
+  ImportRequirement,
+  ProcessingContext,
 } from "../core/types";
 import {
   ExtractedString,
   TransformOptions,
 } from "../types";
 
+import traverse from "@babel/traverse";
+import * as t from "@babel/types";
+import { isJSXElement, isJSXFragment } from "../babel-type-guards";
 /**
  * React 插件实现
  */
@@ -74,7 +76,7 @@ export class ReactPlugin implements FrameworkPlugin {
   getRequiredImportsAndHooks(
     extractedStrings: ExtractedString[],
     options: TransformOptions,
-    context: ProcessingContext
+    _context: ProcessingContext
   ): {
     imports: ImportRequirement[];
     hooks: HookRequirement[];
@@ -117,9 +119,9 @@ export class ReactPlugin implements FrameworkPlugin {
    */
   postProcess(
     code: string,
-    extractedStrings: ExtractedString[],
-    options: TransformOptions,
-    context: ProcessingContext
+    _extractedStrings: ExtractedString[],
+    _options: TransformOptions,
+    _context: ProcessingContext
   ): string {
     // 新的统一格式已经在 processImportsAndHooks 中处理，这里跳过后处理
     return code;
@@ -170,20 +172,6 @@ export class ReactPlugin implements FrameworkPlugin {
   }
 }
 
-// 添加 ReactTransformer 相关的导入
-import { parse } from "@babel/parser";
-import traverse from "@babel/traverse";
-import * as t from "@babel/types";
-import generate from "@babel/generator";
-import { hasTranslationHook } from "../frameworks/react-support";
-import { formatGeneratedCode } from "../code-formatter";
-import { fallbackTransform } from "../fallback-transform";
-import { replaceStringsWithTCalls } from "../ast-replacer";
-import {
-  UsedExistingKey,
-  ChangeDetail,
-  I18nTransformer,
-} from "../types";
 
 /**
  * Traverses the AST to add the translation hook import and call if necessary.
@@ -377,102 +365,4 @@ function addHookAndImport(
   });
 
   return { importAdded, hookCallAdded };
-}
-
-/**
- * React 框架多语言提取与替换实现
- */
-export class ReactTransformer implements I18nTransformer {
-  extractAndReplace(
-    code: string,
-    filePath: string,
-    options: TransformOptions,
-    existingValueToKey?: Map<string, string | number>
-  ) {
-    const translationMethod =
-      options.i18nConfig?.i18nImport?.name || options.translationMethod || "t"; // 已废弃，建议通过 options 传递框架配置
-    const hookName =
-      options.i18nConfig?.i18nImport?.importName ||
-      options.hookName ||
-      "useTranslation"; // 已废弃
-    const hookImport =
-      options.i18nConfig?.i18nImport?.source ||
-      options.hookImport ||
-      "react-i18next"; // 已废弃
-    const extractedStrings: ExtractedString[] = [];
-    const usedExistingKeysList: UsedExistingKey[] = [];
-    let changes: ChangeDetail[] = [];
-    try {
-      const ast = parse(code, {
-        sourceType: "module",
-        plugins: ["jsx", "typescript"],
-        errorRecovery: true,
-      });
-      const { modified, changes: replacementChanges } =
-        replaceStringsWithTCalls(
-          ast,
-          existingValueToKey || new Map(),
-          extractedStrings,
-          usedExistingKeysList,
-          translationMethod,
-          options,
-          filePath
-        );
-      changes = replacementChanges;
-      // 如果没有修改，直接返回原始代码
-      if (!modified && extractedStrings.length === 0) {
-        return { code, extractedStrings, usedExistingKeysList, changes: [] };
-      }
-      // hook 相关逻辑
-      // addHookAndImport 函数足够智能，可以按组件处理现有的 hook，
-      // 因此只要有修改，我们就会调用它。
-      const { importAdded, hookCallAdded } = addHookAndImport(
-        ast,
-        translationMethod,
-        hookName,
-        hookImport
-      );
-
-      let { code: generatedCode } = generate(ast, {
-        retainLines: true,
-        compact: false,
-        comments: true,
-        jsescOption: { minimal: true },
-      });
-      const transformedCode = formatGeneratedCode(generatedCode, {
-        importAdded,
-        hookCallAdded,
-        hookName,
-        hookImport,
-        // 仅在实际添加了 hook 时才传递 translationMethod，
-        // 以避免在所有组件都已有 hook 的情况下添加未使用的变量。
-        translationMethod: hookCallAdded ? translationMethod : undefined,
-      });
-      return {
-        code: transformedCode,
-        extractedStrings,
-        usedExistingKeysList,
-        changes,
-      };
-    } catch (error) {
-      console.error(`[${filePath}] Error during AST transformation: ${error}`);
-      if (error instanceof Error) {
-        console.error(error.stack);
-      }
-      console.error(
-        `[${filePath}] Falling back to simple regex replacement (key generation/reuse might be inaccurate in fallback)`
-      );
-      const transformedCode = fallbackTransform(
-        code,
-        extractedStrings,
-        options
-      );
-      return {
-        code: transformedCode,
-        extractedStrings: [],
-        usedExistingKeysList: [],
-        changes: [],
-      };
-    }
-  }
 }

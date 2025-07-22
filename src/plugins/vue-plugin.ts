@@ -12,11 +12,9 @@ import {
 import {
   ExtractedString,
   TransformOptions,
-  UsedExistingKey,
-  ChangeDetail,
 } from "../types";
 import { VueCodeGenerator } from "../frameworks/vue-code-generator";
-import { getDefaultPattern } from "../string-extractor";
+import { getDefaultPattern } from "../core/utils";
 
 /**
  * Vue 插件实现

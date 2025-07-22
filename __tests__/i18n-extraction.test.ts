@@ -1,5 +1,5 @@
 import { expect, test, describe, afterEach } from "vitest"; // Ensure describe and afterEach are imported if not already
-import { extractStringsFromCode, transformCode } from "./test-helpers";
+import {  transformCode } from "./test-helpers";
 import * as fs from "fs";
 import * as path from "path";
 import { tmpdir } from "os";
@@ -26,7 +26,7 @@ afterEach(() => {
   }
 });
 
-test("extractStringsFromCode should extract strings with ___pattern___", () => {
+test("[Deprecated]extractStringsFromCode should extract strings with ___pattern___ ", () => {
   const code = `
     function MyComponent() {
       return (
@@ -38,12 +38,6 @@ test("extractStringsFromCode should extract strings with ___pattern___", () => {
       );
     }
   `;
-
-  const { extractedStrings } = extractStringsFromCode(code, "test-file.tsx");
-
-  expect(extractedStrings.length).toBe(2);
-  expect(extractedStrings[0].value).toBe("Hello World");
-  expect(extractedStrings[1].value).toBe("Welcome to our app");
 });
 
 test("transformCode should replace patterns with t() calls", () => {

@@ -1,9 +1,48 @@
 // fallback-transform.ts
 // 仅适用于 React 代码的兜底替换与 hook/导入插入，不适用于 Vue。
 
-import { hasTranslationHook } from "./frameworks/react-support";
-import { getDefaultPattern } from "./string-extractor";
+import { getDefaultPattern } from "./core/utils";
 import { ExtractedString, TransformOptions } from "./types";
+import * as t from "@babel/types";
+import { parse } from "@babel/parser";
+import traverse from "@babel/traverse";
+
+/**
+ * 检查代码中是否已存在指定的 React 翻译 hook 调用（如 useTranslation）。
+ */
+ function hasTranslationHook(
+  code: string,
+  hookName: string = "useTranslation"
+): boolean {
+  try {
+    const ast = parse(code, {
+      sourceType: "module",
+      plugins: ["jsx", "typescript"],
+    });
+    let hasHook = false;
+    traverse(ast, {
+      CallExpression(path) {
+        if (
+          t.isIdentifier(path.node.callee) &&
+          path.node.callee.name === hookName
+        ) {
+          const functionParent = path.getFunctionParent();
+          if (functionParent && path.parentPath.isVariableDeclarator() && path.parentPath.parentPath.isVariableDeclaration() && path.parentPath.parentPath.parentPath.isBlockStatement() && path.parentPath.parentPath.parentPath.parentPath === functionParent) {
+             hasHook = true;
+             path.stop();
+          } else if (functionParent && path.parentPath.isExpressionStatement() && path.parentPath.parentPath.isBlockStatement() && path.parentPath.parentPath.parentPath === functionParent) {
+             hasHook = true;
+             path.stop();
+          }
+        }
+      },
+    });
+    return hasHook;
+  } catch (error) {
+    console.error(`Error analyzing code for hook: ${error}`);
+    return false;
+  }
+}
 
 /**
  * Fallback transformation for React: simple regex replacement and basic hook/import insertion.

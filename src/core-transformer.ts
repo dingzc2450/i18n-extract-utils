@@ -11,28 +11,9 @@ import {
   TransformOptions,
   UsedExistingKey,
   FileModificationRecord,
-  ChangeDetail,
 } from "./types";
-import { createProcessorWithDefaultPlugins } from "./plugins";
-
-/**
- * 使用新的CoreProcessor处理单个文件
- */
-export function transformCodeWithCoreProcessor(
-  code: string,
-  filePath: string,
-  options: TransformOptions = {},
-  existingValueToKey?: Map<string, string | number>
-): {
-  code: string;
-  extractedStrings: ExtractedString[];
-  usedExistingKeysList: UsedExistingKey[];
-  changes: ChangeDetail[];
-} {
-  const processor = createProcessorWithDefaultPlugins();
-
-  return processor.processCode(code, filePath, options, existingValueToKey);
-}
+import { transformCode } from "./processor";
+import { FileCacheUtils } from "./core/utils";
 
 /**
  * 确保目录存在
@@ -101,13 +82,13 @@ function loadExistingTranslations(options: TransformOptions): {
 /**
  * 使用新的CoreProcessor处理文件
  */
-export async function processFilesWithCoreProcessor(
+export async function processFiles(
   pattern: string,
   options: TransformOptions = {}
 ): Promise<{
   extractedStrings: ExtractedString[];
-  usedExistingKeysList: UsedExistingKey[];
-  fileModifications: FileModificationRecord[];
+  usedExistingKeys: UsedExistingKey[];
+  modifiedFiles: FileModificationRecord[];
   sourceJsonObject?: Record<string, string | number>;
 }> {
   const { existingValueToKey, sourceJsonObject } =
@@ -128,14 +109,11 @@ export async function processFilesWithCoreProcessor(
         continue;
       }
 
-      const originalContent = fs.readFileSync(filePath, "utf8");
+      const originalContent = FileCacheUtils.readFileWithCache(filePath, {
+        noCache: true,
+      });
 
-      const result = transformCodeWithCoreProcessor(
-        originalContent,
-        filePath,
-        options,
-        existingValueToKey
-      );
+      const result = transformCode(filePath, options, existingValueToKey);
 
       allExtractedStrings.push(...result.extractedStrings);
       allUsedExistingKeys.push(...result.usedExistingKeysList);
@@ -171,8 +149,8 @@ export async function processFilesWithCoreProcessor(
 
   return {
     extractedStrings: allExtractedStrings,
-    usedExistingKeysList: allUsedExistingKeys,
-    fileModifications,
+    usedExistingKeys: allUsedExistingKeys,
+    modifiedFiles: fileModifications,
     sourceJsonObject,
   };
 }

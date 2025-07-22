@@ -1,7 +1,7 @@
 import { expect, test, describe, afterEach, beforeEach } from "vitest";
 import { transformCode } from "./test-helpers";
 import { StringReplacer } from "../src/string-replacer";
-import { processFiles } from "../src/transformer";
+import { processFiles } from "./test-helpers";
 import * as fs from "fs";
 import * as path from "path";
 import { tmpdir } from "os";

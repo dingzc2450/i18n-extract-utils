@@ -1,5 +1,5 @@
 import { ExtractedString, TransformOptions, UsedExistingKey } from "./types";
-import { getDefaultPattern } from "./string-extractor";
+import { getDefaultPattern } from "./core/utils";
 
 /**
  * Manages translation key lookup, generation, and recording.

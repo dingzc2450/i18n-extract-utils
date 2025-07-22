@@ -2,7 +2,7 @@
 // 框架工厂，根据配置选择合适的 I18nTransformer
 
 import { TransformOptions, I18nTransformer, FrameworkCodeGenerator } from "../types";
-import { ReactTransformer } from "../plugins/react-plugin";
+import { ReactTransformer } from "./react-support";
 import { React15Transformer } from "./react15-support";
 import { VueTransformer } from "./vue-support";
 import { UniversalCodeGenerator } from "./universal-code-generator";

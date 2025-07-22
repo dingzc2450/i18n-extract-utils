@@ -1,5 +1,5 @@
 import { expect, test, describe, afterEach } from "vitest";
-import { processFiles } from "../src/transformer"; // Adjust path if needed
+import { processFiles } from "./test-helpers"; // Adjust path if needed
 import * as fs from "fs";
 import * as path from "path";
 import { tmpdir } from "os";

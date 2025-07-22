@@ -12,7 +12,7 @@ import {
   ChangeDetail,
 } from "../types";
 import { getKeyAndRecord } from "../key-manager";
-import { getDefaultPattern } from "../string-extractor";
+import { getDefaultPattern } from "../core/utils";
 import { attachExtractedCommentToNode } from "../ast-utils";
 
 /**

@@ -4,7 +4,6 @@
  */
 
 export { CoreProcessor } from "./processor";
-export { CoreExtractor } from "./extractor";
 export { ASTParserUtils, ImportHookUtils, StringUtils } from "./utils";
 export * from "./types";
 

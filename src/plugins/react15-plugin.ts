@@ -168,7 +168,6 @@ export class React15Plugin implements FrameworkPlugin {
       return { imports: [], hooks: [] };
     }
 
-    const translationMethod = this.getTranslationMethod(options);
     const importSource = this.getImportSource(options);
     const importName = this.getImportName(options);
 
@@ -199,16 +198,6 @@ export class React15Plugin implements FrameworkPlugin {
     return code;
   }
 
-  /**
-   * 获取翻译方法名称
-   */
-  private getTranslationMethod(options: TransformOptions): string {
-    return (
-      options.i18nConfig?.i18nImport?.name ||
-      options.translationMethod ||
-      "t"
-    );
-  }
 
   /**
    * 获取导入来源

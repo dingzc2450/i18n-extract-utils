@@ -13,12 +13,12 @@ import {
   attachExtractedCommentToNode,
   parseJSXTextPlaceholders,
 } from "./ast-utils";
-import { getDefaultPattern } from "./string-extractor";
+import { getDefaultPattern } from "./core/utils";
 import * as tg from "./babel-type-guards";
-import { isJSXAttribute } from "./frameworks/react-support";
 import { StringReplacer } from "./string-replacer";
 import { detectCodeContext, ContextInfo } from "./context-detector";
 import { SmartImportManager, ImportInfo } from "./smart-import-manager";
+import { isJSXAttribute } from "./babel-type-guards";
 
 /**
  * 上下文感知的AST替换器

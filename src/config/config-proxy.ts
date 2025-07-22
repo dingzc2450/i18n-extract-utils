@@ -34,43 +34,6 @@ export class ConfigProxy {
   }
 
   /**
-   * 获取配置的安全访问器
-   */
-  static getConfigAccessor(userOptions: TransformOptions = {}) {
-    const resolved = resolveConfig(userOptions);
-    
-    return {
-      // 基础配置安全访问
-      getPattern: () => resolved.pattern,
-      getOutputPath: () => resolved.outputPath,
-      getAppendExtractedComment: () => resolved.appendExtractedComment,
-      getExtractedCommentType: () => resolved.extractedCommentType,
-      getPreserveFormatting: () => resolved.preserveFormatting,
-      getUseASTTransform: () => resolved.useASTTransform,
-      
-      // i18n配置安全访问
-      getFramework: () => resolved.i18nConfig.framework,
-      getTranslationMethod: () => resolved.i18nConfig.i18nImport.name,
-      getHookName: () => resolved.i18nConfig.i18nImport.importName,
-      getImportSource: () => resolved.i18nConfig.i18nImport.source,
-      getCustomImport: () => resolved.i18nConfig.i18nImport.custom,
-      
-      // 非React配置
-      getNonReactConfig: () => resolved.i18nConfig.nonReactConfig,
-      
-      // 可选配置
-      getGenerateKey: () => resolved.generateKey,
-      getExistingTranslations: () => resolved.existingTranslations,
-      
-      // 获取完整的解析配置
-      getResolvedConfig: () => resolved,
-      
-      // 获取向后兼容的TransformOptions
-      getTransformOptions: () => ConfigAdapter.toTransformOptions(resolved),
-    };
-  }
-
-  /**
    * 简单的框架检测逻辑（内联实现，避免循环依赖）
    */
   private static simpleDetectFramework(code: string, filePath: string): string {

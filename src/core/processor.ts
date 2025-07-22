@@ -9,7 +9,6 @@ import { StringReplacer } from "../string-replacer";
 import { SmartImportManager } from "../smart-import-manager";
 import { fallbackTransform } from "../fallback-transform";
 import { ASTParserUtils, ImportHookUtils } from "./utils";
-import { CoreExtractor } from "./extractor";
 import { collectContextAwareReplacementInfo } from "../context-aware-ast-replacer";
 import {
   FrameworkPlugin,
@@ -32,7 +31,6 @@ import {
  */
 export class CoreProcessor {
   private plugins: FrameworkPlugin[] = [];
-  private extractor = new CoreExtractor();
 
   constructor() {
     // 插件将在外部注册，不在此处硬编码
