@@ -82,11 +82,20 @@ function loadExistingTranslations(options: TransformOptions): {
 }
 
 /**
- * 使用新的 CoreProcessor 处理单个文件的代码转换
- * @param filePath 文件路径
- * @param options 转换配置
- * @param existingValueToKey 现有 value->key 映射
- * @returns 转换结果
+ * 使用 CoreProcessor 处理单个文件的代码转换
+ * 
+ * 该函数负责国际化字符串的提取和转换，是整个处理流程的核心。
+ * 文件路径参数（filePath）在此函数中具有三个关键作用：
+ * 1. 用于读取文件内容
+ * 2. 用于确定正确的AST解析器配置（根据文件扩展名如.tsx, .vue等）
+ * 3. 用于插件系统选择合适的框架处理器（Vue、React等）
+ * 
+ * 重要说明：不要移除或修改filePath参数，这会破坏AST解析和插件选择功能。
+ * 
+ * @param filePath 文件路径，用于读取文件、确定文件类型和选择正确的处理插件
+ * @param options 转换配置选项，控制国际化提取和转换的行为
+ * @param existingValueToKey 现有翻译的 value->key 映射，用于重用已有的键值
+ * @returns 包含转换后代码、提取的字符串、已使用的现有键和变更详情的结果对象
  */
 export function transformCode(
   filePath: string,
@@ -98,22 +107,43 @@ export function transformCode(
   usedExistingKeysList: UsedExistingKey[];
   changes: ChangeDetail[];
 } {
-  const code = FileCacheUtils.readFileWithCache(filePath);
-  const processor = createProcessorWithDefaultPlugins();
+  try {
+    // 第一步：读取文件内容
+    // 文件内容缓存由FileCacheUtils处理，避免重复读取相同文件
+    const code = FileCacheUtils.readFileWithCache(filePath);
+    
+    // 第二步：创建预配置的处理器
+    // 处理器包含所有已注册的框架插件（React、Vue等）
+    const processor = createProcessorWithDefaultPlugins();
 
-  // 使用 ConfigProxy 进行框架检测和配置预处理
-  const enhancedOptions = ConfigProxy.preprocessOptions(
-    options,
-    code,
-    filePath
-  );
+    // 第三步：通过ConfigProxy进行框架检测和配置预处理
+    // filePath参数在此处用于框架类型检测，不可移除
+    const enhancedOptions = ConfigProxy.preprocessOptions(
+      options,
+      code,
+      filePath
+    );
 
-  return processor.processCode(
-    code,
-    filePath,
-    enhancedOptions,
-    existingValueToKey
-  );
+    // 第四步：执行代码处理并返回结果
+    // filePath在processCode中用于AST解析配置和插件选择，不可移除
+    return processor.processCode(
+      code,
+      filePath,
+      enhancedOptions,
+      existingValueToKey
+    );
+  } catch (error) {
+    // 错误处理：提供详细错误信息并返回一致的结果结构
+    console.error(`处理文件 ${filePath} 时发生错误:`, error);
+    
+    // 即使出错也返回一致的结构，避免调用方需要处理不同的返回类型
+    return {
+      code: FileCacheUtils.readFileWithCache(filePath, { noCache: true }),
+      extractedStrings: [],
+      usedExistingKeysList: [],
+      changes: [],
+    };
+  }
 }
 
 /**

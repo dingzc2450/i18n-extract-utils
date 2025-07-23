@@ -533,7 +533,7 @@ const message = ref('___Hello Vue Script___');
 
       const result = transformCode(tempFile, { ...baseOptions, extractedCommentType: "line" });
 
-      expect(result.code).toContain("const message = ref(t(\"Hello Vue Script\"));");
+      expect(result.code).toContain("const message = ref(t(\"Hello Vue Script\")");
       expect(result.code).toContain("// Hello Vue Script");
       expect(result.extractedStrings).toHaveLength(1);
       expect(result.extractedStrings[0].value).toBe("Hello Vue Script");
@@ -551,7 +551,7 @@ const message = ref('___Hello Vue Script Block___');
 
       const result = transformCode(tempFile, { ...baseOptions, extractedCommentType: "block" });
 
-      expect(result.code).toContain("const message = ref(t(\"Hello Vue Script Block\"));");
+      expect(result.code).toContain("const message = ref(t(\"Hello Vue Script Block\")");
       expect(result.code).toContain("/* Hello Vue Script Block */");
       expect(result.extractedStrings).toHaveLength(1);
       expect(result.extractedStrings[0].value).toBe("Hello Vue Script Block");

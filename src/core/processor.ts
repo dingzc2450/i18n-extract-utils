@@ -23,7 +23,6 @@ import {
   ExtractedString,
   TransformOptions,
   UsedExistingKey,
-  ChangeDetail,
 } from "../types";
 
 /**
@@ -742,52 +741,6 @@ export class CoreProcessor {
     
     return pos + 1;
   }
-
-  /**
-   * 提取函数体内容（简化版本，用于检查是否有t()调用）
-   */
-  private extractFunctionBody(code: string, functionStartPos: number): string {
-    let braceCount = 0;
-    let start = functionStartPos;
-    let end = code.length;
-    
-    // 找到函数体开始的大括号位置
-    // 注意 functionStartPos 应该已经在 { 之后了
-    start = functionStartPos;
-    
-    // 从当前位置往前找到 {
-    while (start > 0 && code[start - 1] !== '{') {
-      start--;
-    }
-    
-    if (start === 0) {
-      // 无法找到开始的大括号，从 functionStartPos 开始
-      start = functionStartPos;
-      while (start < code.length && code[start] !== '{') {
-        start++;
-      }
-    }
-    
-    if (start >= code.length) return '';
-    
-    braceCount = 1; // 开始时已经有一个开放的大括号
-    
-    // 找到匹配的结束大括号
-    for (let i = start + 1; i < code.length; i++) {
-      if (code[i] === '{') {
-        braceCount++;
-      } else if (code[i] === '}') {
-        braceCount--;
-        if (braceCount === 0) {
-          end = i;
-          break;
-        }
-      }
-    }
-    
-    return code.slice(start, end + 1);
-  }
-
   /**
    * 添加 Hook 调用（遗留方法）
    */
