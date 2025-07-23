@@ -16,6 +16,7 @@ import {
 import { FileCacheUtils } from "./core/utils";
 import { createProcessorWithDefaultPlugins } from "./plugins";
 import { ConfigProxy } from "./config/config-proxy";
+import { createI18nError, logError, ErrorCategory, ErrorSeverity, enhanceError, formatErrorForUser } from './core/error-handler';
 
 /**
  * 确保目录存在
@@ -97,6 +98,9 @@ function loadExistingTranslations(options: TransformOptions): {
  * @param existingValueToKey 现有翻译的 value->key 映射，用于重用已有的键值
  * @returns 包含转换后代码、提取的字符串、已使用的现有键和变更详情的结果对象
  */
+// 导入I18nError类型
+import { I18nError } from "./core/error-handler";
+
 export function transformCode(
   filePath: string,
   options: TransformOptions = {},
@@ -106,6 +110,7 @@ export function transformCode(
   extractedStrings: ExtractedString[];
   usedExistingKeysList: UsedExistingKey[];
   changes: ChangeDetail[];
+  error?: I18nError;  // 可选的错误信息
 } {
   try {
     // 第一步：读取文件内容
@@ -133,8 +138,42 @@ export function transformCode(
       existingValueToKey
     );
   } catch (error) {
-    // 错误处理：提供详细错误信息并返回一致的结果结构
-    console.error(`处理文件 ${filePath} 时发生错误:`, error);
+    // 使用统一的错误处理机制
+    let errorCode = 'GENERAL001';
+    let params: any[] = [];
+    
+    // 根据错误类型确定错误代码
+    if (error instanceof Error) {
+      const errorMessage = error.message;
+      
+      if (errorMessage.includes('BABEL_PARSER_SYNTAX_ERROR') || 
+          errorMessage.includes('Unexpected token')) {
+        errorCode = 'PARSING001';
+        params = [errorMessage];
+      } else if (errorMessage.includes('No plugin found')) {
+        errorCode = 'PLUGIN002';
+        params = [filePath];
+      } else if (errorMessage.includes('Cannot read')) {
+        errorCode = 'FILE001';
+        params = [filePath];
+      } else if (errorMessage.includes('Invalid position') || 
+                errorMessage.includes('Context match not found')) {
+        errorCode = 'TRANSFORM002';
+        params = [errorMessage];
+      } else {
+        params = [errorMessage];
+      }
+    } else {
+      params = [String(error)];
+    }
+    
+    // 创建并记录错误
+    const i18nError = createI18nError(errorCode, params, {
+      filePath,
+      originalError: error instanceof Error ? error : undefined
+    });
+    
+    logError(i18nError);
     
     // 即使出错也返回一致的结构，避免调用方需要处理不同的返回类型
     return {
@@ -142,6 +181,7 @@ export function transformCode(
       extractedStrings: [],
       usedExistingKeysList: [],
       changes: [],
+      error: i18nError // 添加错误信息到返回值
     };
   }
 }
@@ -157,6 +197,7 @@ export async function processFiles(
   usedExistingKeys: UsedExistingKey[];
   modifiedFiles: FileModificationRecord[];
   sourceJsonObject?: Record<string, string | number>;
+  errors?: I18nError[]; // 添加错误列表字段
 }> {
   const { existingValueToKey, sourceJsonObject } =
     loadExistingTranslations(options);
@@ -167,12 +208,15 @@ export async function processFiles(
   const allExtractedStrings: ExtractedString[] = [];
   const allUsedExistingKeys: UsedExistingKey[] = [];
   const fileModifications: FileModificationRecord[] = [];
+  const errors: I18nError[] = []; // 收集处理过程中的所有错误
 
   for (const filePath of filePaths) {
     try {
       // Check if file exists before reading to avoid race conditions
       if (!fs.existsSync(filePath)) {
-        console.warn(`File not found, skipping: ${filePath}`);
+        const fileError = createI18nError('FILE001', [filePath], { filePath });
+        logError(fileError);
+        errors.push(fileError);
         continue;
       }
 
@@ -181,6 +225,12 @@ export async function processFiles(
       });
 
       const result = transformCode(filePath, options, existingValueToKey);
+
+      // 如果处理过程中出现错误，添加到错误列表
+      if (result.error) {
+        errors.push(result.error);
+        // 仍然继续处理，因为transformCode即使出错也会返回有效的结构
+      }
 
       allExtractedStrings.push(...result.extractedStrings);
       allUsedExistingKeys.push(...result.usedExistingKeysList);
@@ -196,7 +246,10 @@ export async function processFiles(
         writeFileContent(filePath, result.code);
       }
     } catch (error) {
-      console.error(`Error processing file ${filePath}:`, error);
+      // 使用增强的错误处理
+      const enhancedError = enhanceError(error instanceof Error ? error : new Error(String(error)), filePath);
+      logError(enhancedError);
+      errors.push(enhancedError);
     }
   }
 
@@ -219,5 +272,62 @@ export async function processFiles(
     usedExistingKeys: allUsedExistingKeys,
     modifiedFiles: fileModifications,
     sourceJsonObject,
+    errors, // 返回处理过程中收集的所有错误
   };
+}
+
+/**
+ * 执行国际化处理并提供友好的错误处理
+ * 这是推荐给最终用户使用的包装函数
+ */
+export async function executeI18nExtraction(
+  pattern: string,
+  options: TransformOptions = {}
+): Promise<{
+  success: boolean;
+  extractedStrings: ExtractedString[];
+  usedExistingKeys: UsedExistingKey[];
+  modifiedFiles: FileModificationRecord[];
+  sourceJsonObject?: Record<string, string | number>;
+  errors?: I18nError[];
+  friendlyErrorMessage?: string;
+}> {
+  try {
+    const result = await processFiles(pattern, options);
+    
+    // 处理完成后整体检查错误
+    const hasErrors = result.errors && result.errors.length > 0;
+    
+    if (hasErrors) {
+      // 生成用户友好的错误总结消息
+      const errorMessages = result.errors!.map(err => formatErrorForUser(err));
+      const friendlyErrorMessage = 
+        `国际化处理过程中发生了 ${result.errors!.length} 个错误:\n\n${errorMessages.join('\n\n---------------\n\n')}`;
+      
+      return {
+        ...result,
+        success: false,
+        friendlyErrorMessage
+      };
+    }
+    
+    return {
+      ...result,
+      success: true
+    };
+  } catch (error) {
+    // 处理顶层异常
+    const topLevelError = enhanceError(
+      error instanceof Error ? error : new Error(String(error))
+    );
+    
+    return {
+      extractedStrings: [],
+      usedExistingKeys: [],
+      modifiedFiles: [],
+      success: false,
+      errors: [topLevelError],
+      friendlyErrorMessage: formatErrorForUser(topLevelError)
+    };
+  }
 }

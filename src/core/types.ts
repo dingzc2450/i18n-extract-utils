@@ -3,6 +3,7 @@
  */
 
 import { ExtractedString, TransformOptions, UsedExistingKey, ChangeDetail } from "../types";
+import { I18nError } from "./error-handler";
 
 /**
  * 框架特定处理插件接口
@@ -112,4 +113,5 @@ export interface ProcessingResult {
   extractedStrings: ExtractedString[];
   usedExistingKeysList: UsedExistingKey[];
   changes: ChangeDetail[];
+  error?: I18nError; // 错误信息，如果处理过程中出现错误
 }

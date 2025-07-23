@@ -10,6 +10,15 @@ import { SmartImportManager } from "../smart-import-manager";
 import { fallbackTransform } from "../fallback-transform";
 import { ASTParserUtils, ImportHookUtils } from "./utils";
 import { collectContextAwareReplacementInfo } from "../context-aware-ast-replacer";
+import { createI18nError, logError, I18nError } from "./error-handler";
+import { 
+  normalizeConfig, 
+  CONFIG_DEFAULTS, 
+  getTranslationMethodName, 
+  getHookName, 
+  getImportSource,
+  NormalizedTransformOptions 
+} from "./config-normalizer";
 import {
   FrameworkPlugin,
   ProcessingContext,
@@ -52,15 +61,18 @@ export class CoreProcessor {
     existingValueToKey?: Map<string, string | number>
   ): ProcessingResult {
     try {
+      // 规范化配置，确保一致性
+      const normalizedOptions = normalizeConfig(options);
+      
       // 1. 确定处理模式 - 默认使用上下文感知模式
-      const mode = this.determineProcessingMode(options);
+      const mode = this.determineProcessingMode(normalizedOptions);
 
       // 2. 选择合适的插件
-      const plugin = this.selectPlugin(code, filePath, options);
+      const plugin = this.selectPlugin(code, filePath, normalizedOptions);
 
       // 3. 预处理
       let processedCode = plugin.preProcess
-        ? plugin.preProcess(code, options)
+        ? plugin.preProcess(code, normalizedOptions)
         : code;
 
       // 4. 解析AST
@@ -128,7 +140,31 @@ export class CoreProcessor {
         changes: result.changes,
       };
     } catch (error) {
-      console.error(`Error processing code in ${filePath}:`, error);
+      // 使用统一的错误处理
+      let errorCode = 'PARSING001'; // 默认为解析错误
+      let params = [String(error)];
+      
+      if (error instanceof Error) {
+        if (error.message.includes('No plugin found')) {
+          errorCode = 'PLUGIN002';
+          params = [filePath];
+        } else if (error.message.includes('Vue')) {
+          errorCode = 'VUE001';
+          params = [error.message];
+        } else if (error.message.includes('React')) {
+          errorCode = 'REACT001';
+          params = [error.message];
+        }
+      }
+      
+      // 创建并记录错误
+      const i18nError = createI18nError(errorCode, params, {
+        filePath,
+        originalError: error instanceof Error ? error : undefined
+      });
+      
+      logError(i18nError);
+      
       const extractedStrings: ExtractedString[] = [];
       const usedExistingKeysList: UsedExistingKey[] = [];
       
@@ -137,6 +173,7 @@ export class CoreProcessor {
         extractedStrings,
         usedExistingKeysList,
         changes: [],
+        error: i18nError, // 包含错误信息
       };
     }
   }
@@ -145,11 +182,13 @@ export class CoreProcessor {
    * 确定处理模式
    * 暂时只支持 CONTEXT_AWARE   其余模式不支持
    */
-  private determineProcessingMode(options: TransformOptions): ProcessingMode {
+  private determineProcessingMode(options: TransformOptions | NormalizedTransformOptions): ProcessingMode {
     // 如果用户明确指定了字符串替换模式
     if (
       options.preserveFormatting === true ||
-      options.i18nConfig?.nonReactConfig
+      ('normalizedI18nConfig' in options 
+        ? options.normalizedI18nConfig.nonReactConfig
+        : options.i18nConfig?.nonReactConfig)
     ) {
       return ProcessingMode.CONTEXT_AWARE;
     }
@@ -185,28 +224,20 @@ export class CoreProcessor {
   /**
    * 获取默认插件
    */
-  private getDefaultPlugin(options: TransformOptions): FrameworkPlugin {
+  private getDefaultPlugin(options: TransformOptions | NormalizedTransformOptions): FrameworkPlugin {
     return {
       name: 'default-react',
       shouldApply: () => true,
-      getRequiredImportsAndHooks: (extractedStrings, options, context) => {
+      getRequiredImportsAndHooks: (extractedStrings, pluginOptions, context) => {
         // 默认使用React hooks方式
         if (extractedStrings.length === 0) {
           return { imports: [], hooks: [] };
         }
 
-        // 回退逻辑：如果没有 i18nConfig，使用旧的选项
-        const hookName = options.i18nConfig?.i18nImport?.importName || 
-                        options.hookName || 
-                        "useTranslation";
-        
-        const hookSource = options.i18nConfig?.i18nImport?.source || 
-                          options.hookImport || 
-                          "react-i18next";
-        
-        const translationMethod = options.i18nConfig?.i18nImport?.name || 
-                                 options.translationMethod || 
-                                 "t";
+        // 使用规范化的配置获取值
+        const hookName = getHookName(pluginOptions);
+        const hookSource = getImportSource(pluginOptions);
+        const translationMethod = getTranslationMethodName(pluginOptions);
 
         const imports: ImportRequirement[] = [
           {
@@ -266,29 +297,15 @@ export class CoreProcessor {
     if (mode === ProcessingMode.CONTEXT_AWARE) {
       // 使用上下文感知模式 - 暂时保持使用原有的方法，后续可以迁移到新的extractor
       
-      // 创建兼容的导入配置，根据框架类型决定
-      let importConfig = options.i18nConfig?.i18nImport;
-      if (!importConfig && (options.translationMethod || options.hookName || options.hookImport)) {
-        // 如果没有新配置但有旧选项，创建兼容配置
-        importConfig = {
-          name: options.translationMethod || "t",
-          importName: options.hookName || "useTranslation", 
-          source: options.hookImport || "react-i18next"
-        };
-      }
+      // 规范化配置获取导入信息
+      const normalizedOptions = normalizeConfig(options);
       
-      // 如果没有配置且检测到Vue框架，使用Vue默认配置
-      if (!importConfig && options.i18nConfig?.framework === "vue") {
-        importConfig = {
-          name: "t",
-          importName: "useI18n",
-          source: "vue-i18n"
-        };
-      }
+      const importConfig = normalizedOptions.normalizedI18nConfig.i18nImport;
+      const nonReactConfig = normalizedOptions.normalizedI18nConfig.nonReactConfig;
       
       const importManager = new SmartImportManager(
         importConfig,
-        options.i18nConfig?.nonReactConfig
+        nonReactConfig
       );
 
       const result = collectContextAwareReplacementInfo(

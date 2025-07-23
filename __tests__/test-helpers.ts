@@ -16,4 +16,4 @@ export const transformCodeFromFile = transformCode;
 export { transformCode } from "../src/processFiles";
 // 导出其他常用的测试工具
 export { clearConfigCache } from "../src/config/config-manager";
-export { processFiles } from "../src/processFiles";
+export { processFiles, executeI18nExtraction } from "../src/processFiles";
