@@ -413,9 +413,35 @@ export class VuePlugin implements FrameworkPlugin {
   }
 
   /**
-   * 处理模板部分
+   * 处理模板部分 - 使用直接的字符串处理方法
    */
   private processTemplate(
+    template: string,
+    translationMethod: string,
+    extractedStrings: ExtractedString[],
+    usedExistingKeysList: UsedExistingKey[],
+    options: TransformOptions,
+    existingValueToKey: Map<string, string | number>,
+    filePath: string
+  ): string {
+    // 直接使用字符串替换方法处理模板
+    // 这比使用Vue AST更可靠，因为我们只需要替换特定的字符串
+    return this.processTemplateWithRegex(
+      template,
+      translationMethod,
+      extractedStrings,
+      usedExistingKeysList,
+      options,
+      existingValueToKey,
+      filePath
+    );
+  }
+  
+  
+  /**
+   * 使用正则表达式直接处理模板
+   */
+  private processTemplateWithRegex(
     template: string,
     translationMethod: string,
     extractedStrings: ExtractedString[],
@@ -430,20 +456,86 @@ export class VuePlugin implements FrameworkPlugin {
 
     let processedTemplate = template;
 
-    // 查找所有匹配的字符串并替换
+    // 特别情况: 处理三元运算符中的字符串，如: {{ condition ? '___字符串1___' : '___字符串2___' }}
+    // 这个正则表达式匹配Vue模板中的三元表达式
+    const ternaryRegex = /{{(.+?)\?\s*['"](___[^'"]+___)['"]\s*:\s*['"](___[^'"]+___)['"]\s*}}/g;
+    processedTemplate = processedTemplate.replace(ternaryRegex, (match, condition, trueStr, falseStr) => {
+      // 处理true分支
+      const trueKey = getKeyAndRecord(
+        `'${trueStr}'`,
+        { filePath, line: 0, column: 0 },
+        existingValueToKey,
+        new Map(),
+        extractedStrings,
+        usedExistingKeysList,
+        options
+      );
+      
+      const trueCallExpr = t.callExpression(t.identifier(translationMethod), [
+        t.stringLiteral(String(trueKey)),
+      ]);
+      
+      const { code: trueCallCode } = generate(trueCallExpr, {
+        compact: true,
+        jsescOption: { minimal: true, quotes: "double" }
+      });
+      
+      // 处理false分支
+      const falseKey = getKeyAndRecord(
+        `'${falseStr}'`,
+        { filePath, line: 0, column: 0 },
+        existingValueToKey,
+        new Map(),
+        extractedStrings,
+        usedExistingKeysList,
+        options
+      );
+      
+      const falseCallExpr = t.callExpression(t.identifier(translationMethod), [
+        t.stringLiteral(String(falseKey)),
+      ]);
+      
+      const { code: falseCallCode } = generate(falseCallExpr, {
+        compact: true,
+        jsescOption: { minimal: true, quotes: "double" }
+      });
+      
+      // 重新组装三元表达式
+      return `{{ ${condition.trim()} ? ${trueCallCode} : ${falseCallCode} }}`;
+    });
+
+    // 处理所有其他的普通字符串
     processedTemplate = processedTemplate.replace(
       patternRegex,
       (fullMatch, extractedValue) => {
         if (!extractedValue) return fullMatch;
+        
+        // 检查是否在三元表达式内部（避免重复处理）
+        const isInTernary = (position: number) => {
+          let lastTernaryMatch = null;
+          const ternaryRegex = /{{.+?\?.+?:.+?}}/g;
+          let ternaryMatch;
+          
+          // 寻找最后一个匹配的三元表达式
+          while ((ternaryMatch = ternaryRegex.exec(processedTemplate)) !== null) {
+            if (ternaryMatch.index < position && position < ternaryMatch.index + ternaryMatch[0].length) {
+              return true;
+            }
+          }
+          
+          return false;
+        };
+        
+        // 如果这个字符串在三元表达式内，跳过它
+        const matchIndex = processedTemplate.indexOf(fullMatch);
+        if (isInTernary(matchIndex)) {
+          return fullMatch;
+        }
 
         // 获取或生成键值
         const key = getKeyAndRecord(
           fullMatch,
-          {
-            filePath,
-            line: 0,
-            column: 0,
-          },
+          { filePath, line: 0, column: 0 },
           existingValueToKey,
           new Map(),
           extractedStrings,
@@ -451,18 +543,17 @@ export class VuePlugin implements FrameworkPlugin {
           options
         );
 
-        // 在Vue模板中，需要用{{}}包裹函数调用
-        // 使用 Babel AST 生成 {{ t("key") }} 结构
+        // 生成翻译函数调用
         const callExpr = t.callExpression(t.identifier(translationMethod), [
           t.stringLiteral(String(key)),
         ]);
-        // 生成 t("key") 的代码
+        
         const { code: callCode } = generate(callExpr, {
           compact: true,
-          jsescOption: { minimal: true, quotes: "double" },
+          jsescOption: { minimal: true, quotes: "double" }
         });
         
-        // 检查是否在模板插值表达式内
+        // 判断是否在表达式内部
         if (fullMatch.includes('{{') && fullMatch.includes('}}')) {
           // 已经在插值表达式中，不需要额外添加 {{}}
           const replacement = callCode;

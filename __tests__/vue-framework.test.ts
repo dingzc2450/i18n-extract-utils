@@ -18,7 +18,11 @@ const tempFiles: string[] = [];
 afterEach(() => {
   tempFiles.forEach((file) => {
     if (fs.existsSync(file)) {
-      try { fs.unlinkSync(file); } catch (err) { console.error(`Error removing temp file ${file}:`, err); }
+      try {
+        fs.unlinkSync(file);
+      } catch (err) {
+        console.error(`Error removing temp file ${file}:`, err);
+      }
     }
   });
   tempFiles.length = 0;
@@ -56,26 +60,28 @@ export default {
 }
 </script>
       `;
-      
+
       const tempFile = createTempFile(code);
       tempFiles.push(tempFile);
-      
+
       const result = transformCode(tempFile, {
         i18nConfig: {
           framework: "vue",
           i18nImport: {
             name: "t",
             importName: "useI18n",
-            source: "vue-i18n"
-          }
-        }
+            source: "vue-i18n",
+          },
+        },
       });
-      
-      expect(result.code).toMatch(/import\s*?{\s*?useI18n\s*?}\s*?from\s*?"vue-i18n"/);
-      expect(result.code).toContain('useI18n()');
+
+      expect(result.code).toMatch(
+        /import\s*?{\s*?useI18n\s*?}\s*?from\s*?"vue-i18n"/
+      );
+      expect(result.code).toContain("useI18n()");
       expect(result.extractedStrings.length).toBe(3);
-      expect(result.extractedStrings.map(s => s.value)).toEqual(
-        expect.arrayContaining(['欢迎使用Vue', '这是一个示例组件', '点击我'])
+      expect(result.extractedStrings.map((s) => s.value)).toEqual(
+        expect.arrayContaining(["欢迎使用Vue", "这是一个示例组件", "点击我"])
       );
     });
 
@@ -104,26 +110,34 @@ const submit = () => {
 }
 </script>
       `;
-      
+
       const tempFile = createTempFile(code);
       tempFiles.push(tempFile);
-      
+
       const result = transformCode(tempFile, {
         i18nConfig: {
           framework: "vue",
           i18nImport: {
             name: "t",
             importName: "useI18n",
-            source: "vue-i18n"
-          }
-        }
+            source: "vue-i18n",
+          },
+        },
       });
-      
-      expect(result.code).toMatch(/import\s*?{\s*?useI18n\s*?}\s*?from\s*?"vue-i18n"/);
-      expect(result.code).toContain('useI18n()');
+
+      expect(result.code).toMatch(
+        /import\s*?{\s*?useI18n\s*?}\s*?from\s*?"vue-i18n"/
+      );
+      expect(result.code).toContain("useI18n()");
       expect(result.extractedStrings.length).toBe(5);
-      expect(result.extractedStrings.map(s => s.value)).toEqual(
-        expect.arrayContaining(['用户管理', '请输入用户名', '提交', '提交成功', '请填写用户名'])
+      expect(result.extractedStrings.map((s) => s.value)).toEqual(
+        expect.arrayContaining([
+          "用户管理",
+          "请输入用户名",
+          "提交",
+          "提交成功",
+          "请填写用户名",
+        ])
       );
     });
 
@@ -162,25 +176,33 @@ const updateProfile = () => {
 }
 </script>
       `;
-      
+
       const tempFile = createTempFile(code, "vue");
       tempFiles.push(tempFile);
-      
+
       const result = transformCode(tempFile, {
         i18nConfig: {
           framework: "vue",
           i18nImport: {
             name: "t",
             importName: "useI18n",
-            source: "vue-i18n"
-          }
-        }
+            source: "vue-i18n",
+          },
+        },
       });
-      
-      expect(result.code).toMatch(/import\s*?{\s*?useI18n\s*?}\s*?from\s*?"vue-i18n"/);
+
+      expect(result.code).toMatch(
+        /import\s*?{\s*?useI18n\s*?}\s*?from\s*?"vue-i18n"/
+      );
       expect(result.extractedStrings.length).toBe(5);
-      expect(result.extractedStrings.map(s => s.value)).toEqual(
-        expect.arrayContaining(['个人资料', '姓名', '邮箱', '更新资料', '更新用户资料'])
+      expect(result.extractedStrings.map((s) => s.value)).toEqual(
+        expect.arrayContaining([
+          "个人资料",
+          "姓名",
+          "邮箱",
+          "更新资料",
+          "更新用户资料",
+        ])
       );
     });
   });
@@ -235,25 +257,30 @@ export default {
 }
 </script>
       `;
-      
+
       const tempFile = createTempFile(code);
       tempFiles.push(tempFile);
-      
+
       const result = transformCode(tempFile, {
         i18nConfig: {
           framework: "vue2",
           i18nImport: {
             name: "$t",
-            source: "vue-i18n"
-          }
-        }
+            source: "vue-i18n",
+          },
+        },
       });
-      
+
       expect(result.extractedStrings.length).toBe(7);
-      expect(result.extractedStrings.map(s => s.value)).toEqual(
+      expect(result.extractedStrings.map((s) => s.value)).toEqual(
         expect.arrayContaining([
-          '待办事项', '输入新任务', '添加', '删除', 
-          '任务添加成功', '请输入任务内容', '任务已删除'
+          "待办事项",
+          "输入新任务",
+          "添加",
+          "删除",
+          "任务添加成功",
+          "请输入任务内容",
+          "任务已删除",
         ])
       );
     });
@@ -324,27 +351,38 @@ export default {
 }
 </script>
       `;
-      
+
       const tempFile = createTempFile(code);
       tempFiles.push(tempFile);
-      
+
       const result = transformCode(tempFile, {
         i18nConfig: {
           framework: "vue",
           i18nImport: {
             name: "t",
-            importName: "useI18n", 
-            source: "vue-i18n"
-          }
-        }
+            importName: "useI18n",
+            source: "vue-i18n",
+          },
+        },
       });
-      
-      console.log("提取的字符串:", result.extractedStrings.map(s => s.value));
+
+      console.log(
+        "提取的字符串:",
+        result.extractedStrings.map((s) => s.value)
+      );
       expect(result.extractedStrings.length).toBe(10);
-      expect(result.extractedStrings.map(s => s.value)).toEqual(
+      expect(result.extractedStrings.map((s) => s.value)).toEqual(
         expect.arrayContaining([
-          '搜索页面', '请输入搜索关键词', '正在搜索...', '未找到相关结果',
-          '搜索中', '请输入关键词', '找到结果', '无结果', '用户输入', '搜索完成'
+          "搜索页面",
+          "请输入搜索关键词",
+          "正在搜索...",
+          "未找到相关结果",
+          "搜索中",
+          "请输入关键词",
+          "找到结果",
+          "无结果",
+          "用户输入",
+          "搜索完成",
         ])
       );
     });
@@ -394,25 +432,30 @@ export default {
 }
 </script>
       `;
-      
+
       const tempFile = createTempFile(code);
       tempFiles.push(tempFile);
-      
+
       const result = transformCode(tempFile, {
         i18nConfig: {
           framework: "vue",
           i18nImport: {
             name: "t",
             importName: "useI18n",
-            source: "vue-i18n"
-          }
-        }
+            source: "vue-i18n",
+          },
+        },
       });
-      
+
       expect(result.extractedStrings.length).toBe(6);
-      expect(result.extractedStrings.map(s => s.value)).toEqual(
+      expect(result.extractedStrings.map((s) => s.value)).toEqual(
         expect.arrayContaining([
-          '默认标题', '默认内容', '关闭', '保存', '卡片已关闭', '数据已保存'
+          "默认标题",
+          "默认内容",
+          "关闭",
+          "保存",
+          "卡片已关闭",
+          "数据已保存",
         ])
       );
     });
@@ -474,25 +517,32 @@ export default {
 }
 </script>
       `;
-      
+
       const tempFile = createTempFile(code);
       tempFiles.push(tempFile);
-      
+
       const result = transformCode(tempFile, {
         i18nConfig: {
           framework: "vue",
           i18nImport: {
             name: "t",
             importName: "useI18n",
-            source: "vue-i18n"
-          }
-        }
+            source: "vue-i18n",
+          },
+        },
       });
-      
+
       expect(result.extractedStrings.length).toBe(8);
-      expect(result.extractedStrings.map(s => s.value)).toEqual(
+      expect(result.extractedStrings.map((s) => s.value)).toEqual(
         expect.arrayContaining([
-          '动态列表', '项目', '描述', '编辑', '删除', '暂无数据', '切换视图', '加载数据'
+          "动态列表",
+          "项目",
+          "描述",
+          "编辑",
+          "删除",
+          "暂无数据",
+          "切换视图",
+          "加载数据",
         ])
       );
     });
@@ -536,25 +586,29 @@ export default {
   }
 }
       `;
-      
+
       const tempFile = createTempFile(code, "js");
       tempFiles.push(tempFile);
-      
+
       const result = transformCode(tempFile, {
         i18nConfig: {
           framework: "vue",
           i18nImport: {
             name: "t",
             importName: "useI18n",
-            source: "vue-i18n"
-          }
-        }
+            source: "vue-i18n",
+          },
+        },
       });
-      
+
       expect(result.extractedStrings.length).toBe(5);
-      expect(result.extractedStrings.map(s => s.value)).toEqual(
+      expect(result.extractedStrings.map((s) => s.value)).toEqual(
         expect.arrayContaining([
-          '默认按钮', '按钮已禁用', '点击执行操作', '按钮被禁用，无法点击', '按钮被点击'
+          "默认按钮",
+          "按钮已禁用",
+          "点击执行操作",
+          "按钮被禁用，无法点击",
+          "按钮被点击",
         ])
       );
     });
@@ -607,25 +661,32 @@ AlertComponent.props = {
   showActions: Boolean
 }
       `;
-      
+
       const tempFile = createTempFile(code, "js");
       tempFiles.push(tempFile);
-      
+
       const result = transformCode(tempFile, {
         i18nConfig: {
           framework: "vue",
           i18nImport: {
             name: "t",
             importName: "useI18n",
-            source: "vue-i18n"
-          }
-        }
+            source: "vue-i18n",
+          },
+        },
       });
-      
+
       expect(result.extractedStrings.length).toBe(8);
-      expect(result.extractedStrings.map(s => s.value)).toEqual(
+      expect(result.extractedStrings.map((s) => s.value)).toEqual(
         expect.arrayContaining([
-          '提示信息', '关闭提示', '关闭', '暂无内容', '确认操作', '确认', '取消操作', '取消'
+          "提示信息",
+          "关闭提示",
+          "关闭",
+          "暂无内容",
+          "确认操作",
+          "确认",
+          "取消操作",
+          "取消",
         ])
       );
     });
@@ -721,28 +782,43 @@ export default {
 }
 </script>
       `;
-      
+
       const tempFile = createTempFile(code);
       tempFiles.push(tempFile);
-      
+
       const result = transformCode(tempFile, {
         i18nConfig: {
           framework: "vue",
           i18nImport: {
             name: "t",
             importName: "useI18n",
-            source: "vue-i18n"
-          }
-        }
+            source: "vue-i18n",
+          },
+        },
       });
-      
-      console.log("提取的字符串:", result.extractedStrings.map(s => s.value));
+
+      console.log(
+        "提取的字符串:",
+        result.extractedStrings.map((s) => s.value)
+      );
+      console.log("处理后的代码:", result.code);
+      expect(result.code).match(/t\(['"]加入购物车['"]\)/);
+      expect(result.code).not.match(/{{\s*t\(['"]加入购物车['"]\)\s*}}/);
       expect(result.extractedStrings.length).toBe(12);
-      expect(result.extractedStrings.map(s => s.value)).toEqual(
+      expect(result.extractedStrings.map((s) => s.value)).toEqual(
         expect.arrayContaining([
-          '商品筛选', '全部分类', '正在加载商品...', '没有找到符合条件的商品',
-          '原价', '现价', '缺货', '加入购物车', '添加到购物车', '商品已添加到购物车',
-          '开始加载商品列表', '商品加载完成'
+          "商品筛选",
+          "全部分类",
+          "正在加载商品...",
+          "没有找到符合条件的商品",
+          "原价",
+          "现价",
+          "缺货",
+          "加入购物车",
+          "添加到购物车",
+          "商品已添加到购物车",
+          "开始加载商品列表",
+          "商品加载完成",
         ])
       );
     });
@@ -857,28 +933,41 @@ export default {
 }
 </script>
       `;
-      
+
       const tempFile = createTempFile(code);
       tempFiles.push(tempFile);
-      
+
       const result = transformCode(tempFile, {
         i18nConfig: {
           framework: "vue",
           i18nImport: {
             name: "t",
             importName: "useI18n",
-            source: "vue-i18n"
-          }
-        }
+            source: "vue-i18n",
+          },
+        },
       });
-      
+
       expect(result.extractedStrings.length).toBe(17);
-      expect(result.extractedStrings.map(s => s.value)).toEqual(
+      expect(result.extractedStrings.map((s) => s.value)).toEqual(
         expect.arrayContaining([
-          '用户注册表单', '用户名', '请输入用户名', '邮箱', '请输入邮箱地址',
-          '年龄', '请输入年龄', '提交注册', '重置表单', '移动到下一个输入框',
-          '邮箱格式不正确', '邮箱验证通过', '年龄必须大于18岁', '年龄验证通过',
-          '提交表单数据', '注册成功', '表单已重置'
+          "用户注册表单",
+          "用户名",
+          "请输入用户名",
+          "邮箱",
+          "请输入邮箱地址",
+          "年龄",
+          "请输入年龄",
+          "提交注册",
+          "重置表单",
+          "移动到下一个输入框",
+          "邮箱格式不正确",
+          "邮箱验证通过",
+          "年龄必须大于18岁",
+          "年龄验证通过",
+          "提交表单数据",
+          "注册成功",
+          "表单已重置",
         ])
       );
     });
@@ -976,27 +1065,39 @@ export default {
   }
 }
       `;
-      
+
       const tempFile = createTempFile(code, "js");
       tempFiles.push(tempFile);
-      
+
       const result = transformCode(tempFile, {
         i18nConfig: {
           framework: "vue",
           i18nImport: {
             name: "t",
             importName: "useI18n",
-            source: "vue-i18n"
-          }
-        }
+            source: "vue-i18n",
+          },
+        },
       });
-      
+
       expect(result.extractedStrings.length).toBe(15);
-      expect(result.extractedStrings.map(s => s.value)).toEqual(
+      expect(result.extractedStrings.map((s) => s.value)).toEqual(
         expect.arrayContaining([
-          '操作成功', '操作失败', '请注意', '提示信息', '添加通知', '移除通知',
-          '清空所有通知', '开始加载用户数据', '用户数据加载成功', '加载用户数据失败',
-          '无法加载用户数据', '开始更新用户资料', '资料更新成功', '更新资料失败', '资料更新失败'
+          "操作成功",
+          "操作失败",
+          "请注意",
+          "提示信息",
+          "添加通知",
+          "移除通知",
+          "清空所有通知",
+          "开始加载用户数据",
+          "用户数据加载成功",
+          "加载用户数据失败",
+          "无法加载用户数据",
+          "开始更新用户资料",
+          "资料更新成功",
+          "更新资料失败",
+          "资料更新失败",
         ])
       );
     });
@@ -1018,23 +1119,25 @@ export default {
 }
 </script>
       `;
-      
+
       const tempFile = createTempFile(code);
       tempFiles.push(tempFile);
-      
+
       const result = transformCode(tempFile, {
         i18nConfig: {
           framework: "vue",
           i18nImport: {
             name: "$t",
             importName: "useI18n",
-            source: "@/composables/useI18n"
-          }
-        }
+            source: "@/composables/useI18n",
+          },
+        },
       });
-      
-      expect(result.code).toMatch(/import\s*?{\s*?useI18n\s*?}\s*?from\s*?"@\/composables\/useI18n"/);
-      expect(result.code).toContain('useI18n()');
+
+      expect(result.code).toMatch(
+        /import\s*?{\s*?useI18n\s*?}\s*?from\s*?"@\/composables\/useI18n"/
+      );
+      expect(result.code).toContain("useI18n()");
       expect(result.extractedStrings.length).toBe(2);
     });
 
@@ -1058,23 +1161,23 @@ export default {
 }
 </script>
       `;
-      
+
       const tempFile = createTempFile(code);
       tempFiles.push(tempFile);
-      
+
       const result = transformCode(tempFile, {
         i18nConfig: {
           framework: "vue2",
           i18nImport: {
             name: "$t",
-            source: "vue-i18n"
-          }
-        }
+            source: "vue-i18n",
+          },
+        },
       });
-      
+
       expect(result.extractedStrings.length).toBe(3);
-      expect(result.extractedStrings.map(s => s.value)).toEqual(
-        expect.arrayContaining(['Vue 2 配置测试', '点击按钮', '按钮被点击了'])
+      expect(result.extractedStrings.map((s) => s.value)).toEqual(
+        expect.arrayContaining(["Vue 2 配置测试", "点击按钮", "按钮被点击了"])
       );
     });
 
@@ -1093,23 +1196,25 @@ export default {
 }
 </script>
       `;
-      
+
       const tempFile = createTempFile(code, "vue");
       tempFiles.push(tempFile);
-      
+
       // 不指定框架，让它自动检测
       const result = transformCode(tempFile, {
         i18nConfig: {
           i18nImport: {
             name: "t",
             importName: "useI18n",
-            source: "vue-i18n"
-          }
-        }
+            source: "vue-i18n",
+          },
+        },
       });
-      
-      expect(result.code).toMatch(/import\s*?{\s*?useI18n\s*?}\s*?from\s*?"vue-i18n"/);
-      expect(result.code).toContain('useI18n()');
+
+      expect(result.code).toMatch(
+        /import\s*?{\s*?useI18n\s*?}\s*?from\s*?"vue-i18n"/
+      );
+      expect(result.code).toContain("useI18n()");
       expect(result.extractedStrings.length).toBe(2);
     });
   });
