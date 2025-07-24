@@ -339,6 +339,7 @@ export default {
         }
       });
       
+      console.log("提取的字符串:", result.extractedStrings.map(s => s.value));
       expect(result.extractedStrings.length).toBe(10);
       expect(result.extractedStrings.map(s => s.value)).toEqual(
         expect.arrayContaining([
@@ -735,6 +736,7 @@ export default {
         }
       });
       
+      console.log("提取的字符串:", result.extractedStrings.map(s => s.value));
       expect(result.extractedStrings.length).toBe(12);
       expect(result.extractedStrings.map(s => s.value)).toEqual(
         expect.arrayContaining([

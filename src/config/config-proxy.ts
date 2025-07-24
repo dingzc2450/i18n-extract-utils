@@ -4,8 +4,7 @@
  */
 
 import { TransformOptions } from "../types";
-import { resolveConfig, ResolvedConfig } from "./config-manager";
-import { ConfigAdapter } from "./config-adapter";
+import { normalizeConfig, CONFIG_DEFAULTS } from "../core/config-normalizer";
 
 /**
  * 配置代理类 - 包装原有功能，添加配置管理
@@ -21,16 +20,41 @@ export class ConfigProxy {
   ): TransformOptions {
     // 如果提供了代码和文件路径，进行框架检测
     let detectedFramework: string | undefined;
-    if (code && filePath) {
+    if (code && filePath && !userOptions.i18nConfig?.framework) {
+      // 只有在用户没有明确指定framework时才进行自动检测
       // 简单的内联框架检测逻辑，避免模块依赖问题
       detectedFramework = this.simpleDetectFramework(code, filePath);
+      
+      // 如果检测到了框架，但用户没有指定，就添加到配置中
+      if (detectedFramework) {
+        userOptions = {
+          ...userOptions,
+          i18nConfig: {
+            ...userOptions.i18nConfig,
+            framework: detectedFramework as "react" | "react15" | "vue" | "vue2" | "vue3"
+          }
+        };
+      }
     }
 
-    // 解析为完整配置
-    const resolved = resolveConfig(userOptions, detectedFramework);
+    // 使用新的配置规范化模块处理配置
+    const normalizedConfig = normalizeConfig(userOptions);
     
-    // 转换回TransformOptions格式，但现在所有字段都有默认值
-    return ConfigAdapter.toTransformOptions(resolved);
+    // 返回完整的配置
+    return {
+      ...userOptions,
+      pattern: normalizedConfig.pattern,
+      outputPath: normalizedConfig.outputPath,
+      appendExtractedComment: normalizedConfig.appendExtractedComment,
+      extractedCommentType: normalizedConfig.extractedCommentType,
+      preserveFormatting: normalizedConfig.preserveFormatting,
+      useASTTransform: normalizedConfig.useASTTransform,
+      i18nConfig: {
+        framework: normalizedConfig.normalizedI18nConfig.framework as "react" | "react15" | "vue" | "vue3" | "vue2",
+        i18nImport: normalizedConfig.normalizedI18nConfig.i18nImport,
+        nonReactConfig: normalizedConfig.normalizedI18nConfig.nonReactConfig
+      }
+    };
   }
 
   /**
@@ -41,6 +65,7 @@ export class ConfigProxy {
     const extension = filePath.split('.').pop()?.toLowerCase();
     
     if (extension === 'vue') {
+      console.log('检测到Vue文件扩展名，使用Vue框架');
       return 'vue';
     }
     
@@ -60,6 +85,7 @@ export class ConfigProxy {
       
       // 如果明确有 React 15 特征，或者没有现代 hooks 且有老式写法
       if (hasReact15Features || (!hasModernHooks && code.includes('React.createElement'))) {
+        console.log('检测到React 15特征，使用React15框架');
         return 'react15';
       }
       
@@ -89,36 +115,37 @@ export class ConfigProxy {
     const warnings: string[] = [];
 
     try {
-      const resolved = resolveConfig(userOptions);
+      const normalizedConfig = normalizeConfig(userOptions);
 
       // 基本验证
-      if (!resolved.pattern) {
+      if (!normalizedConfig.pattern) {
         errors.push("Pattern is required");
       }
 
-      if (!resolved.outputPath) {
+      if (!normalizedConfig.outputPath) {
         errors.push("Output path is required");
       }
 
-      if (!resolved.i18nConfig.i18nImport.source) {
+      if (!normalizedConfig.normalizedI18nConfig.i18nImport.source) {
         errors.push("i18n import source is required");
       }
 
       // 框架特定验证
-      if (resolved.i18nConfig.framework === "react" && !resolved.i18nConfig.i18nImport.importName) {
+      if (normalizedConfig.normalizedI18nConfig.framework === "react" && 
+          !normalizedConfig.normalizedI18nConfig.i18nImport.importName) {
         warnings.push("React hook name not specified, using default 'useTranslation'");
       }
 
       // 废弃配置警告
-      if (resolved._legacyTranslationMethod) {
+      if (userOptions.translationMethod) {
         warnings.push("translationMethod is deprecated, use i18nConfig.i18nImport.name instead");
       }
 
-      if (resolved._legacyHookName) {
+      if (userOptions.hookName) {
         warnings.push("hookName is deprecated, use i18nConfig.i18nImport.importName instead");
       }
 
-      if (resolved._legacyHookImport) {
+      if (userOptions.hookImport) {
         warnings.push("hookImport is deprecated, use i18nConfig.i18nImport.source instead");
       }
 

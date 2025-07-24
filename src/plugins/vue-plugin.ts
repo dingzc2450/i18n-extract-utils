@@ -41,19 +41,40 @@ export class VuePlugin implements FrameworkPlugin {
     filePath: string,
     options: TransformOptions
   ): boolean {
+    console.log("VuePlugin.shouldApply被调用");
+    
     // 检查是否明确指定为Vue框架
-    if (options.i18nConfig?.framework === "vue") return true;
+    if (options.i18nConfig?.framework === "vue") {
+      console.log("Vue框架已明确指定，应用VuePlugin");
+      return true;
+    }
 
-    // 检查文件扩展名和代码特征
-    return (
-      filePath.endsWith(".vue") ||
-      code.includes("<template>") ||
-      (code.includes("export default") &&
-        (code.includes("setup()") ||
-          code.includes("setup:") ||
-          code.includes("data()") ||
-          code.includes("methods:")))
-    );
+    // 检查文件扩展名
+    if (filePath.endsWith(".vue")) {
+      console.log("检测到.vue文件扩展名，应用VuePlugin");
+      return true;
+    }
+    
+    // 检查Vue特有结构
+    const hasVueTemplate = code.includes("<template>");
+    const hasVueExport = code.includes("export default") &&
+                      (code.includes("setup()") ||
+                       code.includes("setup:") ||
+                       code.includes("data()") ||
+                       code.includes("methods:"));
+                       
+    if (hasVueTemplate) {
+      console.log("检测到Vue <template>标签，应用VuePlugin");
+      return true;
+    }
+    
+    if (hasVueExport) {
+      console.log("检测到Vue组件结构，应用VuePlugin");
+      return true;
+    }
+    
+    console.log("未检测到Vue特征，不应用VuePlugin");
+    return false;
   }
 
   /**
@@ -440,11 +461,23 @@ export class VuePlugin implements FrameworkPlugin {
           compact: true,
           jsescOption: { minimal: true, quotes: "double" },
         });
-        const replacement = `{{ ${callCode} }}`;
-        if (options.appendExtractedComment) {
-          return `${replacement} <!-- ${extractedValue} -->`;
+        
+        // 检查是否在模板插值表达式内
+        if (fullMatch.includes('{{') && fullMatch.includes('}}')) {
+          // 已经在插值表达式中，不需要额外添加 {{}}
+          const replacement = callCode;
+          if (options.appendExtractedComment) {
+            return `${replacement} /* ${extractedValue} */`;
+          }
+          return replacement;
+        } else {
+          // 不在插值表达式中，需要添加 {{}}
+          const replacement = `{{ ${callCode} }}`;
+          if (options.appendExtractedComment) {
+            return `${replacement} <!-- ${extractedValue} -->`;
+          }
+          return replacement;
         }
-        return replacement;
       }
     );
 

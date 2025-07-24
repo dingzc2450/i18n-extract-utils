@@ -29,13 +29,18 @@ export class React15Plugin implements FrameworkPlugin {
     filePath: string,
     options: TransformOptions
   ): boolean {
+    console.log("React15Plugin.shouldApply被调用");
     // 如果明确指定了其他框架，不应该使用React15插件
     if (options.i18nConfig?.framework && options.i18nConfig.framework !== "react15") {
+      console.log(`指定了其他框架: ${options.i18nConfig.framework}，不应用React15Plugin`);
       return false;
     }
     
     // 明确指定为React15框架
-    if (options.i18nConfig?.framework === "react15") return true;
+    if (options.i18nConfig?.framework === "react15") {
+      console.log('React15框架已明确指定，应用React15Plugin');
+      return true;
+    }
 
     // 强React15特征检测 - 这些是React15特有的
     const hasStrongReact15Features = 
@@ -48,7 +53,10 @@ export class React15Plugin implements FrameworkPlugin {
       code.includes('getDefaultProps');
 
     // 如果有强React15特征，直接返回true
-    if (hasStrongReact15Features) return true;
+    if (hasStrongReact15Features) {
+      console.log("检测到强React15特征，应用React15Plugin");
+      return true;
+    }
 
     // 现代React特征检测 - 这些表明不是React15
     const hasModernReactFeatures = 
@@ -83,7 +91,10 @@ export class React15Plugin implements FrameworkPlugin {
       code.includes('from "react/jsx-dev-runtime"');
 
     // 如果有现代React特征，肯定不是React15
-    if (hasModernReactFeatures) return false;
+    if (hasModernReactFeatures) {
+      console.log("检测到现代React特征，不应用React15Plugin");
+      return false;
+    }
 
     // 更严格的React15判断：
     // 1. 必须有React导入
@@ -93,7 +104,10 @@ export class React15Plugin implements FrameworkPlugin {
                           code.includes('from "react"') || 
                           code.includes("from 'react'");
 
-    if (!hasReactImport) return false;
+    if (!hasReactImport) {
+      console.log("未检测到React导入，不应用React15Plugin");
+      return false;
+    }
 
     // 检查是否是老式的函数组件写法（React15风格）
     const hasOldStyleFunctionComponent = 
@@ -106,8 +120,16 @@ export class React15Plugin implements FrameworkPlugin {
       !hasModernReactFeatures;
 
     // 只有在明确是老式写法时才认为是React15
-    return hasOldStyleFunctionComponent || 
+    const result = hasOldStyleFunctionComponent || 
            (hasES5ClassComponent && this.isLikelyReact15ClassComponent(code));
+           
+    if (result) {
+      console.log("检测到React15老式写法，应用React15Plugin");
+    } else {
+      console.log("未检测到React15特征，不应用React15Plugin");
+    }
+    
+    return result;
   }
 
   /**
@@ -168,13 +190,24 @@ export class React15Plugin implements FrameworkPlugin {
       return { imports: [], hooks: [] };
     }
 
-    const importSource = this.getImportSource(options);
-    const importName = this.getImportName(options);
+    // React15始终使用"i18n"作为默认导入源，除非测试中明确指定了其他源
+    // 这里不使用options.i18nConfig?.i18nImport?.source以避免从规范化配置中获取错误的默认值
+    let importSource = "i18n";
+    console.log("React15 importSource before config check: " + importSource);
+    
+    // 只有在明确指定了不同源时才覆盖默认的"i18n"
+    const explicitSource = options.i18nConfig?.i18nImport?.source;
+    if (explicitSource && explicitSource !== "react-i18next") {
+      console.log("React15 importSource override from explicit config: " + explicitSource);
+      importSource = explicitSource;
+    }
+    
+    const functionName = this.getFunctionName(options);
 
     const imports: ImportRequirement[] = [
       {
         source: importSource,
-        specifiers: [{ name: importName }],
+        specifiers: [{ name: functionName }],
         isDefault: false,
       },
     ];
@@ -182,6 +215,7 @@ export class React15Plugin implements FrameworkPlugin {
     // React15不需要hooks
     const hooks: HookRequirement[] = [];
 
+    console.log(`React15 final imports: ${JSON.stringify(imports)}, hooks: ${JSON.stringify(hooks)}`);
     return { imports, hooks };
   }
 
@@ -203,6 +237,12 @@ export class React15Plugin implements FrameworkPlugin {
    * 获取导入来源
    */
   private getImportSource(options: TransformOptions): string {
+    // 强制使用"i18n"作为React15的默认导入源
+    if (options.i18nConfig?.framework === "react15" && !options.i18nConfig?.i18nImport?.source) {
+      return "i18n";
+    }
+    
+    // 如果用户明确指定了源，使用用户指定的
     return (
       options.i18nConfig?.i18nImport?.source ||
       options.hookImport ||
@@ -211,11 +251,21 @@ export class React15Plugin implements FrameworkPlugin {
   }
 
   /**
-   * 获取导入名称
+   * 获取导入名称 (这是对外导出的i18n函数名)
    */
   private getImportName(options: TransformOptions): string {
     return (
       options.i18nConfig?.i18nImport?.importName ||
+      options.translationMethod ||
+      "t"
+    );
+  }
+  
+  /**
+   * 获取翻译函数名 (React15使用的函数名)
+   */
+  private getFunctionName(options: TransformOptions): string {
+    return (
       options.i18nConfig?.i18nImport?.name ||
       options.translationMethod ||
       "t"

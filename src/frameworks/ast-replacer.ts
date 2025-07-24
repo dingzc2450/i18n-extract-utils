@@ -10,6 +10,7 @@ import {
 import { getKeyAndRecord } from "../key-manager";
 import { createTranslationCall, attachExtractedCommentToNode, parseJSXTextPlaceholders } from "../core/ast-utils";
 import { getDefaultPattern } from "../core/utils";
+import { getI18nCall } from "../core/config-normalizer";
 import * as tg from "../babel-type-guards";
 import { isJSXAttribute } from "../babel-type-guards";
 
@@ -37,8 +38,17 @@ export function replaceStringsWithTCalls(
     ? new RegExp(options.pattern, "g")
     : new RegExp(getDefaultPattern().source, "g");
 
-  // 支持自定义调用生成
-  const callFactory = (options.i18nConfig && options.i18nConfig.i18nCall) || ((callName, key, rawText) => createTranslationCall(callName, key));
+  // 获取自定义i18nCall或使用默认的createTranslationCall
+  const customI18nCall = getI18nCall(options);
+  const callFactory = (callName: string, key: string | number, rawText: string) => {
+    if (customI18nCall) {
+      // 直接调用自定义的i18nCall，确保一致性
+      return customI18nCall(callName, key, rawText);
+    } else {
+      // 使用默认的createTranslationCall
+      return createTranslationCall(callName, key);
+    }
+  };
 
   const recordChange = (
     path: NodePath<t.Node>,
@@ -111,9 +121,6 @@ export function replaceStringsWithTCalls(
         let firstMatchIndex = -1;
         let lastMatchedTextWithDelimiters = "";
         let lastMatch = null;
-
-        // 支持自定义调用生成
-        const callFactory = (options.i18nConfig && options.i18nConfig.i18nCall) || ((callName, key, rawText) => createTranslationCall(callName, key));
 
         while ((match = patternRegex.exec(nodeValue)) !== null) {
             if (firstMatchIndex === -1) {
@@ -295,7 +302,7 @@ export function replaceStringsWithTCalls(
                 
                 let translationCall;
                 if (parsedPlaceholders && parsedPlaceholders.interpolationObject) {
-                  // Use canonical text as key and provide interpolation object
+                  // 对于有插值的情况，我们需要使用原始的createTranslationCall，因为i18nCall目前不支持插值对象
                   translationCall = createTranslationCall(
                     translationMethod, 
                     translationKey, 
@@ -400,12 +407,12 @@ export function replaceStringsWithTCalls(
               ? new RegExp(options.pattern)
               : new RegExp(getDefaultPattern().source);
             const rawTextMatch = pattern.exec(originalRawStringForPatternCheck);
-            const rawText = rawTextMatch ? rawTextMatch[1] : originalRawStringForPatternCheck;
-            
-            // For custom i18nCall, we need to handle interpolations differently
-            if (options.i18nConfig && options.i18nConfig.i18nCall) {
+            const rawText = rawTextMatch ? rawTextMatch[1] : originalRawStringForPatternCheck;                  // For custom i18nCall, we need to handle interpolations differently
+            const customI18nCall = getI18nCall(options);
+            if (customI18nCall) {
               // Custom i18nCall should handle interpolations as needed
-              const replacementNode = callFactory(
+              // 注意: 自定义i18nCall目前不支持模板字符串插值，此处传入原始文本以供自定义处理
+              const replacementNode = customI18nCall(
                 translationMethod,
                 translationKey,
                 rawText

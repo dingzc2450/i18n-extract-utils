@@ -1,22 +1,21 @@
 /**
  * 配置系统使用示例和文档
- * 演示如何使用新的配置管理系统
+ * 简化版配置系统，使用统一的config-normalizer
  */
 
 import { TransformOptions } from "../types";
-import { resolveConfig, ResolvedConfig } from "../config/config-manager";
-import { ConfigAdapter } from "../config/config-adapter";
 import { CoreProcessor } from "../core/processor";
+import { normalizeConfig, NormalizedTransformOptions } from "../core/config-normalizer";
 
 /**
- * 新的统一处理器 - 使用配置管理系统
+ * 统一处理器 - 使用简化的配置系统
  */
 export class EnhancedProcessor {
   private coreProcessor = new CoreProcessor();
 
   /**
    * 处理代码的主入口
-   * 自动解析配置，提供完全配置好的内部处理
+   * 自动规范化配置，提供完整的配置处理
    */
   processCode(
     code: string,
@@ -24,23 +23,20 @@ export class EnhancedProcessor {
     userOptions: TransformOptions = {},
     existingValueToKey?: Map<string, string | number>
   ) {
-    // 配置解析在这里进行，内部组件只使用解析后的配置
-    const config = resolveConfig(userOptions);
-    
-    // CoreProcessor 现在使用的是解析后的完整配置
+    // CoreProcessor 内部已经使用了normalizeConfig，直接传递即可
     return this.coreProcessor.processCode(
       code,
       filePath,
-      userOptions, // 传递原始选项，内部会重新解析
+      userOptions,
       existingValueToKey
     );
   }
 
   /**
-   * 获取解析后的配置（用于调试或高级用途）
+   * 获取规范化后的配置（用于调试或高级用途）
    */
-  getResolvedConfig(userOptions: TransformOptions): ResolvedConfig {
-    return resolveConfig(userOptions);
+  getNormalizedConfig(userOptions: TransformOptions): NormalizedTransformOptions {
+    return normalizeConfig(userOptions);
   }
 
   /**
@@ -55,36 +51,18 @@ export class EnhancedProcessor {
     const warnings: string[] = [];
 
     try {
-      const config = resolveConfig(userOptions);
-
-      // 基本验证
-      if (!config.pattern) {
-        errors.push("Pattern is required");
-      }
-
-      if (!config.outputPath) {
-        errors.push("Output path is required");
-      }
-
-      if (!config.i18nConfig.i18nImport.source) {
-        errors.push("i18n import source is required");
-      }
-
-      // 框架特定验证
-      if (config.i18nConfig.framework === "react" && !config.i18nConfig.i18nImport.importName) {
-        warnings.push("React hook name not specified, using default 'useTranslation'");
-      }
+      const config = normalizeConfig(userOptions);
 
       // 废弃配置警告
-      if (config._legacyTranslationMethod) {
+      if (userOptions.translationMethod) {
         warnings.push("translationMethod is deprecated, use i18nConfig.i18nImport.name instead");
       }
 
-      if (config._legacyHookName) {
+      if (userOptions.hookName) {
         warnings.push("hookName is deprecated, use i18nConfig.i18nImport.importName instead");
       }
 
-      if (config._legacyHookImport) {
+      if (userOptions.hookImport) {
         warnings.push("hookImport is deprecated, use i18nConfig.i18nImport.source instead");
       }
 
@@ -113,15 +91,15 @@ export class ConfigExamples {
       i18nConfig: {
         framework: "react",
         i18nImport: {
-          name: "t",
-          importName: "useTranslation",
-          source: "react-i18next",
+          name: CONFIG_DEFAULTS.TRANSLATION_METHOD,
+          importName: CONFIG_DEFAULTS.HOOK_NAME,
+          source: CONFIG_DEFAULTS.HOOK_SOURCE,
         },
       },
-      pattern: "___(.*?)___",
-      outputPath: "./src/locales",
-      appendExtractedComment: true,
-      extractedCommentType: "line",
+      pattern: CONFIG_DEFAULTS.PATTERN,
+      outputPath: CONFIG_DEFAULTS.OUTPUT_PATH,
+      appendExtractedComment: CONFIG_DEFAULTS.APPEND_EXTRACTED_COMMENT,
+      extractedCommentType: CONFIG_DEFAULTS.EXTRACTED_COMMENT_TYPE as "line",
     };
   }
 
@@ -133,13 +111,13 @@ export class ConfigExamples {
       i18nConfig: {
         framework: "vue",
         i18nImport: {
-          name: "t",
-          importName: "useI18n",
-          source: "vue-i18n",
+          name: CONFIG_DEFAULTS.VUE_TRANSLATION_METHOD,
+          importName: CONFIG_DEFAULTS.VUE_HOOK_NAME,
+          source: CONFIG_DEFAULTS.VUE_HOOK_SOURCE,
         },
       },
-      pattern: "___(.*?)___",
-      outputPath: "./src/locales",
+      pattern: CONFIG_DEFAULTS.PATTERN,
+      outputPath: CONFIG_DEFAULTS.OUTPUT_PATH,
     };
   }
 
@@ -151,18 +129,18 @@ export class ConfigExamples {
       i18nConfig: {
         framework: "react",
         i18nImport: {
-          name: "t",
-          importName: "useTranslation",
-          source: "react-i18next",
+          name: CONFIG_DEFAULTS.TRANSLATION_METHOD,
+          importName: CONFIG_DEFAULTS.HOOK_NAME,
+          source: CONFIG_DEFAULTS.HOOK_SOURCE,
         },
         nonReactConfig: {
-          functionName: "t",
-          importType: "named",
-          source: "react-i18next",
+          functionName: CONFIG_DEFAULTS.NON_REACT_FUNCTION_NAME,
+          importType: CONFIG_DEFAULTS.NON_REACT_IMPORT_TYPE as "named",
+          source: CONFIG_DEFAULTS.HOOK_SOURCE,
         },
       },
-      pattern: "___(.*?)___",
-      outputPath: "./src/locales",
+      pattern: CONFIG_DEFAULTS.PATTERN,
+      outputPath: CONFIG_DEFAULTS.OUTPUT_PATH,
     };
   }
 
@@ -206,5 +184,5 @@ export class ConfigExamples {
 /**
  * 导出新的推荐入口
  */
-export { resolveConfig, ConfigAdapter, ResolvedConfig };
+export { normalizeConfig, NormalizedTransformOptions, CONFIG_DEFAULTS } from "../core/config-normalizer";
 export const processor = new EnhancedProcessor();

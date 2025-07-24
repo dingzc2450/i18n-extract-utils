@@ -210,14 +210,20 @@ export class CoreProcessor {
     filePath: string,
     options: TransformOptions
   ): FrameworkPlugin {
+    console.log(`选择插件处理文件: ${filePath}`);
+    console.log(`配置指定的框架: ${options.i18nConfig?.framework || '未指定'}`);
+    
     // 按优先级查找合适的插件
     for (const plugin of this.plugins) {
+      console.log(`检查插件: ${plugin.name}`);
       if (plugin.shouldApply(code, filePath, options)) {
+        console.log(`选择插件: ${plugin.name}`);
         return plugin;
       }
     }
 
     // 如果没有找到合适的插件，返回默认React插件
+    console.log("未找到匹配插件，使用默认插件");
     return this.getDefaultPlugin(options);
   }
 
@@ -225,11 +231,16 @@ export class CoreProcessor {
    * 获取默认插件
    */
   private getDefaultPlugin(options: TransformOptions | NormalizedTransformOptions): FrameworkPlugin {
+    // 检查是否是React15框架
+    const isReact15 = 'normalizedI18nConfig' in options 
+      ? options.normalizedI18nConfig.framework === 'react15' 
+      : options.i18nConfig?.framework === 'react15';
+    
     return {
-      name: 'default-react',
+      name: isReact15 ? 'default-react15' : 'default-react',
       shouldApply: () => true,
       getRequiredImportsAndHooks: (extractedStrings, pluginOptions, context) => {
-        // 默认使用React hooks方式
+        // 没有提取字符串时不需要导入
         if (extractedStrings.length === 0) {
           return { imports: [], hooks: [] };
         }
@@ -238,7 +249,27 @@ export class CoreProcessor {
         const hookName = getHookName(pluginOptions);
         const hookSource = getImportSource(pluginOptions);
         const translationMethod = getTranslationMethodName(pluginOptions);
-
+        
+        // 检查是否是React15框架
+        const isReact15 = pluginOptions.i18nConfig?.framework === 'react15';
+          
+        if (isReact15) {
+          // React15处理逻辑：直接导入函数，不使用hooks
+          const imports: ImportRequirement[] = [
+            {
+              source: hookSource,
+              specifiers: [{ name: translationMethod }],
+              isDefault: false,
+            },
+          ];
+          
+          // React15不需要hooks
+          const hooks: HookRequirement[] = [];
+          
+          return { imports, hooks };
+        }
+        
+        // 默认React处理逻辑：使用hooks
         const imports: ImportRequirement[] = [
           {
             source: hookSource,

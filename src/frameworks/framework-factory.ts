@@ -6,16 +6,15 @@ import { ReactTransformer } from "./react-support";
 import { React15Transformer } from "./react15-support";
 import { VueTransformer } from "./vue-support";
 import { UniversalCodeGenerator } from "./universal-code-generator";
-import { resolveConfig, ResolvedConfig } from "../config/config-manager";
-import { ConfigAdapter } from "../config/config-adapter";
+import { normalizeConfig, CONFIG_DEFAULTS } from "../core/config-normalizer";
 
 /**
  * 根据 i18nConfig.framework 创建对应的 transformer
  */
 export function createFrameworkTransformer(userOptions: TransformOptions): I18nTransformer {
-  // 使用配置管理器解析配置
-  const config = resolveConfig(userOptions);
-  const framework = config.i18nConfig.framework;
+  // 使用配置规范化模块处理配置
+  const normalizedConfig = normalizeConfig(userOptions);
+  const framework = normalizedConfig.normalizedI18nConfig.framework;
   
   switch (framework.toLowerCase()) {
     case "react":
@@ -42,43 +41,88 @@ export function createFrameworkTransformer(userOptions: TransformOptions): I18nT
  * 根据文件内容和配置自动检测框架类型
  */
 export function detectFramework(code: string, filePath: string): string {
+  console.log(`detectFramework被调用，文件路径: ${filePath}`);
+  
   // 检查文件扩展名
   const extension = filePath.split('.').pop()?.toLowerCase();
   
   if (extension === 'vue') {
+    console.log('通过文件扩展名检测到Vue框架');
     return 'vue';
   }
   
-  // 检查代码内容
+  // 强React15特征检测
+  const hasStrongReact15Features = 
+    code.includes('React.createClass') || 
+    code.includes('createReactClass') ||
+    code.includes('getInitialState') ||
+    code.includes('componentWillMount') ||
+    code.includes('componentWillReceiveProps') ||
+    code.includes('componentWillUpdate') ||
+    code.includes('getDefaultProps');
+    
+  if (hasStrongReact15Features) {
+    console.log('通过强React15特征检测到React15框架');
+    return 'react15';
+  }
+    
+  // 检查Vue特征
+  // 增强Vue检测逻辑，可检测更多Vue特征
+  const hasVueImport = code.includes('import Vue') || 
+                       code.includes('from "vue"') || 
+                       code.includes("from 'vue'");
+                       
+  const hasVueStructure = code.includes('export default {') && 
+                        (code.includes('data()') || 
+                         code.includes('methods:') || 
+                         code.includes('computed:') ||
+                         code.includes('components:'));
+                         
+  const hasVue3Features = code.includes('defineComponent') ||
+                          code.includes('setup()') ||
+                          code.includes('setup:');
+                          
+  if (hasVueImport || hasVueStructure || hasVue3Features) {
+    console.log('通过Vue特征检测到Vue框架');
+    return 'vue';
+  }
+  
+  // 检查React
   if (code.includes('import React') || code.includes('from "react"') || code.includes("from 'react'")) {
-    // 检查是否为 React 15 (通过缺少现代 hooks 来判断)
-    const hasModernHooks = code.includes('useState') || 
-                          code.includes('useEffect') || 
-                          code.includes('useCallback') ||
-                          code.includes('useMemo') ||
-                          code.includes('useContext');
+    // 检查是否为 React 15 (通过缺少现代特征来判断)
+    const hasModernFeatures = 
+      // Hooks
+      code.includes('useState') || 
+      code.includes('useEffect') || 
+      code.includes('useCallback') ||
+      code.includes('useMemo') ||
+      code.includes('useContext') ||
+      code.includes('useReducer') ||
+      code.includes('useRef') ||
+      // React 16+ 特征
+      code.includes('React.Fragment') ||
+      code.includes('React.memo') ||
+      code.includes('React.lazy') ||
+      code.includes('React.Suspense') ||
+      code.includes('<>') || // Fragment语法
+      code.includes('</>')   // Fragment闭合标签
     
-    const hasReact15Features = code.includes('React.createClass') || 
-                              code.includes('createReactClass') ||
-                              code.includes('getInitialState') ||
-                              code.includes('componentWillMount');
+    // 检查是否符合React15特征
+    const isReact15Compatible = 
+      (!hasModernFeatures && code.includes('React.createElement')) || // 使用createElement但没有现代特征
+      /class\s+\w+\s+extends\s+React\.Component/.test(code) && !hasModernFeatures; // ES5类但没有现代特征
     
-    // 如果明确有 React 15 特征，或者没有现代 hooks 且有老式写法
-    if (hasReact15Features || (!hasModernHooks && code.includes('React.createElement'))) {
+    if (isReact15Compatible) {
+      console.log('通过特征组合检测到React15框架');
       return 'react15';
     }
     
+    console.log('通过React特征检测到现代React框架');
     return 'react';
   }
   
-  if (code.includes('import Vue') || 
-      code.includes('from "vue"') || 
-      code.includes("from 'vue'") ||
-      code.includes('export default {') && (code.includes('data()') || code.includes('methods:'))) {
-    return 'vue';
-  }
-  
   // 默认返回 react
+  console.log('未检测到明确框架，默认使用React');
   return 'react';
 }
 
@@ -105,7 +149,9 @@ export function getFrameworkDefaults(framework: string): Partial<TransformOption
           framework: "react15",
           i18nImport: {
             name: "t",
-            source: "i18n"
+            // React15不使用hooks，直接从i18n导入t函数
+            source: "i18n",
+            importName: "t" // 明确设置导入名也是t，不使用hook
           }
         }
       };
@@ -150,17 +196,26 @@ export function getFrameworkDefaults(framework: string): Partial<TransformOption
 
 /**
  * 合并用户配置和框架默认配置
- * @deprecated 使用 resolveConfig 代替
+ * @deprecated 使用 normalizeConfig 代替
  */
 export function mergeWithFrameworkDefaults(
   userOptions: TransformOptions,
   detectedFramework?: string
 ): TransformOptions {
-  // 使用新的配置管理器
-  const resolvedConfig = resolveConfig(userOptions, detectedFramework);
+  // 使用新的配置规范化模块
+  const normalizedConfig = normalizeConfig(userOptions);
   
-  // 转换回 TransformOptions 格式以保持向后兼容
-  return ConfigAdapter.toTransformOptions(resolvedConfig);
+  // 返回完整的配置，保持向后兼容
+  return {
+    ...userOptions,
+    pattern: normalizedConfig.pattern,
+    outputPath: normalizedConfig.outputPath,
+    i18nConfig: {
+      framework: normalizedConfig.normalizedI18nConfig.framework as "react" | "react15" | "vue" | "vue3" | "vue2",
+      i18nImport: normalizedConfig.normalizedI18nConfig.i18nImport,
+      nonReactConfig: normalizedConfig.normalizedI18nConfig.nonReactConfig
+    }
+  };
 }
 
 /**

@@ -14,6 +14,7 @@ import {
   parseJSXTextPlaceholders,
 } from "./core/ast-utils";
 import { getDefaultPattern } from "./core/utils";
+import { getI18nCall } from "./core/config-normalizer";
 import * as tg from "./babel-type-guards";
 import { StringReplacer } from "./string-replacer";
 import { detectCodeContext, ContextInfo } from "./context-detector";
@@ -61,7 +62,9 @@ export function collectContextAwareReplacementInfo(
 
   // 智能调用工厂函数，根据是否有自定义 i18nCall 来决定参数
   const smartCallFactory = (callName: string, key: string | number, rawText: string, interpolations?: t.ObjectExpression, originalText?: string) => {
-    if (options.i18nConfig && options.i18nConfig.i18nCall) {
+    // 首先尝试从规范化配置获取i18nCall
+    const customI18nCall = getI18nCall(options);
+    if (customI18nCall) {
       // 使用自定义的 i18nCall，传递合适的原始文本
       // 对于有插值的情况，使用 originalText 并替换实际表达式为 ${...}
       let textForCustomCall = originalText || rawText;
@@ -69,7 +72,8 @@ export function collectContextAwareReplacementInfo(
         // 将具体的变量表达式替换为 ${...} 占位符
         textForCustomCall = originalText.replace(/\$\{[^}]+\}/g, "${...}");
       }
-      return options.i18nConfig.i18nCall(callName, key, textForCustomCall);
+      // 直接调用自定义i18nCall，不使用任何封装
+      return customI18nCall(callName, key, textForCustomCall);
     } else {
       // 使用默认的 createTranslationCall，支持 interpolations
       return createTranslationCall(callName, key, interpolations);

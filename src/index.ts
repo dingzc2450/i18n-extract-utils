@@ -4,6 +4,15 @@ import { TransformOptions } from "./types";
 // 导出核心模块
 export { CoreProcessor, createProcessorWithDefaultPlugins } from "./core";
 export { ReactPlugin, VuePlugin, GenericJSPlugin } from "./plugins";
+export { 
+  normalizeConfig, 
+  CONFIG_DEFAULTS,
+  NormalizedTransformOptions,
+  NormalizedI18nConfig
+} from "./core/config-normalizer";
+
+// 导出配置系统
+export { EnhancedProcessor, ConfigExamples } from "./config";
 
 export { TransformOptions };
 export { transformCode };
