@@ -56,8 +56,6 @@ export function Welcome() {
 
       const result = transformCode(tempFile, baseOptions);
 
-      console.log("Generated code:", result.code);
-
       expect(result.code).toContain('t("Hello World")');
       expect(result.code).toContain("/* Hello World */");
       expect(result.extractedStrings).toHaveLength(1);

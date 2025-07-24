@@ -210,20 +210,15 @@ export class CoreProcessor {
     filePath: string,
     options: TransformOptions
   ): FrameworkPlugin {
-    console.log(`选择插件处理文件: ${filePath}`);
-    console.log(`配置指定的框架: ${options.i18nConfig?.framework || '未指定'}`);
     
     // 按优先级查找合适的插件
     for (const plugin of this.plugins) {
-      console.log(`检查插件: ${plugin.name}`);
       if (plugin.shouldApply(code, filePath, options)) {
-        console.log(`选择插件: ${plugin.name}`);
         return plugin;
       }
     }
 
     // 如果没有找到合适的插件，返回默认React插件
-    console.log("未找到匹配插件，使用默认插件");
     return this.getDefaultPlugin(options);
   }
 

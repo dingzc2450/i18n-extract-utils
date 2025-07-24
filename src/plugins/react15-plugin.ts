@@ -29,16 +29,13 @@ export class React15Plugin implements FrameworkPlugin {
     filePath: string,
     options: TransformOptions
   ): boolean {
-    console.log("React15Plugin.shouldApply被调用");
     // 如果明确指定了其他框架，不应该使用React15插件
     if (options.i18nConfig?.framework && options.i18nConfig.framework !== "react15") {
-      console.log(`指定了其他框架: ${options.i18nConfig.framework}，不应用React15Plugin`);
       return false;
     }
     
     // 明确指定为React15框架
     if (options.i18nConfig?.framework === "react15") {
-      console.log('React15框架已明确指定，应用React15Plugin');
       return true;
     }
 
@@ -54,7 +51,6 @@ export class React15Plugin implements FrameworkPlugin {
 
     // 如果有强React15特征，直接返回true
     if (hasStrongReact15Features) {
-      console.log("检测到强React15特征，应用React15Plugin");
       return true;
     }
 
@@ -92,7 +88,6 @@ export class React15Plugin implements FrameworkPlugin {
 
     // 如果有现代React特征，肯定不是React15
     if (hasModernReactFeatures) {
-      console.log("检测到现代React特征，不应用React15Plugin");
       return false;
     }
 
@@ -105,7 +100,6 @@ export class React15Plugin implements FrameworkPlugin {
                           code.includes("from 'react'");
 
     if (!hasReactImport) {
-      console.log("未检测到React导入，不应用React15Plugin");
       return false;
     }
 
@@ -122,13 +116,6 @@ export class React15Plugin implements FrameworkPlugin {
     // 只有在明确是老式写法时才认为是React15
     const result = hasOldStyleFunctionComponent || 
            (hasES5ClassComponent && this.isLikelyReact15ClassComponent(code));
-           
-    if (result) {
-      console.log("检测到React15老式写法，应用React15Plugin");
-    } else {
-      console.log("未检测到React15特征，不应用React15Plugin");
-    }
-    
     return result;
   }
 
@@ -193,12 +180,10 @@ export class React15Plugin implements FrameworkPlugin {
     // React15始终使用"i18n"作为默认导入源，除非测试中明确指定了其他源
     // 这里不使用options.i18nConfig?.i18nImport?.source以避免从规范化配置中获取错误的默认值
     let importSource = "i18n";
-    console.log("React15 importSource before config check: " + importSource);
     
     // 只有在明确指定了不同源时才覆盖默认的"i18n"
     const explicitSource = options.i18nConfig?.i18nImport?.source;
     if (explicitSource && explicitSource !== "react-i18next") {
-      console.log("React15 importSource override from explicit config: " + explicitSource);
       importSource = explicitSource;
     }
     
@@ -215,7 +200,6 @@ export class React15Plugin implements FrameworkPlugin {
     // React15不需要hooks
     const hooks: HookRequirement[] = [];
 
-    console.log(`React15 final imports: ${JSON.stringify(imports)}, hooks: ${JSON.stringify(hooks)}`);
     return { imports, hooks };
   }
 

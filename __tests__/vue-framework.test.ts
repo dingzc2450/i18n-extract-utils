@@ -366,10 +366,6 @@ export default {
         },
       });
 
-      console.log(
-        "提取的字符串:",
-        result.extractedStrings.map((s) => s.value)
-      );
       expect(result.extractedStrings.length).toBe(10);
       expect(result.extractedStrings.map((s) => s.value)).toEqual(
         expect.arrayContaining([
@@ -797,11 +793,6 @@ export default {
         },
       });
 
-      console.log(
-        "提取的字符串:",
-        result.extractedStrings.map((s) => s.value)
-      );
-      console.log("处理后的代码:", result.code);
       expect(result.code).match(/t\(['"]加入购物车['"]\)/);
       expect(result.code).not.match(/{{\s*t\(['"]加入购物车['"]\)\s*}}/);
       expect(result.extractedStrings.length).toBe(12);

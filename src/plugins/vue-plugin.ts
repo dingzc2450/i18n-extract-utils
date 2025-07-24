@@ -41,17 +41,14 @@ export class VuePlugin implements FrameworkPlugin {
     filePath: string,
     options: TransformOptions
   ): boolean {
-    console.log("VuePlugin.shouldApply被调用");
     
     // 检查是否明确指定为Vue框架
     if (options.i18nConfig?.framework === "vue") {
-      console.log("Vue框架已明确指定，应用VuePlugin");
       return true;
     }
 
     // 检查文件扩展名
     if (filePath.endsWith(".vue")) {
-      console.log("检测到.vue文件扩展名，应用VuePlugin");
       return true;
     }
     
@@ -64,16 +61,13 @@ export class VuePlugin implements FrameworkPlugin {
                        code.includes("methods:"));
                        
     if (hasVueTemplate) {
-      console.log("检测到Vue <template>标签，应用VuePlugin");
       return true;
     }
     
     if (hasVueExport) {
-      console.log("检测到Vue组件结构，应用VuePlugin");
       return true;
     }
     
-    console.log("未检测到Vue特征，不应用VuePlugin");
     return false;
   }
 

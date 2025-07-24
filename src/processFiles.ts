@@ -16,7 +16,7 @@ import {
 import { FileCacheUtils } from "./core/utils";
 import { createProcessorWithDefaultPlugins } from "./plugins";
 import { ConfigProxy } from "./config/config-proxy";
-import { createI18nError, logError, ErrorCategory, ErrorSeverity, enhanceError, formatErrorForUser } from './core/error-handler';
+import { createI18nError, logError, enhanceError, formatErrorForUser } from './core/error-handler';
 
 /**
  * 确保目录存在

@@ -248,11 +248,6 @@ const messages = {
         extractedCommentType: 'block'
       });
 
-      // 验证模板字符串转换和注释
-      console.log('Result code:', result.code);
-      console.log('Extracted strings:', result.extractedStrings);
-      console.log('Changes:', result.changes);
-      
       expect(result.code).toContain('t("Hello {arg1}, you have {arg2} items", { arg1: name, arg2: count }) /* Hello {arg1}, you have {arg2} items */');
       expect(result.extractedStrings).toHaveLength(1);
       expect(result.extractedStrings[0].value).toBe('Hello {arg1}, you have {arg2} items');

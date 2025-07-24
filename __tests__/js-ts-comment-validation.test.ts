@@ -85,11 +85,6 @@ function displayMessage() {
     expect(lineResult.code).toContain('t("Goodbye") // Goodbye');
     expect(lineResult.code).toContain('t("Processing") // Processing');
     expect(lineResult.code).toContain('t("Success") // Success');
-
-    console.log('JS Block Comment Result:');
-    console.log(blockResult.code);
-    console.log('\nJS Line Comment Result:');
-    console.log(lineResult.code);
   });
 
   test("Validates .ts files with TypeScript features", () => {
@@ -140,8 +135,6 @@ enum Status {
     expect(result.code).toContain('t("Loading") /* Loading */');
     expect(result.code).toContain('t("Error Occurred") /* Error Occurred */');
 
-    console.log('TypeScript Result:');
-    console.log(result.code);
   });
 
   test("Validates template literals with complex expressions", () => {
@@ -172,9 +165,5 @@ function createNotification(user: string, count: number, type: string) {
 
     expect(result.code).toContain('t("Hello {arg1}, you have {arg2} notifications", { arg1: user, arg2: count }) // Hello {arg1}, you have {arg2} notifications');
     expect(result.code).toContain('t("{arg1}: {arg2} items remaining", { arg1: type, arg2: count }) // {arg1}: {arg2} items remaining');
-
-    console.log('Complex Template Literals Result:');
-    console.log(result.code);
-    console.log('Extracted strings:', result.extractedStrings);
   });
 });

@@ -100,11 +100,6 @@ export { validateEmail, UserForm, UserProfile };
         appendExtractedComment: true,
         extractedCommentType: 'block'
       });
-
-      console.log('Mixed Code Result:');
-      console.log(result.code);
-      console.log('Extracted strings:', result.extractedStrings.length);
-
       // 验证普通函数中使用了非React配置的导入
       expect(result.code).toContain('import { t } from \'react-i18n-plus\';');
       
@@ -253,9 +248,6 @@ function UserComponent() {
         appendExtractedComment: true,
         extractedCommentType: 'line'
       });
-
-      console.log('Custom Hook Result:');
-      console.log(result.code);
 
       // 验证自定义Hook可以使用React Hook配置
       expect(result.code).toContain('import { useTranslation } from \'react-i18next\';');
