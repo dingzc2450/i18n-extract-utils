@@ -6,7 +6,6 @@
 import { TransformOptions } from "../types";
 import {
   normalizeConfig,
-  CONFIG_DEFAULTS,
   NormalizedTransformOptions,
 } from "../core/config-normalizer";
 

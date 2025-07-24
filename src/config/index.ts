@@ -5,7 +5,7 @@
 
 import { TransformOptions } from "../types";
 import { CoreProcessor } from "../core/processor";
-import { normalizeConfig, NormalizedTransformOptions } from "../core/config-normalizer";
+import { CONFIG_DEFAULTS, normalizeConfig, NormalizedTransformOptions } from "../core/config-normalizer";
 
 /**
  * 统一处理器 - 使用简化的配置系统
