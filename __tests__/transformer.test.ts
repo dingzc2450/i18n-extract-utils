@@ -233,5 +233,53 @@ describe("processFiles Functionality", () => {
     expect(change.line).toBe(11); // Line of "___New Translation___"
   });
 
+  test("should handle TypeScript component with React.FC type annotation", async () => {
+    const codeWithTypedComponent = `
+      import React from 'react';
+
+      const ComponentA1: React.FC = () => {
+        return <h2>___Hello___</h2>; // Line 5
+      };
+
+      export default ComponentA1;
+    `;
+
+    const filePath = createTempFile(
+      codeWithTypedComponent,
+      "-typed-component.tsx"
+    );
+    const pattern = path.join(testTempDir, "test-*-typed-component.tsx");
+
+    const result = await processFiles(pattern, {
+      translationMethod: "t",
+      hookName: "useTranslation",
+      hookImport: "react-i18next",
+    });
+
+    expect(result.modifiedFiles.length).toBe(1);
+    const modifiedRecord = result.modifiedFiles[0];
+    const { newContent } = modifiedRecord;
+
+    // 1. Check that the import was added correctly
+    expect(newContent).toContain('import { useTranslation } from "react-i18next";');
+
+    // 2. Check that the hook was added to the typed component
+    expect(newContent).toMatch(/const ComponentA1: React\.FC = \(\) => {\s*const { t } = useTranslation\(\);/);
+
+    // 3. Check that the translation was applied correctly
+    expect(newContent).toContain('<h2>{t("Hello")}</h2>');
+
+    // 4. Verify the change record
+    expect(modifiedRecord.changes.length).toBe(1);
+    const change = modifiedRecord.changes[0];
+    expect(change.original).toBe("___Hello___");
+    expect(change.replacement).toBe('{t("Hello")}');
+    expect(change.line).toBe(5); // Line of "___Hello___"
+
+    // 5. Verify file content on disk
+    const finalContentOnDisk = fs.readFileSync(filePath, "utf8");
+    expect(finalContentOnDisk).toBe(modifiedRecord.newContent);
+  });
+
   // Add more tests as needed, e.g., for existingTranslations, outputPath, generateKey, template literals etc.
 });

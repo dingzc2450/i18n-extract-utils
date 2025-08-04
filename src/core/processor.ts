@@ -385,7 +385,7 @@ export class CoreProcessor {
         context
       );
       if (requirements.imports.length > 0 || requirements.hooks.length > 0) {
-        modifiedCode = this.addImportsAndHooksWithAST(
+        modifiedCode = this.addImportsAndHooks(
           modifiedCode,
           requirements.imports,
           requirements.hooks,
@@ -407,9 +407,9 @@ export class CoreProcessor {
   }
 
   /**
-   * 使用AST统一处理导入和hook插入
+   * 统一处理导入和hook插入
    */
-  private addImportsAndHooksWithAST(
+  private addImportsAndHooks(
     code: string,
     importRequirements: ImportRequirement[],
     hookRequirements: HookRequirement[],
@@ -420,19 +420,6 @@ export class CoreProcessor {
     }
 
     try {
-      // 如果没有提供文件路径，尝试从代码特征推断类型
-      let inferredPath = filePath;
-      if (!inferredPath) {
-        if (code.includes("jsx") || /<[A-Z]/.test(code) || /<[a-z]+/.test(code)) {
-          inferredPath = "file.tsx"; // JSX/TSX 文件
-        } else if (code.includes("typescript") || /:\s*\w+/.test(code)) {
-          inferredPath = "file.ts"; // TypeScript 文件
-        } else {
-          inferredPath = "file.js"; // 默认 JavaScript 文件
-        }
-      }
-
-      const ast = ASTParserUtils.parseCode(code, inferredPath);
       let modifiedCode = code;
 
       // 处理导入
@@ -454,7 +441,7 @@ export class CoreProcessor {
 
       return modifiedCode;
     } catch (error) {
-      console.warn(`Failed to add imports and hooks with AST:`, error);
+      console.warn(`Failed to add imports and hooks:`, error);
       return code;
     }
   }
@@ -672,11 +659,19 @@ export class CoreProcessor {
       false // 不是自定义Hook
     );
     
-    // 2. 查找React组件箭头函数
+    // 2. 查找React组件箭头函数（不带类型标注）
     modifiedCode = this.addHookToFunctions(
       modifiedCode, 
       hookReq, 
       /^(\s*)(export\s+)?(default\s+)?const\s+([A-Z][a-zA-Z0-9]*)\s*=\s*\([^)]*\)\s*=>\s*\{/gm,
+      false // 不是自定义Hook
+    );
+    
+    // 2.1. 查找React组件箭头函数（带TypeScript类型标注）
+    modifiedCode = this.addHookToFunctions(
+      modifiedCode, 
+      hookReq, 
+      /^(\s*)(export\s+)?(default\s+)?const\s+([A-Z][a-zA-Z0-9]*)\s*:\s*[^=]+\s*=\s*\([^)]*\)\s*=>\s*\{/gm,
       false // 不是自定义Hook
     );
     
@@ -688,11 +683,19 @@ export class CoreProcessor {
       true // 是自定义Hook
     );
     
-    // 4. 查找自定义Hook箭头函数
+    // 4. 查找自定义Hook箭头函数（不带类型标注）
     modifiedCode = this.addHookToFunctions(
       modifiedCode, 
       hookReq, 
       /^(\s*)(export\s+)?(default\s+)?const\s+(use[A-Z][a-zA-Z0-9]*)\s*=\s*\([^)]*\)\s*=>\s*\{/gm,
+      true // 是自定义Hook
+    );
+    
+    // 4.1. 查找自定义Hook箭头函数（带TypeScript类型标注）
+    modifiedCode = this.addHookToFunctions(
+      modifiedCode, 
+      hookReq, 
+      /^(\s*)(export\s+)?(default\s+)?const\s+(use[A-Z][a-zA-Z0-9]*)\s*:\s*[^=]+\s*=\s*\([^)]*\)\s*=>\s*\{/gm,
       true // 是自定义Hook
     );
 
