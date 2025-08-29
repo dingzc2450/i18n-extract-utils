@@ -68,15 +68,10 @@ export interface ProcessingContext {
  * 导入需求接口
  */
 export interface ImportRequirement {
-  source: string; // 导入源，如 "react-i18next"
-  specifiers: Array<{
-    name: string; // 导入名称，如 "useTranslation"
-    alias?: string; // 别名，如果有的话
-  }>;
-  isDefault?: boolean; // 是否为默认导入
-}
-
-/**
+  source: string;
+  specifiers: { name: string; alias?: string }[];
+  isDefault?: boolean;
+}/**
  * Hook调用需求接口
  */
 export interface HookRequirement {
@@ -106,7 +101,25 @@ export interface ExtractionResult {
 }
 
 /**
- * 核心处理器结果
+ * 导入变更的详细信息
+ */
+export type ImportChange =
+  | {
+      type: 'replace';
+      start: number;
+      end: number;
+      text: string;
+    }
+  | {
+      type: 'insert';
+      start: number;
+      end: number;
+      insertPosition: number;
+      text: string;
+    };
+
+/**
+ * 核心处理器的最终结果
  */
 export interface ProcessingResult {
   code: string;

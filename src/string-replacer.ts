@@ -1,4 +1,4 @@
-import { ChangeDetail } from "./types";
+import { ChangeDetail, ImportChange } from "./types";
 
 /**
  * 字符串替换器 - 使用精确的位置信息进行字符串替换，避免AST重新生成导致的格式问题
@@ -38,13 +38,31 @@ export class StringReplacer {
         } else if (change.matchContext) {
           // 使用上下文匹配进行替换
           result = this.replaceByContext(result, change);
-        } else {
-          // 回退到基于原始字符串的模糊匹配
-          result = this.replaceByOriginalString(result, change);
         }
       } catch (error) {
-        console.warn(`Failed to apply change at line ${change.line}, column ${change.column}:`, error);
-        // 继续处理其他替换
+        console.error("Failed to apply change:", { change, error });
+      }
+    }
+    return result;
+  }
+
+  /**
+   * 应用导入变更
+   */
+  static applyImportChanges(originalCode: string, changes: ImportChange[]): string {
+    if (changes.length === 0) {
+      return originalCode;
+    }
+
+    const sortedChanges = [...changes].sort((a, b) => b.start - a.start);
+
+    let result = originalCode;
+
+    for (const change of sortedChanges) {
+      if (change.type === 'replace') {
+        result = result.slice(0, change.start) + change.text + result.slice(change.end);
+      } else if (change.type === 'insert') {
+        result = result.slice(0, change.insertPosition) + change.text + result.slice(change.insertPosition);
       }
     }
 

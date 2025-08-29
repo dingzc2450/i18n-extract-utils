@@ -4,6 +4,8 @@
  */
 
 import { parse } from "@babel/parser";
+import generate from "@babel/generator";
+import traverse from "@babel/traverse";
 import * as t from "@babel/types";
 import { StringReplacer } from "../string-replacer";
 import { SmartImportManager } from "../smart-import-manager";
@@ -27,6 +29,7 @@ import {
   ProcessingMode,
   ProcessingResult,
   ExtractionResult,
+  ImportChange,
 } from "./types";
 import {
   ExtractedString,
@@ -373,8 +376,6 @@ export class CoreProcessor {
     context: ProcessingContext,
     plugin: FrameworkPlugin
   ): string {
-    if (extractedStrings.length === 0) return code;
-
     let modifiedCode = code;
 
     // 优先处理插件定义的导入和hook需求（统一格式）
@@ -389,7 +390,8 @@ export class CoreProcessor {
           modifiedCode,
           requirements.imports,
           requirements.hooks,
-          context.filePath
+          context.filePath,
+          options, // Pass options down
         );
         return modifiedCode; // 使用新的统一格式，跳过老的逻辑
       }
@@ -413,7 +415,8 @@ export class CoreProcessor {
     code: string,
     importRequirements: ImportRequirement[],
     hookRequirements: HookRequirement[],
-    filePath: string = ""
+    filePath: string = "",
+    options: TransformOptions = {}
   ): string {
     if (importRequirements.length === 0 && hookRequirements.length === 0) {
       return code;
@@ -421,13 +424,27 @@ export class CoreProcessor {
 
     try {
       let modifiedCode = code;
+      
+      // 从规范化配置中获取 mergeImports，默认为 true
+      // 修复：正确处理 mergeImports 属性，包括旧配置格式
+      let mergeImports = true;
+      if (options.i18nConfig?.i18nImport?.mergeImports !== undefined) {
+        // 新配置格式
+        mergeImports = options.i18nConfig.i18nImport.mergeImports !== false;
+      } 
 
       // 处理导入
       if (importRequirements.length > 0) {
-        for (const importReq of importRequirements) {
-          if (!this.hasExistingImport(modifiedCode, importReq)) {
+        if (mergeImports) {
+          modifiedCode = this.addOrMergeImports(modifiedCode, importRequirements, filePath);
+        } else {
+          // 旧的、非合并的添加逻辑
+          for (const importReq of importRequirements) {
             const importStatement = ImportHookUtils.generateImportStatement(importReq);
-            modifiedCode = this.addImportToCode(modifiedCode, importStatement);
+            // 修复：应该检查 modifiedCode，而不是原始的 code
+            if (!modifiedCode.includes(importStatement)) {
+               modifiedCode = this.addImportToCode(modifiedCode, importStatement);
+            }
           }
         }
       }
@@ -444,6 +461,134 @@ export class CoreProcessor {
       console.warn(`Failed to add imports and hooks:`, error);
       return code;
     }
+  }
+
+  /**
+   * 使用AST分析来合并或添加导入，然后通过字符串操作应用变更。
+   */
+  private addOrMergeImports(
+    code: string,
+    importRequirements: ImportRequirement[],
+    filePath: string
+  ): string {
+    const parserConfig = ASTParserUtils.getParserConfig(filePath);
+    const ast = parse(code, { ...parserConfig, sourceFilename: filePath, ranges: true });
+
+    const changes: ImportChange[] = [];
+    const existingImports = new Map<string, { node: t.ImportDeclaration, specifiers: Set<string> }>();
+    let lastImportEndPos = 0;
+
+    // 1. 分析现有导入
+    traverse(ast, {
+      ImportDeclaration: (path) => {
+        const node = path.node;
+        const source = node.source.value;
+        
+        if (!existingImports.has(source)) {
+          existingImports.set(source, { node, specifiers: new Set() });
+        }
+        
+        const existing = existingImports.get(source)!;
+        node.specifiers.forEach(spec => {
+          if (t.isImportSpecifier(spec)) {
+            const importedName = spec.imported.type === 'Identifier' ? spec.imported.name : spec.imported.value;
+            existing.specifiers.add(importedName);
+          } else if (t.isImportDefaultSpecifier(spec)) {
+            existing.specifiers.add('default');
+          } else if (t.isImportNamespaceSpecifier(spec)) {
+            existing.specifiers.add('*');
+          }
+        });
+        
+        if (node.end) {
+          lastImportEndPos = Math.max(lastImportEndPos, node.end);
+        }
+      }
+    });
+
+    // 2. 计算变更集
+    for (const req of importRequirements) {
+      const existing = existingImports.get(req.source);
+
+      if (existing) { // 已存在相同源，尝试合并
+        const { node, specifiers } = existing;
+        const newNamedSpecifiers: t.ImportSpecifier[] = [];
+        let newDefaultSpecifier: t.ImportDefaultSpecifier | null = null;
+
+        if (req.isDefault) {
+          if (!specifiers.has('default')) {
+            newDefaultSpecifier = t.importDefaultSpecifier(t.identifier(req.specifiers[0].name));
+            specifiers.add('default');
+          }
+        } else {
+          (req.specifiers || []).forEach(spec => {
+            if (!specifiers.has(spec.name)) {
+              newNamedSpecifiers.push(t.importSpecifier(t.identifier(spec.name), t.identifier(spec.name)));
+              specifiers.add(spec.name);
+            }
+          });
+        }
+
+        if (newNamedSpecifiers.length > 0 || newDefaultSpecifier) {
+          const updatedNode = t.cloneNode(node);
+          if (newDefaultSpecifier) {
+            updatedNode.specifiers.unshift(newDefaultSpecifier);
+          }
+          updatedNode.specifiers.push(...newNamedSpecifiers);
+          
+          const { code: newImportCode } = generate(updatedNode);
+
+          changes.push({
+            type: 'replace',
+            start: node.start!,
+            end: node.end!,
+            text: newImportCode,
+          });
+        }
+      } else { // 不存在相同源，添加新导入
+        const newSpecifiers: (t.ImportSpecifier | t.ImportDefaultSpecifier)[] = [];
+        if (req.isDefault) {
+          newSpecifiers.push(t.importDefaultSpecifier(t.identifier(req.specifiers[0].name)));
+        } else {
+          (req.specifiers || []).forEach(s => {
+            newSpecifiers.push(t.importSpecifier(t.identifier(s.name), t.identifier(s.name)));
+          });
+        }
+        
+        const newImportNode = t.importDeclaration(newSpecifiers, t.stringLiteral(req.source));
+        const { code: newImportCode } = generate(newImportNode);
+        
+        const insertPos = lastImportEndPos > 0 ? code.indexOf('\n', lastImportEndPos) + 1 : 0;
+
+        changes.push({
+          type: 'insert',
+          start: insertPos,
+          end: insertPos,
+          insertPosition: insertPos,
+          text: newImportCode + '\n',
+        });
+
+        // 更新信息以便后续的新导入可以基于此进行
+        lastImportEndPos += newImportCode.length + 1;
+        const newSpecifierNames = new Set<string>();
+        if (req.isDefault) {
+          newSpecifierNames.add('default');
+        } else {
+          (req.specifiers || []).forEach(s => newSpecifierNames.add(s.name));
+        }
+        existingImports.set(req.source, { 
+          node: newImportNode, 
+          specifiers: newSpecifierNames
+        });
+      }
+    }
+
+    // 3. 应用变更
+    if (changes.length > 0) {
+      return StringReplacer.applyImportChanges(code, changes);
+    }
+
+    return code;
   }
 
   /**
@@ -504,10 +649,50 @@ export class CoreProcessor {
    * 检查是否已存在导入（简化版本）
    */
   private hasExistingImport(code: string, importReq: ImportRequirement): boolean {
-    const importPattern = new RegExp(
-      `import\\s+.*\\b${this.escapeRegex(importReq.specifiers[0].name)}\\b.*from\\s+['"]${this.escapeRegex(importReq.source)}['"]`
-    );
-    return importPattern.test(code);
+    try {
+      const ast = parse(code, { sourceType: 'module', plugins: ['typescript', 'jsx'] });
+      let found = false;
+
+      traverse(ast, {
+        ImportDeclaration(path) {
+          if (path.node.source.value === importReq.source) {
+            // 检查是否满足所有需要的 specifiers
+            const existingSpecifiers = new Set(
+              path.node.specifiers.map(s => {
+                if (t.isImportDefaultSpecifier(s)) return 'default';
+                if (t.isImportSpecifier(s) && s.imported.type === 'Identifier') return s.imported.name;
+                return null;
+              })
+            );
+
+            const requiredSpecifiers = new Set(
+              importReq.specifiers.map(s => (importReq.isDefault ? 'default' : s.name))
+            );
+            
+            let allRequiredFound = true;
+            for (const reqSpec of requiredSpecifiers) {
+              if (!existingSpecifiers.has(reqSpec)) {
+                allRequiredFound = false;
+                break;
+              }
+            }
+
+            if (allRequiredFound) {
+              found = true;
+              path.stop();
+            }
+          }
+        },
+      });
+
+      return found;
+    } catch (e) {
+      // 如果解析失败，回退到简单的正则检查
+      const importPattern = new RegExp(
+        `import\\s+.*\\b${this.escapeRegex(importReq.specifiers[0].name)}\\b.*from\\s+['"]${this.escapeRegex(importReq.source)}['"]`
+      );
+      return importPattern.test(code);
+    }
   }
 
   /**
@@ -557,6 +742,11 @@ export class CoreProcessor {
    * 添加导入到代码中
    */
   private addImportToCode(code: string, importStatement: string): string {
+    // 如果代码中已经包含该导入语句，则不需要添加
+    if (code.includes(importStatement)) {
+      return code;
+    }
+    
     const lines = code.split('\n');
     let insertIndex = 0;
 
@@ -567,14 +757,17 @@ export class CoreProcessor {
       if (line.startsWith('import ')) {
         lastImportIndex = i;
       } else if (line && !line.startsWith('//') && !line.startsWith('/*') && !line.startsWith('"use') && !line.startsWith("'use")) {
+        // 遇到非导入、非注释、非"use client"等指令时停止查找
         break;
       }
     }
 
     if (lastImportIndex !== -1) {
+      // 在最后一个导入语句后插入新导入
       insertIndex = lastImportIndex + 1;
     }
 
+    // 在指定位置插入导入语句
     lines.splice(insertIndex, 0, importStatement);
     return lines.join('\n');
   }

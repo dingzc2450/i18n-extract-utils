@@ -164,6 +164,24 @@ export interface ChangeDetail {
 }
 
 /**
+ * 用于导入语句修改的变更详情。
+ */
+export type ImportChange =
+  | {
+      type: 'replace';
+      start: number;
+      end: number;
+      text: string;
+    }
+  | {
+      type: 'insert';
+      start: number; // 使用 start 以便排序
+      end: number; // 使用 end 以便排序
+      insertPosition: number;
+      text: string;
+    };
+
+/**
  * Represents a record of a file that was modified, including details of the changes.
  * 表示已修改文件的记录，包括更改的详细信息。
  */
@@ -188,6 +206,11 @@ export interface I18nImportConfig {
   source: string;
   /** 可选：完全自定义导入语句（如 import t from ...），若设置则覆盖自动生成 */
   custom?: string;
+  /**
+   * 是否合并来自同一源的导入语句。
+   * @default true
+   */
+  mergeImports?: boolean;
 }
 
 /**
