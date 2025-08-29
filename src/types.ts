@@ -100,6 +100,7 @@ export interface TransformOptions {
    * 是否强制使用AST转换模式（可能破坏格式，但更稳妥）
    * Whether to force AST transformation mode (may break formatting but more robust)
    * 默认 false
+   * @todo 暂未实现
    */
   useASTTransform?: boolean;
 }
