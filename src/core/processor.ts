@@ -13,13 +13,13 @@ import { fallbackTransform } from "../fallback-transform";
 import { ASTParserUtils, ImportHookUtils } from "./utils";
 import { collectContextAwareReplacementInfo } from "../context-aware-ast-replacer";
 import { createI18nError, logError, I18nError } from "./error-handler";
-import { 
-  normalizeConfig, 
-  CONFIG_DEFAULTS, 
-  getTranslationMethodName, 
-  getHookName, 
+import {
+  normalizeConfig,
+  CONFIG_DEFAULTS,
+  getTranslationMethodName,
+  getHookName,
   getImportSource,
-  NormalizedTransformOptions 
+  NormalizedTransformOptions,
 } from "./config-normalizer";
 import {
   FrameworkPlugin,
@@ -31,11 +31,7 @@ import {
   ExtractionResult,
   ImportChange,
 } from "./types";
-import {
-  ExtractedString,
-  TransformOptions,
-  UsedExistingKey,
-} from "../types";
+import { ExtractedString, TransformOptions, UsedExistingKey } from "../types";
 
 /**
  * 核心处理器类 - 重构版本
@@ -66,7 +62,7 @@ export class CoreProcessor {
     try {
       // 规范化配置，确保一致性
       const normalizedOptions = normalizeConfig(options);
-      
+
       // 1. 确定处理模式 - 默认使用上下文感知模式
       const mode = this.determineProcessingMode(normalizedOptions);
 
@@ -144,33 +140,33 @@ export class CoreProcessor {
       };
     } catch (error) {
       // 使用统一的错误处理
-      let errorCode = 'PARSING001'; // 默认为解析错误
+      let errorCode = "PARSING001"; // 默认为解析错误
       let params = [String(error)];
-      
+
       if (error instanceof Error) {
-        if (error.message.includes('No plugin found')) {
-          errorCode = 'PLUGIN002';
+        if (error.message.includes("No plugin found")) {
+          errorCode = "PLUGIN002";
           params = [filePath];
-        } else if (error.message.includes('Vue')) {
-          errorCode = 'VUE001';
+        } else if (error.message.includes("Vue")) {
+          errorCode = "VUE001";
           params = [error.message];
-        } else if (error.message.includes('React')) {
-          errorCode = 'REACT001';
+        } else if (error.message.includes("React")) {
+          errorCode = "REACT001";
           params = [error.message];
         }
       }
-      
+
       // 创建并记录错误
       const i18nError = createI18nError(errorCode, params, {
         filePath,
-        originalError: error instanceof Error ? error : undefined
+        originalError: error instanceof Error ? error : undefined,
       });
-      
+
       logError(i18nError);
-      
+
       const extractedStrings: ExtractedString[] = [];
       const usedExistingKeysList: UsedExistingKey[] = [];
-      
+
       return {
         code: fallbackTransform(code, extractedStrings, options),
         extractedStrings,
@@ -185,11 +181,13 @@ export class CoreProcessor {
    * 确定处理模式
    * 暂时只支持 CONTEXT_AWARE   其余模式不支持
    */
-  private determineProcessingMode(options: TransformOptions | NormalizedTransformOptions): ProcessingMode {
+  private determineProcessingMode(
+    options: TransformOptions | NormalizedTransformOptions
+  ): ProcessingMode {
     // 如果用户明确指定了字符串替换模式
     if (
       options.preserveFormatting === true ||
-      ('normalizedI18nConfig' in options 
+      ("normalizedI18nConfig" in options
         ? options.normalizedI18nConfig.nonReactConfig
         : options.i18nConfig?.nonReactConfig)
     ) {
@@ -198,9 +196,9 @@ export class CoreProcessor {
 
     // 如果用户明确指定了AST转换模式
     if (options.useASTTransform === true) {
-      throw new Error('AST转换模式暂不支持');
+      throw new Error("AST转换模式暂不支持");
     }
-    
+
     // 默认使用上下文感知模式
     return ProcessingMode.CONTEXT_AWARE;
   }
@@ -213,7 +211,6 @@ export class CoreProcessor {
     filePath: string,
     options: TransformOptions
   ): FrameworkPlugin {
-    
     // 按优先级查找合适的插件
     for (const plugin of this.plugins) {
       if (plugin.shouldApply(code, filePath, options)) {
@@ -228,16 +225,23 @@ export class CoreProcessor {
   /**
    * 获取默认插件
    */
-  private getDefaultPlugin(options: TransformOptions | NormalizedTransformOptions): FrameworkPlugin {
+  private getDefaultPlugin(
+    options: TransformOptions | NormalizedTransformOptions
+  ): FrameworkPlugin {
     // 检查是否是React15框架
-    const isReact15 = 'normalizedI18nConfig' in options 
-      ? options.normalizedI18nConfig.framework === 'react15' 
-      : options.i18nConfig?.framework === 'react15';
-    
+    const isReact15 =
+      "normalizedI18nConfig" in options
+        ? options.normalizedI18nConfig.framework === "react15"
+        : options.i18nConfig?.framework === "react15";
+
     return {
-      name: isReact15 ? 'default-react15' : 'default-react',
+      name: isReact15 ? "default-react15" : "default-react",
       shouldApply: () => true,
-      getRequiredImportsAndHooks: (extractedStrings, pluginOptions, context) => {
+      getRequiredImportsAndHooks: (
+        extractedStrings,
+        pluginOptions,
+        context
+      ) => {
         // 没有提取字符串时不需要导入
         if (extractedStrings.length === 0) {
           return { imports: [], hooks: [] };
@@ -247,10 +251,10 @@ export class CoreProcessor {
         const hookName = getHookName(pluginOptions);
         const hookSource = getImportSource(pluginOptions);
         const translationMethod = getTranslationMethodName(pluginOptions);
-        
+
         // 检查是否是React15框架
-        const isReact15 = pluginOptions.i18nConfig?.framework === 'react15';
-          
+        const isReact15 = pluginOptions.i18nConfig?.framework === "react15";
+
         if (isReact15) {
           // React15处理逻辑：直接导入函数，不使用hooks
           const imports: ImportRequirement[] = [
@@ -260,13 +264,13 @@ export class CoreProcessor {
               isDefault: false,
             },
           ];
-          
+
           // React15不需要hooks
           const hooks: HookRequirement[] = [];
-          
+
           return { imports, hooks };
         }
-        
+
         // 默认React处理逻辑：使用hooks
         const imports: ImportRequirement[] = [
           {
@@ -279,16 +283,18 @@ export class CoreProcessor {
         const hooks: HookRequirement[] = [
           {
             hookName,
-            variableName: translationMethod === "default" ? "t" : translationMethod,
+            variableName:
+              translationMethod === "default" ? "t" : translationMethod,
             isDestructured: translationMethod !== "default",
-            callExpression: translationMethod === "default" 
-              ? `const t = ${hookName}();`
-              : `const { ${translationMethod} } = ${hookName}();`,
+            callExpression:
+              translationMethod === "default"
+                ? `const t = ${hookName}();`
+                : `const { ${translationMethod} } = ${hookName}();`,
           },
         ];
 
         return { imports, hooks };
-      }
+      },
     };
   }
 
@@ -325,13 +331,14 @@ export class CoreProcessor {
 
     if (mode === ProcessingMode.CONTEXT_AWARE) {
       // 使用上下文感知模式 - 暂时保持使用原有的方法，后续可以迁移到新的extractor
-      
+
       // 规范化配置获取导入信息
       const normalizedOptions = normalizeConfig(options);
-      
+
       const importConfig = normalizedOptions.normalizedI18nConfig.i18nImport;
-      const nonReactConfig = normalizedOptions.normalizedI18nConfig.nonReactConfig;
-      
+      const nonReactConfig =
+        normalizedOptions.normalizedI18nConfig.nonReactConfig;
+
       const importManager = new SmartImportManager(
         importConfig,
         nonReactConfig
@@ -391,7 +398,7 @@ export class CoreProcessor {
           requirements.imports,
           requirements.hooks,
           context.filePath,
-          options, // Pass options down
+          options // Pass options down
         );
         return modifiedCode; // 使用新的统一格式，跳过老的逻辑
       }
@@ -426,12 +433,7 @@ export class CoreProcessor {
       let modifiedCode = code;
       
       // 从规范化配置中获取 mergeImports，默认为 true
-      // 修复：正确处理 mergeImports 属性，包括旧配置格式
-      let mergeImports = true;
-      if (options.i18nConfig?.i18nImport?.mergeImports !== undefined) {
-        // 新配置格式
-        mergeImports = options.i18nConfig.i18nImport.mergeImports !== false;
-      } 
+      const mergeImports = this.getMergeImports(options);
 
       // 处理导入
       if (importRequirements.length > 0) {
@@ -464,6 +466,21 @@ export class CoreProcessor {
   }
 
   /**
+   * 获取mergeImports配置值
+   * @param options 转换选项
+   * @returns mergeImports的布尔值
+   */
+  private getMergeImports(options: TransformOptions): boolean {
+    // 优先使用新配置格式
+    if (options.i18nConfig?.i18nImport?.mergeImports !== undefined) {
+      return options.i18nConfig.i18nImport.mergeImports !== false;
+    }
+    
+    // 默认值
+    return true;
+  }
+
+  /**
    * 使用AST分析来合并或添加导入，然后通过字符串操作应用变更。
    */
   private addOrMergeImports(
@@ -472,10 +489,17 @@ export class CoreProcessor {
     filePath: string
   ): string {
     const parserConfig = ASTParserUtils.getParserConfig(filePath);
-    const ast = parse(code, { ...parserConfig, sourceFilename: filePath, ranges: true });
+    const ast = parse(code, {
+      ...parserConfig,
+      sourceFilename: filePath,
+      ranges: true,
+    });
 
     const changes: ImportChange[] = [];
-    const existingImports = new Map<string, { node: t.ImportDeclaration, specifiers: Set<string> }>();
+    const existingImports = new Map<
+      string,
+      { node: t.ImportDeclaration; specifiers: Set<string> }
+    >();
     let lastImportEndPos = 0;
 
     // 1. 分析现有导入
@@ -483,47 +507,58 @@ export class CoreProcessor {
       ImportDeclaration: (path) => {
         const node = path.node;
         const source = node.source.value;
-        
+
         if (!existingImports.has(source)) {
           existingImports.set(source, { node, specifiers: new Set() });
         }
-        
+
         const existing = existingImports.get(source)!;
-        node.specifiers.forEach(spec => {
+        node.specifiers.forEach((spec) => {
           if (t.isImportSpecifier(spec)) {
-            const importedName = spec.imported.type === 'Identifier' ? spec.imported.name : spec.imported.value;
+            const importedName =
+              spec.imported.type === "Identifier"
+                ? spec.imported.name
+                : spec.imported.value;
             existing.specifiers.add(importedName);
           } else if (t.isImportDefaultSpecifier(spec)) {
-            existing.specifiers.add('default');
+            existing.specifiers.add("default");
           } else if (t.isImportNamespaceSpecifier(spec)) {
-            existing.specifiers.add('*');
+            existing.specifiers.add("*");
           }
         });
-        
+
         if (node.end) {
           lastImportEndPos = Math.max(lastImportEndPos, node.end);
         }
-      }
+      },
     });
 
     // 2. 计算变更集
     for (const req of importRequirements) {
       const existing = existingImports.get(req.source);
 
-      if (existing) { // 已存在相同源，尝试合并
+      if (existing) {
+        // 已存在相同源，尝试合并
         const { node, specifiers } = existing;
         const newNamedSpecifiers: t.ImportSpecifier[] = [];
         let newDefaultSpecifier: t.ImportDefaultSpecifier | null = null;
 
         if (req.isDefault) {
-          if (!specifiers.has('default')) {
-            newDefaultSpecifier = t.importDefaultSpecifier(t.identifier(req.specifiers[0].name));
-            specifiers.add('default');
+          if (!specifiers.has("default")) {
+            newDefaultSpecifier = t.importDefaultSpecifier(
+              t.identifier(req.specifiers[0].name)
+            );
+            specifiers.add("default");
           }
         } else {
-          (req.specifiers || []).forEach(spec => {
+          (req.specifiers || []).forEach((spec) => {
             if (!specifiers.has(spec.name)) {
-              newNamedSpecifiers.push(t.importSpecifier(t.identifier(spec.name), t.identifier(spec.name)));
+              newNamedSpecifiers.push(
+                t.importSpecifier(
+                  t.identifier(spec.name),
+                  t.identifier(spec.name)
+                )
+              );
               specifiers.add(spec.name);
             }
           });
@@ -535,50 +570,60 @@ export class CoreProcessor {
             updatedNode.specifiers.unshift(newDefaultSpecifier);
           }
           updatedNode.specifiers.push(...newNamedSpecifiers);
-          
+
           const { code: newImportCode } = generate(updatedNode);
 
           changes.push({
-            type: 'replace',
+            type: "replace",
             start: node.start!,
             end: node.end!,
             text: newImportCode,
           });
         }
-      } else { // 不存在相同源，添加新导入
-        const newSpecifiers: (t.ImportSpecifier | t.ImportDefaultSpecifier)[] = [];
+      } else {
+        // 不存在相同源，添加新导入
+        const newSpecifiers: (t.ImportSpecifier | t.ImportDefaultSpecifier)[] =
+          [];
         if (req.isDefault) {
-          newSpecifiers.push(t.importDefaultSpecifier(t.identifier(req.specifiers[0].name)));
+          newSpecifiers.push(
+            t.importDefaultSpecifier(t.identifier(req.specifiers[0].name))
+          );
         } else {
-          (req.specifiers || []).forEach(s => {
-            newSpecifiers.push(t.importSpecifier(t.identifier(s.name), t.identifier(s.name)));
+          (req.specifiers || []).forEach((s) => {
+            newSpecifiers.push(
+              t.importSpecifier(t.identifier(s.name), t.identifier(s.name))
+            );
           });
         }
-        
-        const newImportNode = t.importDeclaration(newSpecifiers, t.stringLiteral(req.source));
+
+        const newImportNode = t.importDeclaration(
+          newSpecifiers,
+          t.stringLiteral(req.source)
+        );
         const { code: newImportCode } = generate(newImportNode);
-        
-        const insertPos = lastImportEndPos > 0 ? code.indexOf('\n', lastImportEndPos) + 1 : 0;
+
+        const insertPos =
+          lastImportEndPos > 0 ? code.indexOf("\n", lastImportEndPos) + 1 : 0;
 
         changes.push({
-          type: 'insert',
+          type: "insert",
           start: insertPos,
           end: insertPos,
           insertPosition: insertPos,
-          text: newImportCode + '\n',
+          text: newImportCode + "\n",
         });
 
         // 更新信息以便后续的新导入可以基于此进行
         lastImportEndPos += newImportCode.length + 1;
         const newSpecifierNames = new Set<string>();
         if (req.isDefault) {
-          newSpecifierNames.add('default');
+          newSpecifierNames.add("default");
         } else {
-          (req.specifiers || []).forEach(s => newSpecifierNames.add(s.name));
+          (req.specifiers || []).forEach((s) => newSpecifierNames.add(s.name));
         }
-        existingImports.set(req.source, { 
-          node: newImportNode, 
-          specifiers: newSpecifierNames
+        existingImports.set(req.source, {
+          node: newImportNode,
+          specifiers: newSpecifierNames,
         });
       }
     }
@@ -648,9 +693,15 @@ export class CoreProcessor {
   /**
    * 检查是否已存在导入（简化版本）
    */
-  private hasExistingImport(code: string, importReq: ImportRequirement): boolean {
+  private hasExistingImport(
+    code: string,
+    importReq: ImportRequirement
+  ): boolean {
     try {
-      const ast = parse(code, { sourceType: 'module', plugins: ['typescript', 'jsx'] });
+      const ast = parse(code, {
+        sourceType: "module",
+        plugins: ["typescript", "jsx"],
+      });
       let found = false;
 
       traverse(ast, {
@@ -658,17 +709,20 @@ export class CoreProcessor {
           if (path.node.source.value === importReq.source) {
             // 检查是否满足所有需要的 specifiers
             const existingSpecifiers = new Set(
-              path.node.specifiers.map(s => {
-                if (t.isImportDefaultSpecifier(s)) return 'default';
-                if (t.isImportSpecifier(s) && s.imported.type === 'Identifier') return s.imported.name;
+              path.node.specifiers.map((s) => {
+                if (t.isImportDefaultSpecifier(s)) return "default";
+                if (t.isImportSpecifier(s) && s.imported.type === "Identifier")
+                  return s.imported.name;
                 return null;
               })
             );
 
             const requiredSpecifiers = new Set(
-              importReq.specifiers.map(s => (importReq.isDefault ? 'default' : s.name))
+              importReq.specifiers.map((s) =>
+                importReq.isDefault ? "default" : s.name
+              )
             );
-            
+
             let allRequiredFound = true;
             for (const reqSpec of requiredSpecifiers) {
               if (!existingSpecifiers.has(reqSpec)) {
@@ -689,7 +743,9 @@ export class CoreProcessor {
     } catch (e) {
       // 如果解析失败，回退到简单的正则检查
       const importPattern = new RegExp(
-        `import\\s+.*\\b${this.escapeRegex(importReq.specifiers[0].name)}\\b.*from\\s+['"]${this.escapeRegex(importReq.source)}['"]`
+        `import\\s+.*\\b${this.escapeRegex(
+          importReq.specifiers[0].name
+        )}\\b.*from\\s+['"]${this.escapeRegex(importReq.source)}['"]`
       );
       return importPattern.test(code);
     }
@@ -742,34 +798,32 @@ export class CoreProcessor {
    * 添加导入到代码中
    */
   private addImportToCode(code: string, importStatement: string): string {
-    // 如果代码中已经包含该导入语句，则不需要添加
-    if (code.includes(importStatement)) {
-      return code;
-    }
-    
-    const lines = code.split('\n');
+    const lines = code.split("\n");
     let insertIndex = 0;
 
     // 查找最后一个导入的位置
     let lastImportIndex = -1;
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
-      if (line.startsWith('import ')) {
+      if (line.startsWith("import ")) {
         lastImportIndex = i;
-      } else if (line && !line.startsWith('//') && !line.startsWith('/*') && !line.startsWith('"use') && !line.startsWith("'use")) {
-        // 遇到非导入、非注释、非"use client"等指令时停止查找
+      } else if (
+        line &&
+        !line.startsWith("//") &&
+        !line.startsWith("/*") &&
+        !line.startsWith('"use') &&
+        !line.startsWith("'use")
+      ) {
         break;
       }
     }
 
     if (lastImportIndex !== -1) {
-      // 在最后一个导入语句后插入新导入
       insertIndex = lastImportIndex + 1;
     }
 
-    // 在指定位置插入导入语句
     lines.splice(insertIndex, 0, importStatement);
-    return lines.join('\n');
+    return lines.join("\n");
   }
 
   /**
@@ -812,28 +866,32 @@ export class CoreProcessor {
     if (code.includes(hookReq.callExpression)) {
       return true;
     }
-    
+
     // 检查是否包含hook函数调用（更宽泛的检查）
     if (code.includes(`${hookReq.hookName}()`)) {
       return true;
     }
-    
+
     // 检查是否有类似的解构赋值（针对解构的情况）
     if (hookReq.isDestructured && hookReq.variableName) {
-      const destructPattern = new RegExp(`const\\s*\\{[^}]*\\b${hookReq.variableName}\\b[^}]*\\}\\s*=\\s*${hookReq.hookName}\\s*\\(`);
+      const destructPattern = new RegExp(
+        `const\\s*\\{[^}]*\\b${hookReq.variableName}\\b[^}]*\\}\\s*=\\s*${hookReq.hookName}\\s*\\(`
+      );
       if (destructPattern.test(code)) {
         return true;
       }
     }
-    
+
     // 检查是否有直接赋值（针对非解构的情况）
     if (!hookReq.isDestructured && hookReq.variableName) {
-      const directPattern = new RegExp(`const\\s+${hookReq.variableName}\\s*=\\s*${hookReq.hookName}\\s*\\(`);
+      const directPattern = new RegExp(
+        `const\\s+${hookReq.variableName}\\s*=\\s*${hookReq.hookName}\\s*\\(`
+      );
       if (directPattern.test(code)) {
         return true;
       }
     }
-    
+
     return false;
   }
 
@@ -842,52 +900,52 @@ export class CoreProcessor {
    */
   private addHookCallToCode(code: string, hookReq: HookRequirement): string {
     let modifiedCode = code;
-    
+
     // 处理所有函数，支持React组件和自定义Hook
     // 1. 查找React组件函数 - 修改正则表达式以匹配任意缩进
     modifiedCode = this.addHookToFunctions(
-      modifiedCode, 
-      hookReq, 
+      modifiedCode,
+      hookReq,
       /^(\s*)(export\s+)?(default\s+)?function\s+([A-Z][a-zA-Z0-9]*)\s*\([^)]*\)\s*\{/gm,
       false // 不是自定义Hook
     );
-    
+
     // 2. 查找React组件箭头函数（不带类型标注）
     modifiedCode = this.addHookToFunctions(
-      modifiedCode, 
-      hookReq, 
+      modifiedCode,
+      hookReq,
       /^(\s*)(export\s+)?(default\s+)?const\s+([A-Z][a-zA-Z0-9]*)\s*=\s*\([^)]*\)\s*=>\s*\{/gm,
       false // 不是自定义Hook
     );
-    
+
     // 2.1. 查找React组件箭头函数（带TypeScript类型标注）
     modifiedCode = this.addHookToFunctions(
-      modifiedCode, 
-      hookReq, 
+      modifiedCode,
+      hookReq,
       /^(\s*)(export\s+)?(default\s+)?const\s+([A-Z][a-zA-Z0-9]*)\s*:\s*[^=]+\s*=\s*\([^)]*\)\s*=>\s*\{/gm,
       false // 不是自定义Hook
     );
-    
+
     // 3. 查找自定义Hook函数
     modifiedCode = this.addHookToFunctions(
-      modifiedCode, 
-      hookReq, 
+      modifiedCode,
+      hookReq,
       /^(\s*)(export\s+)?(default\s+)?function\s+(use[A-Z][a-zA-Z0-9]*)\s*\([^)]*\)\s*\{/gm,
       true // 是自定义Hook
     );
-    
+
     // 4. 查找自定义Hook箭头函数（不带类型标注）
     modifiedCode = this.addHookToFunctions(
-      modifiedCode, 
-      hookReq, 
+      modifiedCode,
+      hookReq,
       /^(\s*)(export\s+)?(default\s+)?const\s+(use[A-Z][a-zA-Z0-9]*)\s*=\s*\([^)]*\)\s*=>\s*\{/gm,
       true // 是自定义Hook
     );
-    
+
     // 4.1. 查找自定义Hook箭头函数（带TypeScript类型标注）
     modifiedCode = this.addHookToFunctions(
-      modifiedCode, 
-      hookReq, 
+      modifiedCode,
+      hookReq,
       /^(\s*)(export\s+)?(default\s+)?const\s+(use[A-Z][a-zA-Z0-9]*)\s*:\s*[^=]+\s*=\s*\([^)]*\)\s*=>\s*\{/gm,
       true // 是自定义Hook
     );
@@ -899,9 +957,9 @@ export class CoreProcessor {
    * 为匹配指定模式的函数添加Hook调用
    */
   private addHookToFunctions(
-    code: string, 
-    hookReq: HookRequirement, 
-    pattern: RegExp, 
+    code: string,
+    hookReq: HookRequirement,
+    pattern: RegExp,
     isCustomHook: boolean
   ): string {
     const matches = Array.from(code.matchAll(pattern));
@@ -913,49 +971,52 @@ export class CoreProcessor {
       const functionName = match[4];
       const indent = match[1];
       const openBracePos = (match.index || 0) + match[0].length;
-      
+
       // 检查这个特定函数是否已经有Hook调用
       const functionStart = match.index || 0;
       const functionEnd = this.findFunctionEnd(modifiedCode, openBracePos);
       const functionContent = modifiedCode.slice(functionStart, functionEnd);
-      
+
       // 使用改进的hook检查逻辑
       if (this.hasExistingHookCall(functionContent, hookReq)) {
         return; // 这个函数已经有Hook调用了
       }
-      
+
       // 对于React组件，需要检查是否返回JSX且包含翻译调用
       if (!isCustomHook) {
-        const hasJSX = functionContent.includes('<') && functionContent.includes('>');
+        const hasJSX =
+          functionContent.includes("<") && functionContent.includes(">");
         // 更宽泛的翻译函数检查，支持 t() 和 t.xxx() 模式
-        const hasTCall = functionContent.includes(`${hookReq.variableName}(`) || 
-                        functionContent.includes(`${hookReq.variableName}.`);
-        
+        const hasTCall =
+          functionContent.includes(`${hookReq.variableName}(`) ||
+          functionContent.includes(`${hookReq.variableName}.`);
+
         if (!hasJSX || !hasTCall) {
           return; // 不是React组件或者没有使用翻译函数
         }
       }
-      
+
       // 对于自定义Hook，检查是否有t()调用
       if (isCustomHook) {
         // 更宽泛的翻译函数检查，支持 t() 和 t.xxx() 模式
-        const hasCall = functionContent.includes(`${hookReq.variableName}(`) || 
-                       functionContent.includes(`${hookReq.variableName}.`);
-        
+        const hasCall =
+          functionContent.includes(`${hookReq.variableName}(`) ||
+          functionContent.includes(`${hookReq.variableName}.`);
+
         if (!hasCall) {
           return; // 自定义Hook没有使用翻译函数，跳过
         }
       }
-      
+
       // 插入Hook调用
-      const hookCallLine = '\n' + indent + '  ' + hookReq.callExpression;
+      const hookCallLine = "\n" + indent + "  " + hookReq.callExpression;
       const insertPosition = openBracePos + totalOffset;
-      
-      modifiedCode = 
-        modifiedCode.slice(0, insertPosition) + 
-        hookCallLine + 
+
+      modifiedCode =
+        modifiedCode.slice(0, insertPosition) +
+        hookCallLine +
         modifiedCode.slice(insertPosition);
-      
+
       totalOffset += hookCallLine.length;
     });
 
@@ -968,16 +1029,16 @@ export class CoreProcessor {
   private findFunctionEnd(code: string, openBracePos: number): number {
     let braceCount = 1;
     let pos = openBracePos;
-    
+
     while (pos < code.length && braceCount > 0) {
       pos++;
-      if (code[pos] === '{') {
+      if (code[pos] === "{") {
         braceCount++;
-      } else if (code[pos] === '}') {
+      } else if (code[pos] === "}") {
         braceCount--;
       }
     }
-    
+
     return pos + 1;
   }
   /**

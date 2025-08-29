@@ -50,6 +50,7 @@ export interface NormalizedI18nConfig {
     name: string;
     importName: string;
     source: string;
+    mergeImports: boolean;
     custom?: string;
   };
   nonReactConfig?: any;
@@ -116,6 +117,7 @@ function normalizeI18nImport(options: TransformOptions): NormalizedI18nConfig["i
         name: name || CONFIG_DEFAULTS.REACT15_TRANSLATION_METHOD,
         importName: importName || CONFIG_DEFAULTS.REACT15_TRANSLATION_METHOD, // React15直接用t，不用hook
         source: CONFIG_DEFAULTS.REACT15_HOOK_SOURCE, // 强制使用"i18n"
+        mergeImports: options.i18nConfig.i18nImport.mergeImports ?? true,
         custom
       };
     }
@@ -124,6 +126,7 @@ function normalizeI18nImport(options: TransformOptions): NormalizedI18nConfig["i
       name: name || (isVue ? CONFIG_DEFAULTS.VUE_TRANSLATION_METHOD : CONFIG_DEFAULTS.TRANSLATION_METHOD),
       importName: importName || (isVue ? CONFIG_DEFAULTS.VUE_HOOK_NAME : CONFIG_DEFAULTS.HOOK_NAME),
       source: source || (isVue ? CONFIG_DEFAULTS.VUE_HOOK_SOURCE : CONFIG_DEFAULTS.HOOK_SOURCE),
+      mergeImports: options.i18nConfig.i18nImport.mergeImports ?? true,
       custom
     };
   }
@@ -134,14 +137,16 @@ function normalizeI18nImport(options: TransformOptions): NormalizedI18nConfig["i
     return {
       name: options.translationMethod || CONFIG_DEFAULTS.REACT15_TRANSLATION_METHOD,
       importName: CONFIG_DEFAULTS.REACT15_TRANSLATION_METHOD, // React15直接导入t
-      source: CONFIG_DEFAULTS.REACT15_HOOK_SOURCE // 强制使用"i18n"
+      source: CONFIG_DEFAULTS.REACT15_HOOK_SOURCE, // 强制使用"i18n"
+      mergeImports: true
     };
   }
   
   return {
     name: options.translationMethod || (isVue ? CONFIG_DEFAULTS.VUE_TRANSLATION_METHOD : CONFIG_DEFAULTS.TRANSLATION_METHOD),
     importName: options.hookName || (isVue ? CONFIG_DEFAULTS.VUE_HOOK_NAME : CONFIG_DEFAULTS.HOOK_NAME),
-    source: options.hookImport || (isVue ? CONFIG_DEFAULTS.VUE_HOOK_SOURCE : CONFIG_DEFAULTS.HOOK_SOURCE)
+    source: options.hookImport || (isVue ? CONFIG_DEFAULTS.VUE_HOOK_SOURCE : CONFIG_DEFAULTS.HOOK_SOURCE),
+    mergeImports: true
   };
 }
 
@@ -261,6 +266,25 @@ export function getImportSource(options: TransformOptions | NormalizedTransformO
   }
   
   return normalizeI18nImport(options).source;
+}
+
+/**
+ * 获取mergeImports配置
+ */
+export function getMergeImports(options: TransformOptions | NormalizedTransformOptions): boolean {
+  // 优先使用新配置格式
+  if ('normalizedI18nConfig' in options) {
+    // 新配置格式中，mergeImports在i18nImport下
+    return (options as NormalizedTransformOptions).normalizedI18nConfig.i18nImport.mergeImports ?? true;
+  }
+  
+  // 旧配置格式兼容
+  if (options.i18nConfig?.i18nImport?.mergeImports !== undefined) {
+    return options.i18nConfig.i18nImport.mergeImports !== false;
+  }
+  
+  // 默认值
+  return true;
 }
 
 /**
