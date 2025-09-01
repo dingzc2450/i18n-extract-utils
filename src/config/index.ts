@@ -3,9 +3,10 @@
  * 简化版配置系统，使用统一的config-normalizer
  */
 
-import { TransformOptions } from "../types";
+import type { TransformOptions } from "../types";
 import { CoreProcessor } from "../core/processor";
-import { CONFIG_DEFAULTS, normalizeConfig, NormalizedTransformOptions } from "../core/config-normalizer";
+import type { NormalizedTransformOptions } from "../core/config-normalizer";
+import { CONFIG_DEFAULTS, normalizeConfig } from "../core/config-normalizer";
 
 /**
  * 统一处理器 - 使用简化的配置系统
@@ -35,7 +36,9 @@ export class EnhancedProcessor {
   /**
    * 获取规范化后的配置（用于调试或高级用途）
    */
-  getNormalizedConfig(userOptions: TransformOptions): NormalizedTransformOptions {
+  getNormalizedConfig(
+    userOptions: TransformOptions
+  ): NormalizedTransformOptions {
     return normalizeConfig(userOptions);
   }
 
@@ -51,23 +54,28 @@ export class EnhancedProcessor {
     const warnings: string[] = [];
 
     try {
-      const config = normalizeConfig(userOptions);
-
       // 废弃配置警告
       if (userOptions.translationMethod) {
-        warnings.push("translationMethod is deprecated, use i18nConfig.i18nImport.name instead");
+        warnings.push(
+          "translationMethod is deprecated, use i18nConfig.i18nImport.name instead"
+        );
       }
 
       if (userOptions.hookName) {
-        warnings.push("hookName is deprecated, use i18nConfig.i18nImport.importName instead");
+        warnings.push(
+          "hookName is deprecated, use i18nConfig.i18nImport.importName instead"
+        );
       }
 
       if (userOptions.hookImport) {
-        warnings.push("hookImport is deprecated, use i18nConfig.i18nImport.source instead");
+        warnings.push(
+          "hookImport is deprecated, use i18nConfig.i18nImport.source instead"
+        );
       }
-
     } catch (error) {
-      errors.push(`Configuration error: ${error instanceof Error ? error.message : String(error)}`);
+      errors.push(
+        `Configuration error: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
 
     return {
@@ -82,7 +90,6 @@ export class EnhancedProcessor {
  * 配置系统使用示例
  */
 export class ConfigExamples {
-  
   /**
    * React 项目配置示例
    */
@@ -161,8 +168,12 @@ export class ConfigExamples {
       outputPath: "./locales",
       generateKey: (value, filePath) => {
         // 自定义键生成逻辑
-        const fileName = filePath.split('/').pop()?.replace(/\.(tsx?|jsx?)$/, '') || 'unknown';
-        return `${fileName}.${value.toLowerCase().replace(/\s+/g, '_')}`;
+        const fileName =
+          filePath
+            .split("/")
+            .pop()
+            ?.replace(/\.(tsx?|jsx?)$/, "") || "unknown";
+        return `${fileName}.${value.toLowerCase().replace(/\s+/g, "_")}`;
       },
     };
   }
@@ -184,5 +195,9 @@ export class ConfigExamples {
 /**
  * 导出新的推荐入口
  */
-export { normalizeConfig, NormalizedTransformOptions, CONFIG_DEFAULTS } from "../core/config-normalizer";
+export {
+  normalizeConfig,
+  NormalizedTransformOptions,
+  CONFIG_DEFAULTS,
+} from "../core/config-normalizer";
 export const processor = new EnhancedProcessor();

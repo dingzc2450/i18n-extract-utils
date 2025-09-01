@@ -6,19 +6,19 @@
  * 不再依赖于frameworks目录
  */
 
-import {
+import type {
   FrameworkPlugin,
   ProcessingContext,
   ImportRequirement,
   HookRequirement,
 } from "../core/types";
-import {
+import type {
   ExtractedString,
   TransformOptions,
   UsedExistingKey,
   ChangeDetail,
 } from "../types";
-import { NormalizedTransformOptions } from "../core/config-normalizer";
+import type { NormalizedTransformOptions } from "../core/config-normalizer";
 import { getDefaultPattern } from "../core/utils";
 import { parse } from "@babel/parser";
 import traverse from "@babel/traverse";
@@ -62,12 +62,9 @@ export class VuePlugin implements FrameworkPlugin {
   /**
    * Vue插件完全接管处理，返回带匹配字符串的占位符确保postProcess被调用
    */
-  preProcess(code: string, options: TransformOptions): string {
+  preProcess(_code: string, _options: TransformOptions): string {
     // 对于Vue文件，返回一个包含匹配字符串的占位符
     // 这确保CoreProcessor会检测到修改并调用postProcess
-    const pattern = options?.pattern
-      ? new RegExp(options.pattern).source
-      : getDefaultPattern().source;
 
     // 返回一个匹配模式的占位符，确保会被处理
     return "const __VUE_PLACEHOLDER__ = '___VUE_PROCESS___';";
@@ -146,14 +143,6 @@ export class VuePlugin implements FrameworkPlugin {
     options: TransformOptions,
     existingValueToKey?: Map<string, string | number>
   ) {
-    // 获取i18n配置
-    const i18nConfig = options.i18nConfig || {};
-    const i18nImportConfig = i18nConfig.i18nImport || {
-      name: "t",
-      importName: "useI18n",
-      source: "vue-i18n",
-    };
-
     // 检查是否为Vue单文件组件
     const isVueSFC =
       filePath.endsWith(".vue") ||
@@ -196,8 +185,6 @@ export class VuePlugin implements FrameworkPlugin {
     };
 
     const translationMethod = i18nImportConfig.name;
-    const hookName = i18nImportConfig.importName || "useI18n";
-    const hookImport = i18nImportConfig.source;
 
     // 解析Vue单文件组件
     const vueFile = this.parseVueFile(code);
@@ -433,7 +420,7 @@ export class VuePlugin implements FrameworkPlugin {
       /{{(.+?)\?\s*['"](___[^'"]+___)['"]\s*:\s*['"](___[^'"]+___)['"]\s*}}/g;
     processedTemplate = processedTemplate.replace(
       ternaryRegex,
-      (match, condition, trueStr, falseStr) => {
+      (_match, condition, trueStr, falseStr) => {
         // 处理true分支
         const trueKey = getKeyAndRecord(
           `'${trueStr}'`,
@@ -488,7 +475,6 @@ export class VuePlugin implements FrameworkPlugin {
 
         // 检查是否在三元表达式内部（避免重复处理）
         const isInTernary = (position: number) => {
-          let lastTernaryMatch = null;
           const ternaryRegex = /{{.+?\?.+?:.+?}}/g;
           let ternaryMatch;
 
@@ -648,7 +634,7 @@ export class VuePlugin implements FrameworkPlugin {
             CallExpression(path) {
               if (callExpressionMap.has(path.node)) {
                 const extractedValue = callExpressionMap.get(path.node)!;
-                const statement = path.findParent((p) => p.isStatement());
+                const statement = path.findParent(p => p.isStatement());
 
                 if (statement) {
                   // 找到了语句级别的父节点，添加注释到语句
@@ -732,12 +718,11 @@ export class VuePlugin implements FrameworkPlugin {
       : new RegExp(getDefaultPattern().source, "g");
 
     // 使用self捕获外部的this上下文，用于在traverse内部调用类方法
-    const self = this;
 
     // 遍历AST，寻找匹配的字符串
     traverse(ast, {
       StringLiteral(path) {
-        const { value, start, end } = path.node;
+        const { value } = path.node;
         if (!value) return;
 
         // 检查字符串是否匹配模式
@@ -801,7 +786,7 @@ export class VuePlugin implements FrameworkPlugin {
         if (!hasMatch) return;
 
         // 转换模板字符串为动态拼接
-        let parts: t.Expression[] = [];
+        const parts: t.Expression[] = [];
 
         for (let i = 0; i < quasis.length; i++) {
           const quasi = quasis[i];
@@ -913,8 +898,7 @@ export class VuePlugin implements FrameworkPlugin {
     let hasImport = false;
     let hasUseI18n = false;
 
-    // 使用self捕获外部的this上下文，用于在traverse内部调用类方法
-    const self = this;
+    const createUseI18nStatement = this.createUseI18nStatement.bind(this);
 
     // 遍历AST，检查是否已有必要的导入和调用
     traverse(ast, {
@@ -922,7 +906,7 @@ export class VuePlugin implements FrameworkPlugin {
         if (
           path.node.source.value === hookImport &&
           path.node.specifiers.some(
-            (s) =>
+            s =>
               t.isImportSpecifier(s) &&
               t.isIdentifier(s.imported) &&
               s.imported.name === hookName
@@ -932,12 +916,12 @@ export class VuePlugin implements FrameworkPlugin {
         }
       },
       VariableDeclaration(path) {
-        path.node.declarations.forEach((decl) => {
+        path.node.declarations.forEach(decl => {
           if (
             t.isVariableDeclarator(decl) &&
             t.isObjectPattern(decl.id) &&
             decl.id.properties.some(
-              (p) =>
+              p =>
                 t.isObjectProperty(p) &&
                 t.isIdentifier(p.key) &&
                 p.key.name === translationMethod
@@ -968,10 +952,7 @@ export class VuePlugin implements FrameworkPlugin {
       // 根据是否为setup脚本使用不同的方法
       if (isSetupScript) {
         // 对于setup脚本，直接在顶层添加
-        const useI18nStmt = self.createUseI18nStatement(
-          translationMethod,
-          hookName
-        );
+        const useI18nStmt = createUseI18nStatement(translationMethod, hookName);
 
         // 插入到导入语句之后
         let insertIndex = 0;
@@ -1005,11 +986,11 @@ export class VuePlugin implements FrameworkPlugin {
                     if (
                       t.isVariableDeclaration(stmt) &&
                       stmt.declarations.some(
-                        (decl) =>
+                        decl =>
                           t.isVariableDeclarator(decl) &&
                           t.isObjectPattern(decl.id) &&
                           decl.id.properties.some(
-                            (p) =>
+                            p =>
                               t.isObjectProperty(p) &&
                               t.isIdentifier(p.key) &&
                               p.key.name === translationMethod
@@ -1024,7 +1005,7 @@ export class VuePlugin implements FrameworkPlugin {
                   // 如果没有找到useI18n调用，添加一个
                   if (!hasExistingUseI18n) {
                     setupBody.unshift(
-                      self.createUseI18nStatement(translationMethod, hookName)
+                      createUseI18nStatement(translationMethod, hookName)
                     );
                   }
 
@@ -1052,11 +1033,11 @@ export class VuePlugin implements FrameworkPlugin {
                     if (
                       t.isVariableDeclaration(stmt) &&
                       stmt.declarations.some(
-                        (decl) =>
+                        decl =>
                           t.isVariableDeclarator(decl) &&
                           t.isObjectPattern(decl.id) &&
                           decl.id.properties.some(
-                            (p) =>
+                            p =>
                               t.isObjectProperty(p) &&
                               t.isIdentifier(p.key) &&
                               p.key.name === translationMethod
@@ -1071,7 +1052,7 @@ export class VuePlugin implements FrameworkPlugin {
                   // 如果没有找到useI18n调用，添加一个
                   if (!hasExistingUseI18n) {
                     setupBody.unshift(
-                      self.createUseI18nStatement(translationMethod, hookName)
+                      createUseI18nStatement(translationMethod, hookName)
                     );
                   }
 
@@ -1112,7 +1093,7 @@ export class VuePlugin implements FrameworkPlugin {
                     t.identifier("setup"),
                     [],
                     t.blockStatement([
-                      self.createUseI18nStatement(translationMethod, hookName),
+                      createUseI18nStatement(translationMethod, hookName),
                       t.returnStatement(t.objectExpression([])),
                     ])
                   );
@@ -1165,9 +1146,9 @@ export class VuePlugin implements FrameworkPlugin {
     translationMethod: string,
     hookName: string
   ) {
-    // 使用self捕获外部的this上下文，用于在traverse内部调用类方法
-    const self = this;
+    const createUseI18nStatement = this.createUseI18nStatement.bind(this);
 
+    // 使用额外的遍历来找到React组件函数并添加useI18n调用
     traverse(ast, {
       FunctionDeclaration: {
         enter(path) {
@@ -1181,15 +1162,15 @@ export class VuePlugin implements FrameworkPlugin {
             // 检查是否已有useI18n调用
             let hasUseI18n = false;
 
-            path.node.body.body.forEach((stmt) => {
+            path.node.body.body.forEach(stmt => {
               if (
                 t.isVariableDeclaration(stmt) &&
                 stmt.declarations.some(
-                  (decl) =>
+                  decl =>
                     t.isVariableDeclarator(decl) &&
                     t.isObjectPattern(decl.id) &&
                     decl.id.properties.some(
-                      (p) =>
+                      p =>
                         t.isObjectProperty(p) &&
                         t.isIdentifier(p.key) &&
                         p.key.name === translationMethod
@@ -1203,7 +1184,7 @@ export class VuePlugin implements FrameworkPlugin {
             // 如果没有找到useI18n调用，添加一个
             if (!hasUseI18n) {
               path.node.body.body.unshift(
-                self.createUseI18nStatement(translationMethod, hookName)
+                createUseI18nStatement(translationMethod, hookName)
               );
             }
           }
@@ -1222,15 +1203,15 @@ export class VuePlugin implements FrameworkPlugin {
             // 检查是否已有useI18n调用
             let hasUseI18n = false;
 
-            path.node.body.body.forEach((stmt) => {
+            path.node.body.body.forEach(stmt => {
               if (
                 t.isVariableDeclaration(stmt) &&
                 stmt.declarations.some(
-                  (decl) =>
+                  decl =>
                     t.isVariableDeclarator(decl) &&
                     t.isObjectPattern(decl.id) &&
                     decl.id.properties.some(
-                      (p) =>
+                      p =>
                         t.isObjectProperty(p) &&
                         t.isIdentifier(p.key) &&
                         p.key.name === translationMethod
@@ -1244,7 +1225,7 @@ export class VuePlugin implements FrameworkPlugin {
             // 如果没有找到useI18n调用，添加一个
             if (!hasUseI18n) {
               path.node.body.body.unshift(
-                self.createUseI18nStatement(translationMethod, hookName)
+                createUseI18nStatement(translationMethod, hookName)
               );
             }
           }

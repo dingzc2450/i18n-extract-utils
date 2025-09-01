@@ -19,12 +19,12 @@ import { GenericJSPlugin } from "./generic-js-plugin";
  */
 export function createProcessorWithDefaultPlugins(): CoreProcessor {
   const processor = new CoreProcessor();
-  
+
   // 按优先级注册插件 - 特殊框架插件在前，通用框架插件在后
   processor.registerPlugin(new React15Plugin()); // React15需要在React之前检查
-  processor.registerPlugin(new VuePlugin());     // Vue在React之前检查以避免.tsx冲突
-  processor.registerPlugin(new ReactPlugin());   // React作为通用的JSX处理器
+  processor.registerPlugin(new VuePlugin()); // Vue在React之前检查以避免.tsx冲突
+  processor.registerPlugin(new ReactPlugin()); // React作为通用的JSX处理器
   processor.registerPlugin(new GenericJSPlugin()); // 通用插件最后注册作为后备
-  
+
   return processor;
 }

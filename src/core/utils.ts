@@ -6,7 +6,7 @@
 import { parse } from "@babel/parser";
 import * as t from "@babel/types";
 import * as tg from "../babel-type-guards";
-import { ImportRequirement, HookRequirement } from "./types";
+import type { ImportRequirement, HookRequirement } from "./types";
 import fs from "fs";
 /**
  * AST解析工具类
@@ -105,9 +105,7 @@ export class ImportHookUtils {
       return `import ${importReq.specifiers[0].name} from "${importReq.source}";`;
     } else {
       const specifiers = importReq.specifiers
-        .map((spec) =>
-          spec.alias ? `${spec.name} as ${spec.alias}` : spec.name
-        )
+        .map(spec => (spec.alias ? `${spec.name} as ${spec.alias}` : spec.name))
         .join(", ");
       return `import { ${specifiers} } from "${importReq.source}";`;
     }
@@ -127,7 +125,7 @@ export class ImportHookUtils {
         tg.isImportDeclaration(node) &&
         node.source.value === importReq.source
       ) {
-        importReq.specifiers.forEach((spec) => {
+        importReq.specifiers.forEach(spec => {
           node.specifiers.forEach((existingSpec: any) => {
             if (
               importReq.isDefault &&

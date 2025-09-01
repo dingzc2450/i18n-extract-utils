@@ -1,4 +1,8 @@
-import { ExtractedString, TransformOptions, UsedExistingKey } from "./types";
+import type {
+  ExtractedString,
+  TransformOptions,
+  UsedExistingKey,
+} from "./types";
 import { getDefaultPattern } from "./core/utils";
 
 /**
@@ -30,7 +34,9 @@ export function getKeyAndRecord(
 
   const match = pattern.exec(originalMatchedValue);
   if (!match || match[1] === undefined) {
-    console.warn(`[${location.filePath}] getKeyAndRecord called with non-matching value: ${originalMatchedValue}`);
+    console.warn(
+      `[${location.filePath}] getKeyAndRecord called with non-matching value: ${originalMatchedValue}`
+    );
     return undefined;
   }
 
@@ -42,24 +48,29 @@ export function getKeyAndRecord(
   // Only convert template literal expressions (${...}) to {argN} format.
   // DO NOT convert simple {variable} placeholders as they are user content.
   if (rawExtractedValue.includes("${")) {
-      let argIndex = 1;
-      // Only convert template literal placeholders like ${expr} to {argN}
-      canonicalValue = rawExtractedValue.replace(/\$\{[^}]+\}/g, () => `{arg${argIndex++}}`);
-      
-      // Example: "Select ${label}" becomes "Select {arg1}"
-      // Example: "Hi ${a}, ${b}" becomes "Hi {arg1}, {arg2}"
-      // But "User: {userName}" stays as "User: {userName}" (no conversion)
+    let argIndex = 1;
+    // Only convert template literal placeholders like ${expr} to {argN}
+    canonicalValue = rawExtractedValue.replace(
+      /\$\{[^}]+\}/g,
+      () => `{arg${argIndex++}}`
+    );
+
+    // Example: "Select ${label}" becomes "Select {arg1}"
+    // Example: "Hi ${a}, ${b}" becomes "Hi {arg1}, {arg2}"
+    // But "User: {userName}" stays as "User: {userName}" (no conversion)
   }
   // Now canonicalValue holds the version like "Select {arg1}" or preserves "User: {userName}"
   // --- End FIX ---
-
 
   // 1. Check existing translations using the canonical value
   if (existingValueToKey.has(canonicalValue)) {
     const key = existingValueToKey.get(canonicalValue)!;
     if (
       !usedExistingKeysList.some(
-        (k) => k.key === key && k.value === canonicalValue && k.filePath === location.filePath
+        k =>
+          k.key === key &&
+          k.value === canonicalValue &&
+          k.filePath === location.filePath
       )
     ) {
       usedExistingKeysList.push({ ...location, key, value: canonicalValue });
@@ -82,9 +93,7 @@ export function getKeyAndRecord(
 
   // 4. Record the newly extracted string using the canonical value
   if (
-    !extractedStrings.some(
-      (s) => s.key === newKey && s.value === canonicalValue
-    )
+    !extractedStrings.some(s => s.key === newKey && s.value === canonicalValue)
   ) {
     // Store the canonical value (e.g., "Select {arg1}") in extractedStrings
     extractedStrings.push({ key: newKey, value: canonicalValue, ...location });

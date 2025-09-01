@@ -12,26 +12,29 @@ import { SmartImportManager } from "../smart-import-manager";
 import { fallbackTransform } from "../fallback-transform";
 import { ASTParserUtils, ImportHookUtils } from "./utils";
 import { collectContextAwareReplacementInfo } from "../context-aware-ast-replacer";
-import { createI18nError, logError, I18nError } from "./error-handler";
+import { createI18nError, logError } from "./error-handler";
+import type { NormalizedTransformOptions } from "./config-normalizer";
 import {
   normalizeConfig,
-  CONFIG_DEFAULTS,
   getTranslationMethodName,
   getHookName,
   getImportSource,
-  NormalizedTransformOptions,
 } from "./config-normalizer";
-import {
+import type {
   FrameworkPlugin,
   ProcessingContext,
   ImportRequirement,
   HookRequirement,
-  ProcessingMode,
   ProcessingResult,
   ExtractionResult,
   ImportChange,
 } from "./types";
-import { ExtractedString, TransformOptions, UsedExistingKey } from "../types";
+import { ProcessingMode } from "./types";
+import type {
+  ExtractedString,
+  TransformOptions,
+  UsedExistingKey,
+} from "../types";
 
 /**
  * 核心处理器类 - 重构版本
@@ -69,7 +72,7 @@ export class CoreProcessor {
       const plugin = this.selectPlugin(code, filePath, normalizedOptions);
 
       // 3. 预处理
-      let processedCode = plugin.preProcess
+      const processedCode = plugin.preProcess
         ? plugin.preProcess(code, normalizedOptions)
         : code;
 
@@ -481,7 +484,7 @@ export class CoreProcessor {
 
       return modifiedCode;
     } catch (error) {
-      console.warn(`Failed to add imports and hooks:`, error);
+      console.warn("Failed to add imports and hooks:", error);
       return code;
     }
   }
@@ -527,7 +530,7 @@ export class CoreProcessor {
 
     // 1. 分析现有导入
     traverse(ast, {
-      ImportDeclaration: (path) => {
+      ImportDeclaration: path => {
         const node = path.node;
         const source = node.source.value;
 
@@ -536,7 +539,7 @@ export class CoreProcessor {
         }
 
         const existing = existingImports.get(source)!;
-        node.specifiers.forEach((spec) => {
+        node.specifiers.forEach(spec => {
           if (t.isImportSpecifier(spec)) {
             const importedName =
               spec.imported.type === "Identifier"
@@ -574,7 +577,7 @@ export class CoreProcessor {
             specifiers.add("default");
           }
         } else {
-          (req.specifiers || []).forEach((spec) => {
+          (req.specifiers || []).forEach(spec => {
             if (!specifiers.has(spec.name)) {
               newNamedSpecifiers.push(
                 t.importSpecifier(
@@ -612,7 +615,7 @@ export class CoreProcessor {
             t.importDefaultSpecifier(t.identifier(req.specifiers[0].name))
           );
         } else {
-          (req.specifiers || []).forEach((s) => {
+          (req.specifiers || []).forEach(s => {
             newSpecifiers.push(
               t.importSpecifier(t.identifier(s.name), t.identifier(s.name))
             );
@@ -642,7 +645,7 @@ export class CoreProcessor {
         if (req.isDefault) {
           newSpecifierNames.add("default");
         } else {
-          (req.specifiers || []).forEach((s) => newSpecifierNames.add(s.name));
+          (req.specifiers || []).forEach(s => newSpecifierNames.add(s.name));
         }
         existingImports.set(req.source, {
           node: newImportNode,
@@ -708,69 +711,8 @@ export class CoreProcessor {
 
       return modifiedCode;
     } catch (error) {
-      console.warn(`Failed to add context-aware imports:`, error);
+      console.warn("Failed to add context-aware imports:", error);
       return code;
-    }
-  }
-
-  /**
-   * 检查是否已存在导入（简化版本）
-   */
-  private hasExistingImport(
-    code: string,
-    importReq: ImportRequirement
-  ): boolean {
-    try {
-      const ast = parse(code, {
-        sourceType: "module",
-        plugins: ["typescript", "jsx"],
-      });
-      let found = false;
-
-      traverse(ast, {
-        ImportDeclaration(path) {
-          if (path.node.source.value === importReq.source) {
-            // 检查是否满足所有需要的 specifiers
-            const existingSpecifiers = new Set(
-              path.node.specifiers.map((s) => {
-                if (t.isImportDefaultSpecifier(s)) return "default";
-                if (t.isImportSpecifier(s) && s.imported.type === "Identifier")
-                  return s.imported.name;
-                return null;
-              })
-            );
-
-            const requiredSpecifiers = new Set(
-              importReq.specifiers.map((s) =>
-                importReq.isDefault ? "default" : s.name
-              )
-            );
-
-            let allRequiredFound = true;
-            for (const reqSpec of requiredSpecifiers) {
-              if (!existingSpecifiers.has(reqSpec)) {
-                allRequiredFound = false;
-                break;
-              }
-            }
-
-            if (allRequiredFound) {
-              found = true;
-              path.stop();
-            }
-          }
-        },
-      });
-
-      return found;
-    } catch (e) {
-      // 如果解析失败，回退到简单的正则检查
-      const importPattern = new RegExp(
-        `import\\s+.*\\b${this.escapeRegex(
-          importReq.specifiers[0].name
-        )}\\b.*from\\s+['"]${this.escapeRegex(importReq.source)}['"]`
-      );
-      return importPattern.test(code);
     }
   }
 
@@ -990,8 +932,7 @@ export class CoreProcessor {
     let totalOffset = 0;
 
     // 倒序处理避免位置偏移问题
-    matches.reverse().forEach((match, index) => {
-      const functionName = match[4];
+    matches.reverse().forEach(match => {
       const indent = match[1];
       const openBracePos = (match.index || 0) + match[0].length;
 

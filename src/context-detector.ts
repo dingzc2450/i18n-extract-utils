@@ -1,5 +1,5 @@
 import * as t from "@babel/types";
-import { NodePath } from "@babel/traverse";
+import type { NodePath } from "@babel/traverse";
 
 /**
  * 代码上下文类型枚举
@@ -18,7 +18,7 @@ export enum CodeContext {
   /** 模块级别/全局作用域 */
   MODULE_LEVEL = "module_level",
   /** 其他上下文 */
-  OTHER = "other"
+  OTHER = "other",
 }
 
 /**
@@ -42,10 +42,7 @@ export interface ContextInfo {
  */
 export function detectCodeContext(path: NodePath<t.Node>): ContextInfo {
   let currentPath = path;
-  let isReactComponent = false;
-  let isCustomHook = false;
   let functionName: string | undefined;
-  let contextType = CodeContext.OTHER;
 
   // 向上遍历 AST 找到最近的函数或类
   while (currentPath) {
@@ -60,7 +57,7 @@ export function detectCodeContext(path: NodePath<t.Node>): ContextInfo {
         isReactComponent: result.isReactComponent,
         needsHook: result.needsHook,
         functionName,
-        isCustomHook: result.isCustomHook
+        isCustomHook: result.isCustomHook,
       };
     }
 
@@ -80,7 +77,7 @@ export function detectCodeContext(path: NodePath<t.Node>): ContextInfo {
         isReactComponent: result.isReactComponent,
         needsHook: result.needsHook,
         functionName,
-        isCustomHook: result.isCustomHook
+        isCustomHook: result.isCustomHook,
       };
     }
 
@@ -98,7 +95,7 @@ export function detectCodeContext(path: NodePath<t.Node>): ContextInfo {
           isReactComponent: true,
           needsHook: false, // 类组件不使用 Hook
           functionName,
-          isCustomHook: false
+          isCustomHook: false,
         };
       }
 
@@ -107,7 +104,7 @@ export function detectCodeContext(path: NodePath<t.Node>): ContextInfo {
         isReactComponent: false,
         needsHook: false,
         functionName,
-        isCustomHook: false
+        isCustomHook: false,
       };
     }
 
@@ -119,7 +116,7 @@ export function detectCodeContext(path: NodePath<t.Node>): ContextInfo {
           isReactComponent: true,
           needsHook: false,
           functionName: node.id?.name,
-          isCustomHook: false
+          isCustomHook: false,
         };
       }
       break;
@@ -136,7 +133,7 @@ export function detectCodeContext(path: NodePath<t.Node>): ContextInfo {
     isReactComponent: false,
     needsHook: false,
     functionName: undefined,
-    isCustomHook: false
+    isCustomHook: false,
   };
 }
 
@@ -152,15 +149,15 @@ function analyzeFunctionContext(
   needsHook: boolean;
   isCustomHook: boolean;
 } {
-  const isCustomHook = functionName?.startsWith('use') ?? false;
-  
+  const isCustomHook = functionName?.startsWith("use") ?? false;
+
   // 检查是否为 React 函数组件
   if (isReactFunctionComponent(node, functionName)) {
     return {
       type: CodeContext.REACT_FUNCTION_COMPONENT,
       isReactComponent: true,
       needsHook: true,
-      isCustomHook
+      isCustomHook,
     };
   }
 
@@ -170,7 +167,7 @@ function analyzeFunctionContext(
       type: CodeContext.REACT_HOOK,
       isReactComponent: false,
       needsHook: true, // 自定义 Hook 可以使用其他 Hook
-      isCustomHook: true
+      isCustomHook: true,
     };
   }
 
@@ -179,14 +176,17 @@ function analyzeFunctionContext(
     type: CodeContext.REGULAR_FUNCTION,
     isReactComponent: false,
     needsHook: false,
-    isCustomHook: false
+    isCustomHook: false,
   };
 }
 
 /**
  * 检查函数是否为 React 函数组件
  */
-function isReactFunctionComponent(node: t.Function, functionName?: string): boolean {
+function isReactFunctionComponent(
+  node: t.Function,
+  functionName?: string
+): boolean {
   // 检查函数名是否为大写开头（React 组件约定）
   if (!functionName || !/^[A-Z]/.test(functionName)) {
     return false;
@@ -231,10 +231,15 @@ function containsJSX(node: t.Node): boolean {
   // 递归检查子节点
   for (const key in node) {
     const value = (node as any)[key];
-    if (value && typeof value === 'object') {
+    if (value && typeof value === "object") {
       if (Array.isArray(value)) {
         for (const item of value) {
-          if (item && typeof item === 'object' && item.type && containsJSX(item)) {
+          if (
+            item &&
+            typeof item === "object" &&
+            item.type &&
+            containsJSX(item)
+          ) {
             return true;
           }
         }
@@ -259,14 +264,14 @@ function isReactClassComponent(node: t.ClassDeclaration): boolean {
   // 检查是否继承自 React.Component 或 Component
   if (node.superClass) {
     if (t.isIdentifier(node.superClass)) {
-      return node.superClass.name === 'Component';
+      return node.superClass.name === "Component";
     }
     if (t.isMemberExpression(node.superClass)) {
       return (
         t.isIdentifier(node.superClass.object) &&
-        node.superClass.object.name === 'React' &&
+        node.superClass.object.name === "React" &&
         t.isIdentifier(node.superClass.property) &&
-        node.superClass.property.name === 'Component'
+        node.superClass.property.name === "Component"
       );
     }
   }
@@ -276,7 +281,7 @@ function isReactClassComponent(node: t.ClassDeclaration): boolean {
     member =>
       t.isClassMethod(member) &&
       t.isIdentifier(member.key) &&
-      member.key.name === 'render'
+      member.key.name === "render"
   );
 }
 

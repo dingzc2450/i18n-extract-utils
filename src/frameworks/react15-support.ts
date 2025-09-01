@@ -2,7 +2,13 @@ import { parse } from "@babel/parser";
 import traverse from "@babel/traverse";
 import * as t from "@babel/types";
 import generate from "@babel/generator";
-import { I18nTransformer, TransformOptions, ExtractedString, UsedExistingKey, ChangeDetail } from "../types";
+import type {
+  I18nTransformer,
+  TransformOptions,
+  ExtractedString,
+  UsedExistingKey,
+  ChangeDetail,
+} from "../types";
 import { formatGeneratedCode } from "./code-formatter";
 import { fallbackTransform } from "../fallback-transform";
 import { replaceStringsWithTCalls } from "./ast-replacer";
@@ -20,7 +26,10 @@ export class React15Transformer implements I18nTransformer {
     // 全局国际化函数名和导入路径，可通过 options 配置
     // 1. 解析多语言配置
     const i18nConfig = options.i18nConfig || {};
-    const i18nImportConfig = i18nConfig.i18nImport || { name: "t", source: "i18n-lib" };
+    const i18nImportConfig = i18nConfig.i18nImport || {
+      name: "t",
+      source: "i18n-lib",
+    };
     const i18nFuncName = i18nImportConfig.name;
     const i18nImport = i18nImportConfig.source;
     const extractedStrings: ExtractedString[] = [];
@@ -50,10 +59,11 @@ export class React15Transformer implements I18nTransformer {
           if (
             path.node.source.value === i18nImport &&
             path.node.specifiers.some(
-              (spec) =>
+              spec =>
                 t.isImportSpecifier(spec) &&
                 t.isIdentifier(spec.imported) &&
-                spec.imported.name === (i18nImportConfig.importName || i18nFuncName)
+                spec.imported.name ===
+                  (i18nImportConfig.importName || i18nFuncName)
             )
           ) {
             importExists = true;
@@ -71,7 +81,9 @@ export class React15Transformer implements I18nTransformer {
           }
         }
         if (i18nImportConfig.custom) {
-          const importAst = parse(i18nImportConfig.custom, { sourceType: "module" });
+          const importAst = parse(i18nImportConfig.custom, {
+            sourceType: "module",
+          });
           const importNode = importAst.program.body[0];
           program.body.splice(lastImportIndex + 1, 0, importNode);
         } else {
@@ -87,7 +99,7 @@ export class React15Transformer implements I18nTransformer {
         }
       }
       // 4. 生成代码
-      let { code: generatedCode } = generate(ast, {
+      const { code: generatedCode } = generate(ast, {
         retainLines: true,
         compact: false,
         comments: true,
@@ -111,7 +123,11 @@ export class React15Transformer implements I18nTransformer {
       if (error instanceof Error) {
         console.error(error.stack);
       }
-      const transformedCode = fallbackTransform(code, extractedStrings, options);
+      const transformedCode = fallbackTransform(
+        code,
+        extractedStrings,
+        options
+      );
       return {
         code: transformedCode,
         extractedStrings: [],

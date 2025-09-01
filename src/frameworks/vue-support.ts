@@ -1,6 +1,6 @@
 // Vue 框架的多语言提取与替换实现 - 使用 VueCodeGenerator 作为核心处理器
 
-import { I18nTransformer, TransformOptions, ExtractedString, UsedExistingKey, ChangeDetail } from "../types";
+import type { I18nTransformer, TransformOptions } from "../types";
 import { VueCodeGenerator } from "./vue-code-generator";
 
 /**
@@ -18,7 +18,12 @@ export class VueTransformer implements I18nTransformer {
     existingValueToKey?: Map<string, string | number>
   ) {
     // 直接使用 VueCodeGenerator 的 processCode 方法
-    return this.codeGenerator.processCode(code, filePath, options, existingValueToKey);
+    return this.codeGenerator.processCode(
+      code,
+      filePath,
+      options,
+      existingValueToKey
+    );
   }
 }
 
@@ -31,7 +36,9 @@ export function hasVueI18nSetup(
   hookName: string = "useI18n"
 ): boolean {
   // 简单检查是否包含 useI18n 调用
-  return code.includes(`${hookName}(`) || code.includes(`const { t } = ${hookName}`);
+  return (
+    code.includes(`${hookName}(`) || code.includes(`const { t } = ${hookName}`)
+  );
 }
 
 /**

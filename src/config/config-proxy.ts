@@ -3,11 +3,9 @@
  * 这是一个更安全的重构方式
  */
 
-import { TransformOptions } from "../types";
-import {
-  normalizeConfig,
-  NormalizedTransformOptions,
-} from "../core/config-normalizer";
+import type { TransformOptions } from "../types";
+import type { NormalizedTransformOptions } from "../core/config-normalizer";
+import { normalizeConfig } from "../core/config-normalizer";
 
 /**
  * 配置代理类 - 包装原有功能，添加配置管理
@@ -23,7 +21,7 @@ export class ConfigProxy {
   ): TransformOptions &
     Pick<NormalizedTransformOptions, "normalizedI18nConfig"> {
     // 如果提供了代码和文件路径，进行框架检测
-  
+
     let detectedFramework: string | undefined;
     if (code && filePath && !userOptions.i18nConfig?.framework) {
       // 只有在用户没有明确指定framework时才进行自动检测
@@ -48,7 +46,7 @@ export class ConfigProxy {
     }
 
     // 应用框架特定的默认配置
-    let userOptionsWithDefault = this.applyFrameworkDefaults(userOptions);
+    const userOptionsWithDefault = this.applyFrameworkDefaults(userOptions);
 
     // 使用新的配置规范化模块处理配置
     const normalizedConfig = normalizeConfig(userOptionsWithDefault);
@@ -91,7 +89,6 @@ export class ConfigProxy {
 
     // React15 特定默认配置
     if (framework === "react15") {
-
       // 确保 i18nConfig 存在
       if (!cloneUserOptions.i18nConfig) {
         cloneUserOptions.i18nConfig = {};
@@ -123,7 +120,6 @@ export class ConfigProxy {
 
     // Vue 特定默认配置
     if (framework === "vue" || framework === "vue2" || framework === "vue3") {
-
       // 确保 i18nConfig 存在
       if (!cloneUserOptions.i18nConfig) {
         cloneUserOptions.i18nConfig = {};

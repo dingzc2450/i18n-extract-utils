@@ -6,7 +6,9 @@ import * as t from "@babel/types";
  * @param node The AST node to check.
  * @returns True if the node is a StringLiteral, false otherwise.
  */
-export function isStringLiteral(node: t.Node | null | undefined): node is t.StringLiteral {
+export function isStringLiteral(
+  node: t.Node | null | undefined
+): node is t.StringLiteral {
   return t.isStringLiteral(node);
 }
 
@@ -16,8 +18,10 @@ export function isStringLiteral(node: t.Node | null | undefined): node is t.Stri
  * @param node The AST node to check.
  * @returns True if the node is a NumericLiteral, false otherwise.
  */
-export function isNumericLiteral(node: t.Node | null | undefined): node is t.NumericLiteral {
-    return t.isNumericLiteral(node);
+export function isNumericLiteral(
+  node: t.Node | null | undefined
+): node is t.NumericLiteral {
+  return t.isNumericLiteral(node);
 }
 
 /**
@@ -26,7 +30,9 @@ export function isNumericLiteral(node: t.Node | null | undefined): node is t.Num
  * @param node The AST node to check.
  * @returns True if the node is an Identifier, false otherwise.
  */
-export function isIdentifier(node: t.Node | null | undefined): node is t.Identifier {
+export function isIdentifier(
+  node: t.Node | null | undefined
+): node is t.Identifier {
   return t.isIdentifier(node);
 }
 
@@ -36,7 +42,9 @@ export function isIdentifier(node: t.Node | null | undefined): node is t.Identif
  * @param node The AST node to check.
  * @returns True if the node is a CallExpression, false otherwise.
  */
-export function isCallExpression(node: t.Node | null | undefined): node is t.CallExpression {
+export function isCallExpression(
+  node: t.Node | null | undefined
+): node is t.CallExpression {
   return t.isCallExpression(node);
 }
 
@@ -46,7 +54,9 @@ export function isCallExpression(node: t.Node | null | undefined): node is t.Cal
  * @param node The AST node to check.
  * @returns True if the node is a TemplateLiteral, false otherwise.
  */
-export function isTemplateLiteral(node: t.Node | null | undefined): node is t.TemplateLiteral {
+export function isTemplateLiteral(
+  node: t.Node | null | undefined
+): node is t.TemplateLiteral {
   return t.isTemplateLiteral(node);
 }
 
@@ -56,7 +66,9 @@ export function isTemplateLiteral(node: t.Node | null | undefined): node is t.Te
  * @param node The AST node to check.
  * @returns True if the node is a TaggedTemplateExpression, false otherwise.
  */
-export function isTaggedTemplateExpression(node: t.Node | null | undefined): node is t.TaggedTemplateExpression {
+export function isTaggedTemplateExpression(
+  node: t.Node | null | undefined
+): node is t.TaggedTemplateExpression {
   return t.isTaggedTemplateExpression(node);
 }
 
@@ -66,7 +78,9 @@ export function isTaggedTemplateExpression(node: t.Node | null | undefined): nod
  * @param node The AST node to check.
  * @returns True if the node is an ImportDeclaration, false otherwise.
  */
-export function isImportDeclaration(node: t.Node | null | undefined): node is t.ImportDeclaration {
+export function isImportDeclaration(
+  node: t.Node | null | undefined
+): node is t.ImportDeclaration {
   return t.isImportDeclaration(node);
 }
 
@@ -76,7 +90,9 @@ export function isImportDeclaration(node: t.Node | null | undefined): node is t.
  * @param node The AST node to check.
  * @returns True if the node is an ExportDeclaration, false otherwise.
  */
-export function isExportDeclaration(node: t.Node | null | undefined): node is t.ExportDeclaration {
+export function isExportDeclaration(
+  node: t.Node | null | undefined
+): node is t.ExportDeclaration {
   return t.isExportDeclaration(node);
 }
 
@@ -86,8 +102,10 @@ export function isExportDeclaration(node: t.Node | null | undefined): node is t.
  * @param node The AST node to check.
  * @returns True if the node is an ImportSpecifier, false otherwise.
  */
-export function isImportSpecifier(node: t.Node | null | undefined): node is t.ImportSpecifier {
-    return t.isImportSpecifier(node);
+export function isImportSpecifier(
+  node: t.Node | null | undefined
+): node is t.ImportSpecifier {
+  return t.isImportSpecifier(node);
 }
 
 /**
@@ -96,7 +114,9 @@ export function isImportSpecifier(node: t.Node | null | undefined): node is t.Im
  * @param node The AST node to check.
  * @returns True if the node is an ExpressionStatement, false otherwise.
  */
-export function isExpressionStatement(node: t.Node | null | undefined): node is t.ExpressionStatement {
+export function isExpressionStatement(
+  node: t.Node | null | undefined
+): node is t.ExpressionStatement {
   return t.isExpressionStatement(node);
 }
 
@@ -106,15 +126,21 @@ export function isExpressionStatement(node: t.Node | null | undefined): node is 
  * @param node The AST node to check.
  * @returns True if the node is a Function, false otherwise.
  */
-export function isFunction(node: t.Node | null | undefined): node is t.Function {
+export function isFunction(
+  node: t.Node | null | undefined
+): node is t.Function {
   return t.isFunction(node);
 }
 
-export function isFunctionDeclaration(node: t.Node | null | undefined): node is t.FunctionDeclaration {
+export function isFunctionDeclaration(
+  node: t.Node | null | undefined
+): node is t.FunctionDeclaration {
   return t.isFunctionDeclaration(node);
 }
 
-export function isFunctionExpression(node: t.Node | null | undefined): node is t.FunctionExpression {
+export function isFunctionExpression(
+  node: t.Node | null | undefined
+): node is t.FunctionExpression {
   return t.isFunctionExpression(node);
 }
 
@@ -124,7 +150,9 @@ export function isFunctionExpression(node: t.Node | null | undefined): node is t
  * @param node The AST node to check.
  * @returns True if the node is a BlockStatement, false otherwise.
  */
-export function isBlockStatement(node: t.Node | null | undefined): node is t.BlockStatement {
+export function isBlockStatement(
+  node: t.Node | null | undefined
+): node is t.BlockStatement {
   return t.isBlockStatement(node);
 }
 
@@ -134,7 +162,9 @@ export function isBlockStatement(node: t.Node | null | undefined): node is t.Blo
  * @param node The AST node to check.
  * @returns True if the node is a VariableDeclaration, false otherwise.
  */
-export function isVariableDeclaration(node: t.Node | null | undefined): node is t.VariableDeclaration {
+export function isVariableDeclaration(
+  node: t.Node | null | undefined
+): node is t.VariableDeclaration {
   return t.isVariableDeclaration(node);
 }
 
@@ -144,7 +174,9 @@ export function isVariableDeclaration(node: t.Node | null | undefined): node is 
  * @param node The AST node to check.
  * @returns True if the node is a VariableDeclarator, false otherwise.
  */
-export function isVariableDeclarator(node: t.Node | null | undefined): node is t.VariableDeclarator {
+export function isVariableDeclarator(
+  node: t.Node | null | undefined
+): node is t.VariableDeclarator {
   return t.isVariableDeclarator(node);
 }
 
@@ -154,7 +186,9 @@ export function isVariableDeclarator(node: t.Node | null | undefined): node is t
  * @param node The AST node to check.
  * @returns True if the node is an ObjectPattern, false otherwise.
  */
-export function isObjectPattern(node: t.Node | null | undefined): node is t.ObjectPattern {
+export function isObjectPattern(
+  node: t.Node | null | undefined
+): node is t.ObjectPattern {
   return t.isObjectPattern(node);
 }
 
@@ -164,22 +198,32 @@ export function isObjectPattern(node: t.Node | null | undefined): node is t.Obje
  * @param node The AST node to check.
  * @returns True if the node is a ReturnStatement, false otherwise.
  */
-export function isReturnStatement(node: t.Node | null | undefined): node is t.ReturnStatement {
-    return t.isReturnStatement(node);
+export function isReturnStatement(
+  node: t.Node | null | undefined
+): node is t.ReturnStatement {
+  return t.isReturnStatement(node);
 }
 // --- JSX/React 类型判断工具 ---
-export function isJSXAttribute(node: t.Node | null | undefined): node is t.JSXAttribute {
+export function isJSXAttribute(
+  node: t.Node | null | undefined
+): node is t.JSXAttribute {
   return t.isJSXAttribute(node);
 }
-export function isJSXExpressionContainer(node: t.Node | null | undefined): node is t.JSXExpressionContainer {
+export function isJSXExpressionContainer(
+  node: t.Node | null | undefined
+): node is t.JSXExpressionContainer {
   return t.isJSXExpressionContainer(node);
 }
 export function isJSXText(node: t.Node | null | undefined): node is t.JSXText {
   return t.isJSXText(node);
 }
-export function isJSXElement(node: t.Node | null | undefined): node is t.JSXElement {
+export function isJSXElement(
+  node: t.Node | null | undefined
+): node is t.JSXElement {
   return t.isJSXElement(node);
 }
-export function isJSXFragment(node: t.Node | null | undefined): node is t.JSXFragment {
+export function isJSXFragment(
+  node: t.Node | null | undefined
+): node is t.JSXFragment {
   return t.isJSXFragment(node);
 }

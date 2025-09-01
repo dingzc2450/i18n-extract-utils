@@ -2,7 +2,7 @@
 // 仅适用于 React 代码的兜底替换与 hook/导入插入，不适用于 Vue。
 
 import { getDefaultPattern } from "./core/utils";
-import { ExtractedString, TransformOptions } from "./types";
+import type { ExtractedString, TransformOptions } from "./types";
 import * as t from "@babel/types";
 import { parse } from "@babel/parser";
 import traverse from "@babel/traverse";
@@ -10,7 +10,7 @@ import traverse from "@babel/traverse";
 /**
  * 检查代码中是否已存在指定的 React 翻译 hook 调用（如 useTranslation）。
  */
- function hasTranslationHook(
+function hasTranslationHook(
   code: string,
   hookName: string = "useTranslation"
 ): boolean {
@@ -27,12 +27,23 @@ import traverse from "@babel/traverse";
           path.node.callee.name === hookName
         ) {
           const functionParent = path.getFunctionParent();
-          if (functionParent && path.parentPath.isVariableDeclarator() && path.parentPath.parentPath.isVariableDeclaration() && path.parentPath.parentPath.parentPath.isBlockStatement() && path.parentPath.parentPath.parentPath.parentPath === functionParent) {
-             hasHook = true;
-             path.stop();
-          } else if (functionParent && path.parentPath.isExpressionStatement() && path.parentPath.parentPath.isBlockStatement() && path.parentPath.parentPath.parentPath === functionParent) {
-             hasHook = true;
-             path.stop();
+          if (
+            functionParent &&
+            path.parentPath.isVariableDeclarator() &&
+            path.parentPath.parentPath.isVariableDeclaration() &&
+            path.parentPath.parentPath.parentPath.isBlockStatement() &&
+            path.parentPath.parentPath.parentPath.parentPath === functionParent
+          ) {
+            hasHook = true;
+            path.stop();
+          } else if (
+            functionParent &&
+            path.parentPath.isExpressionStatement() &&
+            path.parentPath.parentPath.isBlockStatement() &&
+            path.parentPath.parentPath.parentPath === functionParent
+          ) {
+            hasHook = true;
+            path.stop();
           }
         }
       },
@@ -57,7 +68,8 @@ export function fallbackTransform(
 ): string {
   const translationMethodOption = options.translationMethod || "t";
   // Determine the actual function name to call (e.g., 't' even if option is 'default')
-  const effectiveMethodName = translationMethodOption === "default" ? "t" : translationMethodOption;
+  const effectiveMethodName =
+    translationMethodOption === "default" ? "t" : translationMethodOption;
   const hookName = options.hookName || "useTranslation";
   const hookImport = options.hookImport || "react-i18next";
   const defaultPattern = getDefaultPattern();
@@ -68,22 +80,20 @@ export function fallbackTransform(
     : new RegExp(defaultPattern.source, "g");
 
   // 1. Perform regex replacement using the captured group as the key
-  transformedCode = transformedCode.replace(
-    fallbackPattern,
-    (match, p1) => {
-      // p1 is the captured text (the intended key/value)
-      const key = p1;
-      // Escape double quotes within the key for use in the string literal
-      const escapedKey = key.replace(/"/g, '\\"');
-      // Construct the translation call, e.g., t("Your Text")
-      return `${effectiveMethodName}("${escapedKey}")`;
-    }
-  );
+  transformedCode = transformedCode.replace(fallbackPattern, (match, p1) => {
+    // p1 is the captured text (the intended key/value)
+    const key = p1;
+    // Escape double quotes within the key for use in the string literal
+    const escapedKey = key.replace(/"/g, '\\"');
+    // Construct the translation call, e.g., t("Your Text")
+    return `${effectiveMethodName}("${escapedKey}")`;
+  });
 
   // 2. Check if hook/import insertion is needed
   // Base this on the original code and whether *any* strings were passed (even if potentially incomplete)
   // This assumes if AST parsing failed but strings were found, a hook might still be needed.
-  const needsHook = !hasTranslationHook(code, hookName) && extractedStrings.length > 0;
+  const needsHook =
+    !hasTranslationHook(code, hookName) && extractedStrings.length > 0;
   if (!needsHook) {
     return transformedCode; // Return early if no hook needed
   }
@@ -137,17 +147,14 @@ export function fallbackTransform(
     const functionComponentRegex =
       /(function\s+\w+\s*\(.*?\)\s*\{|const\s+\w+\s*=\s*\(.*?\)\s*=>\s*\{)/g;
     let hookAdded = false;
-    transformedCode = transformedCode.replace(
-      functionComponentRegex,
-      (match) => {
-        // Add hook only once if multiple functions exist (simple approach)
-        if (!hookAdded) {
-          hookAdded = true;
-          return `${match}\n  ${hookCallStatement}\n`; // Add hook call inside
-        }
-        return match;
+    transformedCode = transformedCode.replace(functionComponentRegex, match => {
+      // Add hook only once if multiple functions exist (simple approach)
+      if (!hookAdded) {
+        hookAdded = true;
+        return `${match}\n  ${hookCallStatement}\n`; // Add hook call inside
       }
-    );
+      return match;
+    });
     // If regex didn't match (e.g., class component), hook won't be added by this simple fallback
   }
 

@@ -3,14 +3,14 @@
  * 作为默认插件处理不特定于任何框架的JS/TS代码
  */
 
-import {
+import type {
   FrameworkPlugin,
   ProcessingContext,
   ImportRequirement,
   HookRequirement,
 } from "../core/types";
-import { ExtractedString, TransformOptions } from "../types";
-import { NormalizedTransformOptions } from "../core/config-normalizer";
+import type { TransformOptions } from "../types";
+import type { NormalizedTransformOptions } from "../core/config-normalizer";
 
 /**
  * 通用JS插件实现
@@ -47,7 +47,7 @@ export class GenericJSPlugin implements FrameworkPlugin {
    */
   getRequiredImportsAndHooks(
     options: TransformOptions,
-    context: ProcessingContext
+    _context: ProcessingContext
   ): {
     imports: ImportRequirement[];
     hooks: HookRequirement[];

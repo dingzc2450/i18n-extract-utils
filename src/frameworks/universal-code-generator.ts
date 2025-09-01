@@ -3,14 +3,15 @@
  * 所有框架都使用这个统一的生成器，通过插件系统处理框架特异性
  */
 
-import {
+import type {
   ExtractedString,
   TransformOptions,
   UsedExistingKey,
   ChangeDetail,
   FrameworkCodeGenerator,
 } from "../types";
-import { CoreProcessor, createProcessorWithDefaultPlugins } from "../core";
+import type { CoreProcessor } from "../core";
+import { createProcessorWithDefaultPlugins } from "../core";
 
 /**
  * 统一代码生成器

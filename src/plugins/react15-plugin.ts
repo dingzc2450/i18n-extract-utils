@@ -3,14 +3,13 @@
  * 负责React15相关的处理逻辑，不使用hooks，直接导入翻译函数
  */
 
-import {
+import type {
   FrameworkPlugin,
-  ProcessingContext,
   ImportRequirement,
   HookRequirement,
 } from "../core/types";
-import { ExtractedString, TransformOptions } from "../types";
-import { NormalizedTransformOptions } from "../core/config-normalizer";
+import type { TransformOptions } from "../types";
+import type { NormalizedTransformOptions } from "../core/config-normalizer";
 
 /**
  * React 15 插件实现
@@ -79,35 +78,6 @@ export class React15Plugin implements FrameworkPlugin {
    */
   postProcess(code: string): string {
     return code;
-  }
-
-  /**
-   * 获取导入来源
-   */
-  private getImportSource(options: TransformOptions): string {
-    // 强制使用"i18n"作为React15的默认导入源
-    if (
-      options.i18nConfig?.framework === "react15" &&
-      !options.i18nConfig?.i18nImport?.source
-    ) {
-      return "i18n";
-    }
-
-    // 如果用户明确指定了源，使用用户指定的
-    return (
-      options.i18nConfig?.i18nImport?.source || options.hookImport || "i18n"
-    );
-  }
-
-  /**
-   * 获取导入名称 (这是对外导出的i18n函数名)
-   */
-  private getImportName(options: TransformOptions): string {
-    return (
-      options.i18nConfig?.i18nImport?.importName ||
-      options.translationMethod ||
-      "t"
-    );
   }
 
   /**

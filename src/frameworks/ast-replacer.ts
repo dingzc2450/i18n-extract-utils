@@ -1,15 +1,16 @@
-import traverse, { NodePath } from "@babel/traverse";
+import type { NodePath } from "@babel/traverse";
+import traverse from "@babel/traverse";
 import * as t from "@babel/types";
 import generate from "@babel/generator";
-import {
-  ExtractedString,
-  TransformOptions,
-  UsedExistingKey,
-  ChangeDetail,
-} from "../types";
+import type { ExtractedString, UsedExistingKey, ChangeDetail } from "../types";
 import { getKeyAndRecord } from "../key-manager";
-import { createTranslationCall, attachExtractedCommentToNode, parseJSXTextPlaceholders } from "../core/ast-utils";
+import {
+  createTranslationCall,
+  attachExtractedCommentToNode,
+  parseJSXTextPlaceholders,
+} from "../core/ast-utils";
 import { getDefaultPattern } from "../core/utils";
+import type { NormalizedTransformOptions } from "../core/config-normalizer";
 import { getI18nCall } from "../core/config-normalizer";
 import * as tg from "../babel-type-guards";
 import { isJSXAttribute } from "../babel-type-guards";
@@ -24,7 +25,7 @@ export function replaceStringsWithTCalls(
   extractedStrings: ExtractedString[],
   usedExistingKeysList: UsedExistingKey[],
   translationMethod: string,
-  options: TransformOptions,
+  options: NormalizedTransformOptions,
   filePath: string
 ): { modified: boolean; changes: ChangeDetail[] } {
   // ... recordChange, buildTemplateLiteral, patternRegex, etc. ...
@@ -40,7 +41,11 @@ export function replaceStringsWithTCalls(
 
   // 获取自定义i18nCall或使用默认的createTranslationCall
   const customI18nCall = getI18nCall(options);
-  const callFactory = (callName: string, key: string | number, rawText: string) => {
+  const callFactory = (
+    callName: string,
+    key: string | number,
+    rawText: string
+  ) => {
     if (customI18nCall) {
       // 直接调用自定义的i18nCall，确保一致性
       return customI18nCall(callName, key, rawText);
@@ -57,7 +62,7 @@ export function replaceStringsWithTCalls(
   ) => {
     if (originalNode.loc) {
       const replacementCode = Array.isArray(replacementNode)
-        ? replacementNode.map((n) => generate(n).code).join("")
+        ? replacementNode.map(n => generate(n).code).join("")
         : generate(replacementNode).code;
       changes.push({
         filePath,
@@ -85,266 +90,297 @@ export function replaceStringsWithTCalls(
   traverse(ast, {
     // ... StringLiteral, JSXAttribute, JSXText visitors ...
     StringLiteral(path) {
-        // ... existing StringLiteral logic ...
-        // --- Skip checks ---
-        if (
-            (tg.isCallExpression(path.parent) &&
-            tg.isIdentifier(path.parent.callee) &&
-            path.parent.callee.name === effectiveMethodName &&
-            path.listKey === "arguments") ||
-            isJSXAttribute(path.parent) ||
-            tg.isImportDeclaration(path.parent) ||
-            tg.isExportDeclaration(path.parent)
-        ) {
-            return;
-        }
-        // --- End Skip checks ---
+      // ... existing StringLiteral logic ...
+      // --- Skip checks ---
+      if (
+        (tg.isCallExpression(path.parent) &&
+          tg.isIdentifier(path.parent.callee) &&
+          path.parent.callee.name === effectiveMethodName &&
+          path.listKey === "arguments") ||
+        isJSXAttribute(path.parent) ||
+        tg.isImportDeclaration(path.parent) ||
+        tg.isExportDeclaration(path.parent)
+      ) {
+        return;
+      }
+      // --- End Skip checks ---
 
-        const nodeValue = path.node.value;
+      const nodeValue = path.node.value;
+      const location = {
+        filePath,
+        line: path.node.loc?.start.line ?? 0,
+        column: path.node.loc?.start.column ?? 0,
+      };
+
+      patternRegex.lastIndex = 0;
+      if (!patternRegex.test(nodeValue)) {
+        return;
+      }
+      patternRegex.lastIndex = 0;
+
+      const stringParts: string[] = [];
+      const expressions: t.Expression[] = [];
+      let lastIndex = 0;
+      let match;
+      let madeChangeInString = false;
+      let firstMatchIndex = -1;
+      let lastMatchedTextWithDelimiters = "";
+      let lastMatch = null;
+
+      while ((match = patternRegex.exec(nodeValue)) !== null) {
+        if (firstMatchIndex === -1) {
+          firstMatchIndex = match.index;
+        }
+        const matchStartIndex = match.index;
+        const matchedTextWithDelimiters = match[0];
+        lastMatchedTextWithDelimiters = matchedTextWithDelimiters;
+        lastMatch = match;
+
+        if (matchStartIndex > lastIndex) {
+          stringParts.push(nodeValue.slice(lastIndex, matchStartIndex));
+        }
+
+        const translationKey = getKeyAndRecord(
+          matchedTextWithDelimiters, // Pass the full matched text
+          { ...location, column: location.column + matchStartIndex },
+          existingValueToKey,
+          generatedKeysMap,
+          extractedStrings,
+          usedExistingKeysList,
+          options
+        );
+
+        if (translationKey !== undefined) {
+          if (stringParts.length === expressions.length) {
+            stringParts.push("");
+          }
+          // Extract the raw text without delimiters for i18nCall
+          const pattern = options?.pattern
+            ? new RegExp(options.pattern)
+            : new RegExp(getDefaultPattern().source);
+          const rawTextMatch = pattern.exec(matchedTextWithDelimiters);
+          const rawText = rawTextMatch
+            ? rawTextMatch[1]
+            : matchedTextWithDelimiters;
+          expressions.push(
+            callFactory(effectiveMethodName, translationKey, rawText)
+          );
+          madeChangeInString = true;
+        } else {
+          const lastPartIndex = stringParts.length - 1;
+          if (lastPartIndex >= 0) {
+            stringParts[lastPartIndex] += matchedTextWithDelimiters;
+          } else {
+            stringParts.push(matchedTextWithDelimiters);
+          }
+        }
+        lastIndex = patternRegex.lastIndex;
+      }
+
+      if (!madeChangeInString) {
+        return;
+      }
+
+      if (lastIndex < nodeValue.length) {
+        if (stringParts.length === expressions.length) {
+          stringParts.push("");
+        }
+        stringParts[stringParts.length - 1] += nodeValue.slice(lastIndex);
+      }
+      if (stringParts.length === expressions.length && expressions.length > 0) {
+        stringParts.push("");
+      }
+
+      const isFullReplacement =
+        expressions.length === 1 &&
+        firstMatchIndex === 0 &&
+        lastIndex === nodeValue.length;
+
+      const originalNode = path.node;
+      let replacementNode: t.Node;
+
+      if (isFullReplacement) {
+        replacementNode = expressions[0];
+        // 插入注释
+        if (options.appendExtractedComment && expressions.length === 1) {
+          // 修复：使用最后一次匹配到的内容
+          let rawText = "";
+          if (lastMatch && lastMatchedTextWithDelimiters) {
+            const pattern = options?.pattern
+              ? new RegExp(options.pattern)
+              : new RegExp(getDefaultPattern().source);
+            const rawTextMatch = pattern.exec(lastMatchedTextWithDelimiters);
+            rawText = rawTextMatch
+              ? rawTextMatch[1]
+              : lastMatchedTextWithDelimiters;
+          } else {
+            rawText = nodeValue;
+          }
+          attachExtractedCommentToNode(
+            replacementNode,
+            rawText,
+            options.extractedCommentType || "block"
+          );
+        }
+      } else if (expressions.length > 0) {
+        replacementNode = buildTemplateLiteral(stringParts, expressions);
+      } else {
+        return;
+      }
+
+      recordChange(path, originalNode, replacementNode);
+      path.replaceWith(replacementNode);
+    },
+    JSXAttribute(path) {
+      // ... existing JSXAttribute logic ...
+      if (path.node.value && tg.isStringLiteral(path.node.value)) {
+        const nodeValue = path.node.value.value;
         const location = {
-            filePath,
-            line: path.node.loc?.start.line ?? 0,
-            column: path.node.loc?.start.column ?? 0,
+          filePath,
+          line: path.node.loc?.start.line ?? 0,
+          column: path.node.loc?.start.column ?? 0,
         };
 
-        patternRegex.lastIndex = 0;
-        if (!patternRegex.test(nodeValue)) {
-            return;
-        }
-        patternRegex.lastIndex = 0;
+        const singleMatchPattern = options?.pattern
+          ? new RegExp(options.pattern)
+          : new RegExp(getDefaultPattern().source);
 
-        const stringParts: string[] = [];
-        const expressions: t.Expression[] = [];
-        let lastIndex = 0;
-        let match;
-        let madeChangeInString = false;
-        let firstMatchIndex = -1;
-        let lastMatchedTextWithDelimiters = "";
-        let lastMatch = null;
-
-        while ((match = patternRegex.exec(nodeValue)) !== null) {
-            if (firstMatchIndex === -1) {
-                firstMatchIndex = match.index;
-            }
-            const matchStartIndex = match.index;
-            const matchedTextWithDelimiters = match[0];
-            lastMatchedTextWithDelimiters = matchedTextWithDelimiters;
-            lastMatch = match;
-
-            if (matchStartIndex > lastIndex) {
-            stringParts.push(nodeValue.slice(lastIndex, matchStartIndex));
-            }
-
-            const translationKey = getKeyAndRecord(
-            matchedTextWithDelimiters, // Pass the full matched text
-            { ...location, column: location.column + matchStartIndex },
+        const match = singleMatchPattern.exec(nodeValue);
+        if (match && match[0] === nodeValue && match[1] !== undefined) {
+          const translationKey = getKeyAndRecord(
+            nodeValue, // Pass the full original value
+            location,
             existingValueToKey,
             generatedKeysMap,
             extractedStrings,
             usedExistingKeysList,
             options
+          );
+
+          if (translationKey !== undefined) {
+            const originalNode = path.node.value;
+            const rawText = match[1]; // Extract the raw text without delimiters
+            const replacementNode = t.jsxExpressionContainer(
+              callFactory(translationMethod, translationKey, rawText)
             );
-
-            if (translationKey !== undefined) {
-            if (stringParts.length === expressions.length) {
-                stringParts.push("");
-            }
-            // Extract the raw text without delimiters for i18nCall
-            const pattern = options?.pattern
-              ? new RegExp(options.pattern)
-              : new RegExp(getDefaultPattern().source);
-            const rawTextMatch = pattern.exec(matchedTextWithDelimiters);
-            const rawText = rawTextMatch ? rawTextMatch[1] : matchedTextWithDelimiters;
-            expressions.push(
-                callFactory(effectiveMethodName, translationKey, rawText)
-            );
-            madeChangeInString = true;
-            } else {
-            const lastPartIndex = stringParts.length - 1;
-            if (lastPartIndex >= 0) {
-                stringParts[lastPartIndex] += matchedTextWithDelimiters;
-            } else {
-                stringParts.push(matchedTextWithDelimiters);
-            }
-            }
-            lastIndex = patternRegex.lastIndex;
-        }
-
-        if (!madeChangeInString) {
-            return;
-        }
-
-        if (lastIndex < nodeValue.length) {
-            if (stringParts.length === expressions.length) {
-            stringParts.push("");
-            }
-            stringParts[stringParts.length - 1] += nodeValue.slice(lastIndex);
-        }
-        if (stringParts.length === expressions.length && expressions.length > 0) {
-            stringParts.push("");
-        }
-
-        const isFullReplacement =
-            expressions.length === 1 &&
-            firstMatchIndex === 0 &&
-            lastIndex === nodeValue.length;
-
-        const originalNode = path.node;
-        let replacementNode: t.Node;
-
-        if (isFullReplacement) {
-            replacementNode = expressions[0];
             // 插入注释
-            if (options.appendExtractedComment && expressions.length === 1) {
-              // 修复：使用最后一次匹配到的内容
-              let rawText = "";
-              if (lastMatch && lastMatchedTextWithDelimiters) {
-                const pattern = options?.pattern
-                  ? new RegExp(options.pattern)
-                  : new RegExp(getDefaultPattern().source);
-                const rawTextMatch = pattern.exec(lastMatchedTextWithDelimiters);
-                rawText = rawTextMatch ? rawTextMatch[1] : lastMatchedTextWithDelimiters;
-              } else {
-                rawText = nodeValue;
-              }
-              attachExtractedCommentToNode(replacementNode, rawText, options.extractedCommentType || "block");
+            if (options.appendExtractedComment) {
+              attachExtractedCommentToNode(
+                replacementNode.expression,
+                rawText,
+                options.extractedCommentType || "block"
+              );
             }
-        } else if (expressions.length > 0) {
-            replacementNode = buildTemplateLiteral(stringParts, expressions);
-        } else {
-            return;
+            recordChange(path, originalNode, replacementNode);
+            path.node.value = replacementNode;
+          }
         }
-
-        recordChange(path, originalNode, replacementNode);
-        path.replaceWith(replacementNode);
-    },
-    JSXAttribute(path) {
-        // ... existing JSXAttribute logic ...
-        if (path.node.value && tg.isStringLiteral(path.node.value)) {
-            const nodeValue = path.node.value.value;
-            const location = {
-                filePath,
-                line: path.node.loc?.start.line ?? 0,
-                column: path.node.loc?.start.column ?? 0,
-            };
-
-            const singleMatchPattern = options?.pattern
-                ? new RegExp(options.pattern)
-                : new RegExp(getDefaultPattern().source);
-
-            const match = singleMatchPattern.exec(nodeValue);
-            if (match && match[0] === nodeValue && match[1] !== undefined) {
-                const translationKey = getKeyAndRecord(
-                    nodeValue, // Pass the full original value
-                    location, existingValueToKey, generatedKeysMap,
-                    extractedStrings, usedExistingKeysList, options
-                );
-
-                if (translationKey !== undefined) {
-                    const originalNode = path.node.value;
-                    const rawText = match[1]; // Extract the raw text without delimiters
-                    const replacementNode = t.jsxExpressionContainer(
-                        callFactory(translationMethod, translationKey, rawText)
-                    );
-                    // 插入注释
-                    if (options.appendExtractedComment) {
-                      attachExtractedCommentToNode(replacementNode.expression, rawText, options.extractedCommentType || "block");
-                    }
-                    recordChange(path, originalNode, replacementNode);
-                    path.node.value = replacementNode;
-                }
-            }
-        }
+      }
     },
     JSXText(path) {
-        // ... existing JSXText logic ...
-        const nodeValue = path.node.value;
-        const location = {
-            filePath,
-            line: path.node.loc?.start.line ?? 0,
-            column: path.node.loc?.start.column ?? 0,
-        };
-        patternRegex.lastIndex = 0;
-        if (!patternRegex.test(nodeValue)) return;
-        patternRegex.lastIndex = 0;
+      // ... existing JSXText logic ...
+      const nodeValue = path.node.value;
+      const location = {
+        filePath,
+        line: path.node.loc?.start.line ?? 0,
+        column: path.node.loc?.start.column ?? 0,
+      };
+      patternRegex.lastIndex = 0;
+      if (!patternRegex.test(nodeValue)) return;
+      patternRegex.lastIndex = 0;
 
-        const newNodes: (t.JSXText | t.JSXExpressionContainer)[] = [];
-        let lastIndex = 0;
-        let match;
-        let madeChangeInJSXText = false;
+      const newNodes: (t.JSXText | t.JSXExpressionContainer)[] = [];
+      let lastIndex = 0;
+      let match;
+      let madeChangeInJSXText = false;
 
-        while ((match = patternRegex.exec(nodeValue)) !== null) {
-            const matchStartIndex = match.index;
-            const matchedTextWithDelimiters = match[0];
+      while ((match = patternRegex.exec(nodeValue)) !== null) {
+        const matchStartIndex = match.index;
+        const matchedTextWithDelimiters = match[0];
 
-            if (matchStartIndex > lastIndex) {
-                const textBefore = nodeValue.slice(lastIndex, matchStartIndex);
-                if (/\S/.test(textBefore)) newNodes.push(t.jsxText(textBefore));
-            }
+        if (matchStartIndex > lastIndex) {
+          const textBefore = nodeValue.slice(lastIndex, matchStartIndex);
+          if (/\S/.test(textBefore)) newNodes.push(t.jsxText(textBefore));
+        }
 
-            const translationKey = getKeyAndRecord(
-                matchedTextWithDelimiters, // Pass the full matched text
-                { ...location, column: location.column + matchStartIndex },
-                existingValueToKey, generatedKeysMap, extractedStrings,
-                usedExistingKeysList, options
+        const translationKey = getKeyAndRecord(
+          matchedTextWithDelimiters, // Pass the full matched text
+          { ...location, column: location.column + matchStartIndex },
+          existingValueToKey,
+          generatedKeysMap,
+          extractedStrings,
+          usedExistingKeysList,
+          options
+        );
+
+        if (translationKey !== undefined) {
+          // Extract the raw text without delimiters for i18nCall
+          const pattern = options?.pattern
+            ? new RegExp(options.pattern)
+            : new RegExp(getDefaultPattern().source);
+          const rawTextMatch = pattern.exec(matchedTextWithDelimiters);
+          const rawText = rawTextMatch
+            ? rawTextMatch[1]
+            : matchedTextWithDelimiters;
+
+          // Parse JSX text placeholders to generate interpolation
+          const parsedPlaceholders = parseJSXTextPlaceholders(rawText);
+
+          let translationCall;
+          if (parsedPlaceholders && parsedPlaceholders.interpolationObject) {
+            // 对于有插值的情况，我们需要使用原始的createTranslationCall，因为i18nCall目前不支持插值对象
+            translationCall = createTranslationCall(
+              translationMethod,
+              translationKey,
+              parsedPlaceholders.interpolationObject
             );
+          } else {
+            // No placeholders, use simple call
+            translationCall = callFactory(
+              translationMethod,
+              translationKey,
+              rawText
+            );
+          }
 
-            if (translationKey !== undefined) {
-                // Extract the raw text without delimiters for i18nCall
-                const pattern = options?.pattern
-                  ? new RegExp(options.pattern)
-                  : new RegExp(getDefaultPattern().source);
-                const rawTextMatch = pattern.exec(matchedTextWithDelimiters);
-                const rawText = rawTextMatch ? rawTextMatch[1] : matchedTextWithDelimiters;
-                
-                // Parse JSX text placeholders to generate interpolation
-                const parsedPlaceholders = parseJSXTextPlaceholders(rawText);
-                
-                let translationCall;
-                if (parsedPlaceholders && parsedPlaceholders.interpolationObject) {
-                  // 对于有插值的情况，我们需要使用原始的createTranslationCall，因为i18nCall目前不支持插值对象
-                  translationCall = createTranslationCall(
-                    translationMethod, 
-                    translationKey, 
-                    parsedPlaceholders.interpolationObject
-                  );
-                } else {
-                  // No placeholders, use simple call
-                  translationCall = callFactory(translationMethod, translationKey, rawText);
-                }
-                
-                newNodes.push(t.jsxExpressionContainer(translationCall));
-                
-                if (options.appendExtractedComment) {
-                  // 只对表达式节点插入注释
-                  const lastNode = newNodes[newNodes.length - 1];
-                  if (t.isJSXExpressionContainer(lastNode)) {
-                    // Use the canonical text for comment (with {argN} format)
-                    const commentText = parsedPlaceholders ? parsedPlaceholders.canonicalText : rawText;
-                    attachExtractedCommentToNode(lastNode.expression, commentText, options.extractedCommentType || "block");
-                  }
-                }
-                madeChangeInJSXText = true;
-            } else {
-                 if (/\S/.test(matchedTextWithDelimiters)) {
-                     newNodes.push(t.jsxText(matchedTextWithDelimiters));
-                 }
+          newNodes.push(t.jsxExpressionContainer(translationCall));
+
+          if (options.appendExtractedComment) {
+            // 只对表达式节点插入注释
+            const lastNode = newNodes[newNodes.length - 1];
+            if (t.isJSXExpressionContainer(lastNode)) {
+              // Use the canonical text for comment (with {argN} format)
+              const commentText = parsedPlaceholders
+                ? parsedPlaceholders.canonicalText
+                : rawText;
+              attachExtractedCommentToNode(
+                lastNode.expression,
+                commentText,
+                options.extractedCommentType || "block"
+              );
             }
-            lastIndex = patternRegex.lastIndex;
+          }
+          madeChangeInJSXText = true;
+        } else {
+          if (/\S/.test(matchedTextWithDelimiters)) {
+            newNodes.push(t.jsxText(matchedTextWithDelimiters));
+          }
         }
+        lastIndex = patternRegex.lastIndex;
+      }
 
-        if (lastIndex < nodeValue.length) {
-            const textAfter = nodeValue.slice(lastIndex);
-             if (/\S/.test(textAfter)) {
-                newNodes.push(t.jsxText(textAfter));
-             }
+      if (lastIndex < nodeValue.length) {
+        const textAfter = nodeValue.slice(lastIndex);
+        if (/\S/.test(textAfter)) {
+          newNodes.push(t.jsxText(textAfter));
         }
+      }
 
-        if (newNodes.length > 0 && madeChangeInJSXText) {
-            const originalNode = path.node;
-            recordChange(path, originalNode, newNodes);
-            path.replaceWithMultiple(newNodes);
-        }
+      if (newNodes.length > 0 && madeChangeInJSXText) {
+        const originalNode = path.node;
+        recordChange(path, originalNode, newNodes);
+        path.replaceWithMultiple(newNodes);
+      }
     },
 
     TemplateLiteral(path) {
@@ -407,7 +443,9 @@ export function replaceStringsWithTCalls(
               ? new RegExp(options.pattern)
               : new RegExp(getDefaultPattern().source);
             const rawTextMatch = pattern.exec(originalRawStringForPatternCheck);
-            const rawText = rawTextMatch ? rawTextMatch[1] : originalRawStringForPatternCheck;                  // For custom i18nCall, we need to handle interpolations differently
+            const rawText = rawTextMatch
+              ? rawTextMatch[1]
+              : originalRawStringForPatternCheck; // For custom i18nCall, we need to handle interpolations differently
             const customI18nCall = getI18nCall(options);
             if (customI18nCall) {
               // Custom i18nCall should handle interpolations as needed
@@ -426,23 +464,23 @@ export function replaceStringsWithTCalls(
                 translationKey,
                 interpolations // Pass interpolations object
               );
-              
+
               // 插入注释
               if (options.appendExtractedComment) {
                 // Use the canonical text for comment (with {argN} format)
-                const canonicalText = rawText.replace(/\$\{[^}]+\}/g, (match, offset) => {
-                  const exprIndex = node.expressions.findIndex((expr, i) => {
-                    // This is a simplified approach - in a more complex scenario,
-                    // you might need to track the mapping more precisely
-                    return true; // For now, just use sequential mapping
-                  });
-                  return `{arg${Math.floor(offset / 10) + 1}}`; // Simplified mapping
-                });
+
                 // Actually, let's use a simpler approach - derive from the translation key
-                const commentText = typeof translationKey === 'string' ? translationKey : String(translationKey);
-                attachExtractedCommentToNode(replacementNode, commentText, options.extractedCommentType || "block");
+                const commentText =
+                  typeof translationKey === "string"
+                    ? translationKey
+                    : String(translationKey);
+                attachExtractedCommentToNode(
+                  replacementNode,
+                  commentText,
+                  options.extractedCommentType || "block"
+                );
               }
-              
+
               recordChange(path, originalNode, replacementNode);
               path.replaceWith(replacementNode);
             }
@@ -452,7 +490,7 @@ export function replaceStringsWithTCalls(
       }
 
       // --- Handle TemplateLiterals WITHOUT expressions (logic remains the same) ---
-      const nodeValue = node.quasis.map((q) => q.value.raw).join("");
+      const nodeValue = node.quasis.map(q => q.value.raw).join("");
 
       patternRegex.lastIndex = 0;
       if (!patternRegex.test(nodeValue)) {
@@ -501,8 +539,10 @@ export function replaceStringsWithTCalls(
             ? new RegExp(options.pattern)
             : new RegExp(getDefaultPattern().source);
           const rawTextMatch = pattern.exec(matchedTextWithDelimiters);
-          const rawText = rawTextMatch ? rawTextMatch[1] : matchedTextWithDelimiters;
-          
+          const rawText = rawTextMatch
+            ? rawTextMatch[1]
+            : matchedTextWithDelimiters;
+
           expressions.push(
             callFactory(translationMethod, translationKey, rawText)
           );
@@ -551,11 +591,17 @@ export function replaceStringsWithTCalls(
               ? new RegExp(options.pattern)
               : new RegExp(getDefaultPattern().source);
             const rawTextMatch = pattern.exec(lastMatchedTextWithDelimiters);
-            rawText = rawTextMatch ? rawTextMatch[1] : lastMatchedTextWithDelimiters;
+            rawText = rawTextMatch
+              ? rawTextMatch[1]
+              : lastMatchedTextWithDelimiters;
           } else {
             rawText = nodeValue;
           }
-          attachExtractedCommentToNode(replacementNode, rawText, options.extractedCommentType || "block");
+          attachExtractedCommentToNode(
+            replacementNode,
+            rawText,
+            options.extractedCommentType || "block"
+          );
         }
       } else if (expressions.length > 0) {
         replacementNode = buildTemplateLiteral(stringParts, expressions);

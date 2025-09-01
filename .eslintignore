@@ -1,0 +1,21 @@
+# 构建产物
+dist/
+build/
+
+# 缓存文件
+node_modules/
+
+# 测试相关
+coverage/
+__tests__/dist-test.js
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 编辑器配置
+.vscode/
+.idea/
+
+# 其他
+*.log

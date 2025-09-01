@@ -2,14 +2,9 @@
  * 核心处理器相关类型定义
  */
 
-import {
-  ExtractedString,
-  TransformOptions,
-  UsedExistingKey,
-  ChangeDetail,
-} from "../types";
-import { I18nError } from "./error-handler";
-import { NormalizedTransformOptions } from "./config-normalizer";
+import type { ExtractedString, UsedExistingKey, ChangeDetail } from "../types";
+import type { I18nError } from "./error-handler";
+import type { NormalizedTransformOptions } from "./config-normalizer";
 
 /**
  * 框架特定处理插件接口

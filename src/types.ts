@@ -1,3 +1,5 @@
+import type { CallExpression } from "@babel/types";
+
 /**
  * Configuration options for the transformation process.
  * 转换过程的配置选项。
@@ -332,5 +334,5 @@ export interface I18nConfig {
     callName: string,
     key: string | number,
     rawText: string
-  ) => import("@babel/types").CallExpression;
+  ) => CallExpression;
 }

@@ -8,14 +8,14 @@ export { ASTParserUtils, ImportHookUtils, StringUtils } from "./utils";
 export * from "./types";
 
 // 导出配置规范化系统
-export { 
-  normalizeConfig, 
-  CONFIG_DEFAULTS, 
+export {
+  normalizeConfig,
+  CONFIG_DEFAULTS,
   NormalizedTransformOptions,
   NormalizedI18nConfig,
   getTranslationMethodName,
   getHookName,
-  getImportSource
+  getImportSource,
 } from "./config-normalizer";
 
 // 导出错误处理系统
@@ -28,7 +28,7 @@ export {
   withErrorHandling,
   ErrorCategory,
   ErrorSeverity,
-  I18nError
+  I18nError,
 } from "./error-handler";
 
 // 导出处理器工厂函数

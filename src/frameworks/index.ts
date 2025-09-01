@@ -5,7 +5,12 @@
  */
 
 // 框架支持
-export { createFrameworkTransformer, detectFramework, mergeWithFrameworkDefaults, createFrameworkCodeGenerator } from "./framework-factory";
+export {
+  createFrameworkTransformer,
+  detectFramework,
+  mergeWithFrameworkDefaults,
+  createFrameworkCodeGenerator,
+} from "./framework-factory";
 export { ReactTransformer } from "./react-support";
 export { React15Transformer } from "./react15-support";
 export { VueTransformer } from "./vue-support";

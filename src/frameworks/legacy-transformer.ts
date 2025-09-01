@@ -4,7 +4,7 @@
  */
 
 import fs from "fs";
-import {
+import type {
   ExtractedString,
   TransformOptions,
   UsedExistingKey,
@@ -54,10 +54,10 @@ export function transformCodeLegacy(
   const detectedFramework = detectFramework(code, filePath);
 
   // 合并用户配置和框架默认配置
-  const mergedOptions = mergeWithFrameworkDefaults(options, detectedFramework);
+  const mergedOptions = mergeWithFrameworkDefaults(options);
 
   // 优先使用新的框架代码生成器
-  const codeGenerator = createFrameworkCodeGenerator(mergedOptions);
+  const codeGenerator = createFrameworkCodeGenerator();
   const canHandle = codeGenerator.canHandle(code, filePath);
   const isNotVue = !["vue", "vue2", "vue3"].includes(
     mergedOptions.i18nConfig?.framework || detectedFramework
@@ -71,7 +71,7 @@ export function transformCodeLegacy(
       existingValueToKey
     );
   }
-  
+
   // 回退到老的 transformer（保持向后兼容）
   const realTransformer = createFrameworkTransformer(mergedOptions);
 

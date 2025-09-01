@@ -24,8 +24,12 @@
     "test": "vitest run",
     "test:dist": "node __tests__/dist-test.js",
     "test:all": "npm run test && npm run test:dist",
-    "prepublishOnly": "npm run build && npm run test:all",
-    "test:watch": "vitest"
+    "prepublishOnly": "npm run build && npm run test:all && npm run lint",
+    "test:watch": "vitest",
+    "lint": "eslint src --ext .ts",
+    "lint:fix": "eslint src --ext .ts --fix",
+    "format": "prettier --write src/**/*.ts",
+    "format:check": "prettier --check src/**/*.ts"
   },
   "keywords": [
     "i18n",
@@ -48,6 +52,12 @@
     "@types/babel__generator": "^7.27.0",
     "@types/babel__traverse": "^7.20.4",
     "@types/node": "^20.10.0",
+    "@typescript-eslint/eslint-plugin": "^8.41.0",
+    "@typescript-eslint/parser": "^8.41.0",
+    "eslint": "^8.53.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.4",
+    "prettier": "^3.6.2",
     "ts-node": "^10.9.1",
     "typescript": "^5.3.2",
     "vitest": "^3.2.4"

@@ -1,5 +1,5 @@
 // Vue 专用兜底替换与导入逻辑，仅用于 Vue 代码的 fallback 处理
-import { ExtractedString, TransformOptions } from "../types";
+import type { ExtractedString, TransformOptions } from "../types";
 
 /**
  * Vue 专用兜底替换与导入逻辑
@@ -12,25 +12,24 @@ export function vueFallbackTransform(
 ): string {
   const i18nConfig = options.i18nConfig || {};
   const i18nImportConfig = i18nConfig.i18nImport || {
-    name: '$t',
-    importName: 'useI18n',
-    source: 'vue-i18n'
+    name: "$t",
+    importName: "useI18n",
+    source: "vue-i18n",
   };
-  const translationMethod = i18nImportConfig.name || '$t';
-  const hookName = i18nImportConfig.importName || 'useI18n';
-  const hookImport = i18nImportConfig.source || 'vue-i18n';
-  const defaultPattern = options?.pattern ? new RegExp(options.pattern, 'g') : /___(.+?)___/g;
+  const translationMethod = i18nImportConfig.name || "$t";
+  const hookName = i18nImportConfig.importName || "useI18n";
+  const hookImport = i18nImportConfig.source || "vue-i18n";
+  const defaultPattern = options?.pattern
+    ? new RegExp(options.pattern, "g")
+    : /___(.+?)___/g;
 
   let transformedCode = code;
   // 1. 替换文本为 $t("xxx")
-  transformedCode = transformedCode.replace(
-    defaultPattern,
-    (match, p1) => {
-      const key = p1;
-      const escapedKey = key.replace(/"/g, '\"');
-      return `${translationMethod}("${escapedKey}")`;
-    }
-  );
+  transformedCode = transformedCode.replace(defaultPattern, (match, p1) => {
+    const key = p1;
+    const escapedKey = key.replace(/"/g, '"');
+    return `${translationMethod}("${escapedKey}")`;
+  });
 
   // 2. 检查是否需要插入 import
   const importStatement = `import { ${hookName} } from '${hookImport}';`;
@@ -67,7 +66,7 @@ export function vueFallbackTransform(
       if (setupRegex.test(transformedCode)) {
         transformedCode = transformedCode.replace(
           setupRegex,
-          (match) => `${match}\n  ${hookCallStatement}\n`
+          match => `${match}\n  ${hookCallStatement}\n`
         );
       }
     }

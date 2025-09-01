@@ -5,10 +5,7 @@
 
 import * as tg from "../babel-type-guards";
 
-import {
-  ExtractedString,
-  TransformOptions,
-} from "../types";
+import type { ExtractedString, TransformOptions } from "../types";
 
 // 添加 ReactTransformer 相关的导入
 import generate from "@babel/generator";
@@ -18,13 +15,8 @@ import * as t from "@babel/types";
 import { replaceStringsWithTCalls } from "./ast-replacer";
 import { formatGeneratedCode } from "./code-formatter";
 import { fallbackTransform } from "../fallback-transform";
-import {
-  ChangeDetail,
-  I18nTransformer,
-  UsedExistingKey,
-} from "../types";
+import type { ChangeDetail, I18nTransformer, UsedExistingKey } from "../types";
 import { isJSXElement, isJSXFragment } from "../babel-type-guards";
-
 
 /**
  * Traverses the AST to add the translation hook import and call if necessary.
@@ -48,12 +40,12 @@ function addHookAndImport(
       enter(path) {
         // Check if import already exists
         let importExists = false;
-        path.node.body.forEach((node) => {
+        path.node.body.forEach(node => {
           if (
             tg.isImportDeclaration(node) &&
             node.source.value === hookImport
           ) {
-            node.specifiers.forEach((spec) => {
+            node.specifiers.forEach(spec => {
               if (
                 tg.isImportSpecifier(spec) &&
                 tg.isIdentifier(spec.imported) &&
@@ -85,7 +77,7 @@ function addHookAndImport(
               tg.isExpressionStatement(node) &&
               tg.isStringLiteral(node.expression) &&
               path.node.directives?.some(
-                (dir) =>
+                dir =>
                   dir.value.value ===
                   (tg.isStringLiteral(node.expression)
                     ? node.expression.value
@@ -108,26 +100,14 @@ function addHookAndImport(
         }
       },
     },
-    "FunctionDeclaration|FunctionExpression|ArrowFunctionExpression": (
-      path
-    ) => {
+    "FunctionDeclaration|FunctionExpression|ArrowFunctionExpression": path => {
       // 跳过嵌套函数
-      if (path.findParent((p) => tg.isFunction(p.node))) {
+      if (path.findParent(p => tg.isFunction(p.node))) {
         return;
       }
 
       // 检查是否为组件（返回JSX）或自定义hook（函数名以use开头）
       let returnsJSX = false;
-
-      // 检查函数名
-      if (
-        tg.isFunction(path.node) &&
-        (tg.isFunctionDeclaration(path.node) ||
-          tg.isFunctionExpression(path.node)) &&
-        path.node.id &&
-        /^use[A-Z\d_]/.test(path.node.id.name)
-      ) {
-      }
 
       // 检查是否返回JSX
       path.traverse({
@@ -167,9 +147,9 @@ function addHookAndImport(
       ) {
         // Check if the hook call already exists
         let callExists = false;
-        path.node.body.body.forEach((stmt) => {
+        path.node.body.body.forEach(stmt => {
           if (tg.isVariableDeclaration(stmt)) {
-            stmt.declarations.forEach((decl) => {
+            stmt.declarations.forEach(decl => {
               if (
                 tg.isVariableDeclarator(decl) &&
                 tg.isCallExpression(decl.init) &&
@@ -272,7 +252,7 @@ export class ReactTransformer implements I18nTransformer {
         hookImport
       );
 
-      let { code: generatedCode } = generate(ast, {
+      const { code: generatedCode } = generate(ast, {
         retainLines: true,
         compact: false,
         comments: true,

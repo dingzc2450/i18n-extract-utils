@@ -1,6 +1,5 @@
-import * as t from "@babel/types";
-import { NonReactI18nConfig, I18nImportConfig } from "./types";
-import { ContextInfo, CodeContext } from "./context-detector";
+import type { NonReactI18nConfig, I18nImportConfig } from "./types";
+import type { ContextInfo } from "./context-detector";
 
 /**
  * 导入信息
@@ -40,7 +39,7 @@ export class SmartImportManager {
     }
 
     // 非 React 组件上下文，使用普通导入
-    return this.getNonReactImportInfo(context);
+    return this.getNonReactImportInfo();
   }
 
   /**
@@ -50,7 +49,7 @@ export class SmartImportManager {
     const config = this.reactConfig || {
       name: "t",
       importName: "useTranslation",
-      source: "react-i18next"
+      source: "react-i18next",
     };
 
     const hookName = config.importName || "useTranslation";
@@ -65,16 +64,16 @@ export class SmartImportManager {
         ? {
             importName: hookName,
             source,
-            hookCall: `const { ${translationMethod} } = ${hookName}();`
+            hookCall: `const { ${translationMethod} } = ${hookName}();`,
           }
-        : undefined
+        : undefined,
     };
   }
 
   /**
    * 获取非 React 组件的导入信息
    */
-  private getNonReactImportInfo(context: ContextInfo): ImportInfo {
+  private getNonReactImportInfo(): ImportInfo {
     // 如果用户配置了非 React 配置，使用用户配置
     if (this.nonReactConfig) {
       return this.generateNonReactImport(this.nonReactConfig);
@@ -83,7 +82,7 @@ export class SmartImportManager {
     // 否则回退到 React 配置，但不使用 Hook
     const config = this.reactConfig || {
       name: "t",
-      source: "react-i18next"
+      source: "react-i18next",
     };
 
     // 对于非组件场景，我们尝试直接导入翻译函数而不是 Hook
@@ -93,7 +92,7 @@ export class SmartImportManager {
     return {
       importStatement: `import { ${translationMethod} } from '${source}';`,
       callName: translationMethod,
-      needsHook: false
+      needsHook: false,
     };
   }
 
@@ -104,11 +103,13 @@ export class SmartImportManager {
     // 如果有自定义导入语句，直接使用
     if (config.customImport) {
       // 尝试从自定义导入中提取函数名
-      const functionName = this.extractFunctionNameFromCustomImport(config.customImport);
+      const functionName = this.extractFunctionNameFromCustomImport(
+        config.customImport
+      );
       return {
         importStatement: config.customImport,
         callName: functionName || config.functionName || "t",
-        needsHook: false
+        needsHook: false,
       };
     }
 
@@ -122,16 +123,16 @@ export class SmartImportManager {
       case "default":
         importStatement = `import ${functionName} from '${source}';`;
         break;
-      
-      case "namespace":
+
+      case "namespace": {
         const namespace = config.namespace || "i18n";
         importStatement = `import * as ${namespace} from '${source}';`;
         return {
           importStatement,
           callName: `${namespace}.${functionName}`,
-          needsHook: false
+          needsHook: false,
         };
-      
+      }
       case "named":
       default:
         importStatement = `import { ${functionName} } from '${source}';`;
@@ -141,16 +142,18 @@ export class SmartImportManager {
     return {
       importStatement,
       callName: functionName,
-      needsHook: false
+      needsHook: false,
     };
   }
 
   /**
    * 从自定义导入语句中提取函数名
    */
-  private extractFunctionNameFromCustomImport(customImport: string): string | null {
+  private extractFunctionNameFromCustomImport(
+    customImport: string
+  ): string | null {
     // 简单的正则匹配常见的导入模式
-    
+
     // import t from 'source'
     const defaultMatch = customImport.match(/import\s+(\w+)\s+from/);
     if (defaultMatch) {
@@ -158,7 +161,9 @@ export class SmartImportManager {
     }
 
     // import { t } from 'source' 或 import { translate as t } from 'source'
-    const namedMatch = customImport.match(/import\s*\{\s*(?:\w+\s+as\s+)?(\w+)\s*\}/);
+    const namedMatch = customImport.match(
+      /import\s*\{\s*(?:\w+\s+as\s+)?(\w+)\s*\}/
+    );
     if (namedMatch) {
       return namedMatch[1];
     }

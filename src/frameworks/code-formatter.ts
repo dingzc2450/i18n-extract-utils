@@ -34,7 +34,7 @@ export function formatGeneratedCode(
     const lines = formattedCode.split("\n");
     // 通过判断当前语句是否为 import 语句来决定是否添加换行
     const targetImportLineIndex = lines.findIndex(
-      (line) => line.trim().startsWith("import") && line.includes(hookImport)
+      line => line.trim().startsWith("import") && line.includes(hookImport)
     );
     if (targetImportLineIndex !== -1) {
       const line = lines[targetImportLineIndex];
@@ -90,7 +90,6 @@ export function formatGeneratedCode(
         const line = lines[i].trim();
         if (line.includes(hookCallCode)) {
           const startIndex = line.indexOf(hookCallCode);
-          const endIndex = startIndex + hookCallCode.length;
           // 判断startIndex是否为首字符
           if (!startIndex) {
             break;

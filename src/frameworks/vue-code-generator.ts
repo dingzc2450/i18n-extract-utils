@@ -4,7 +4,7 @@ import { parse } from "@babel/parser";
 import traverse from "@babel/traverse";
 import * as t from "@babel/types";
 import generate from "@babel/generator";
-import {
+import type {
   FrameworkCodeGenerator,
   TransformOptions,
   ExtractedString,
@@ -21,7 +21,6 @@ import { attachExtractedCommentToNode } from "../core/ast-utils";
  */
 export class VueCodeGenerator implements FrameworkCodeGenerator {
   name = "vue";
-
 
   canHandle(code: string, filePath: string): boolean {
     return (
@@ -41,16 +40,6 @@ export class VueCodeGenerator implements FrameworkCodeGenerator {
     options: TransformOptions,
     existingValueToKey?: Map<string, string | number>
   ) {
-
-    // 获取i18n配置
-    const i18nConfig = options.i18nConfig || {};
-    const i18nImportConfig = i18nConfig.i18nImport || {
-      name: "t",
-      importName: "useI18n",
-      source: "vue-i18n",
-    };
-
-
     // 检查是否为Vue单文件组件
     const isVueSFC =
       filePath.endsWith(".vue") ||
@@ -455,7 +444,7 @@ export class VueCodeGenerator implements FrameworkCodeGenerator {
           // 添加注释（如果启用）
           if (options.appendExtractedComment) {
             const commentType = options.extractedCommentType || "line";
-            const statement = path.findParent((p) => p.isStatement());
+            const statement = path.findParent(p => p.isStatement());
             if (statement) {
               attachExtractedCommentToNode(
                 statement.node,
@@ -497,12 +486,12 @@ export class VueCodeGenerator implements FrameworkCodeGenerator {
         enter(path) {
           // 检查是否已有导入
           let importExists = false;
-          path.node.body.forEach((node) => {
+          path.node.body.forEach(node => {
             if (
               t.isImportDeclaration(node) &&
               node.source.value === hookImport
             ) {
-              node.specifiers.forEach((spec) => {
+              node.specifiers.forEach(spec => {
                 if (
                   t.isImportSpecifier(spec) &&
                   t.isIdentifier(spec.imported) &&
@@ -530,13 +519,13 @@ export class VueCodeGenerator implements FrameworkCodeGenerator {
       },
 
       // 记录export default位置
-      ExportDefaultDeclaration: (path) => {
+      ExportDefaultDeclaration: path => {
         hasExportDefault = true;
         exportDefaultPath = path;
       },
 
       // 处理setup函数或setup script
-      ObjectMethod: (path) => {
+      ObjectMethod: path => {
         if (
           t.isIdentifier(path.node.key) &&
           path.node.key.name === "setup" &&
@@ -547,7 +536,7 @@ export class VueCodeGenerator implements FrameworkCodeGenerator {
         }
       },
 
-      ObjectProperty: (path) => {
+      ObjectProperty: path => {
         if (
           t.isIdentifier(path.node.key) &&
           path.node.key.name === "setup" &&
@@ -590,7 +579,7 @@ export class VueCodeGenerator implements FrameworkCodeGenerator {
       let hasUseI18n = false;
       setupBody.forEach((stmt: t.Statement) => {
         if (t.isVariableDeclaration(stmt)) {
-          stmt.declarations.forEach((decl) => {
+          stmt.declarations.forEach(decl => {
             if (
               t.isVariableDeclarator(decl) &&
               t.isCallExpression(decl.init) &&
@@ -640,7 +629,7 @@ export class VueCodeGenerator implements FrameworkCodeGenerator {
       let hasUseI18n = false;
       setupBody.forEach((stmt: t.Statement) => {
         if (t.isVariableDeclaration(stmt)) {
-          stmt.declarations.forEach((decl) => {
+          stmt.declarations.forEach(decl => {
             if (
               t.isVariableDeclarator(decl) &&
               t.isCallExpression(decl.init) &&
@@ -684,9 +673,9 @@ export class VueCodeGenerator implements FrameworkCodeGenerator {
         enter(path) {
           // 检查是否已有useI18n调用
           let hasUseI18n = false;
-          path.node.body.forEach((stmt) => {
+          path.node.body.forEach(stmt => {
             if (t.isVariableDeclaration(stmt)) {
-              stmt.declarations.forEach((decl) => {
+              stmt.declarations.forEach(decl => {
                 if (
                   t.isVariableDeclarator(decl) &&
                   t.isCallExpression(decl.init) &&
@@ -797,30 +786,41 @@ export class VueCodeGenerator implements FrameworkCodeGenerator {
     hookName: string
   ) {
     traverse(ast, {
-      FunctionDeclaration: (path) => {
+      FunctionDeclaration: path => {
         // 检查是否为React函数组件（大写开头）
         if (
           path.node.id &&
           t.isIdentifier(path.node.id) &&
           /^[A-Z]/.test(path.node.id.name)
         ) {
-          this.addUseI18nToFunctionBody(path.node.body, translationMethod, hookName);
+          this.addUseI18nToFunctionBody(
+            path.node.body,
+            translationMethod,
+            hookName
+          );
         }
       },
-      
-      VariableDeclarator: (path) => {
+
+      VariableDeclarator: path => {
         // 检查箭头函数组件
         if (
           t.isIdentifier(path.node.id) &&
           /^[A-Z]/.test(path.node.id.name) &&
-          (t.isArrowFunctionExpression(path.node.init) || t.isFunctionExpression(path.node.init))
+          (t.isArrowFunctionExpression(path.node.init) ||
+            t.isFunctionExpression(path.node.init))
         ) {
-          const func = path.node.init as t.ArrowFunctionExpression | t.FunctionExpression;
+          const func = path.node.init as
+            | t.ArrowFunctionExpression
+            | t.FunctionExpression;
           if (t.isBlockStatement(func.body)) {
-            this.addUseI18nToFunctionBody(func.body, translationMethod, hookName);
+            this.addUseI18nToFunctionBody(
+              func.body,
+              translationMethod,
+              hookName
+            );
           }
         }
-      }
+      },
     });
   }
 
@@ -834,9 +834,9 @@ export class VueCodeGenerator implements FrameworkCodeGenerator {
   ) {
     // 检查是否已有useI18n调用
     let hasUseI18n = false;
-    body.body.forEach((stmt) => {
+    body.body.forEach(stmt => {
       if (t.isVariableDeclaration(stmt)) {
-        stmt.declarations.forEach((decl) => {
+        stmt.declarations.forEach(decl => {
           if (
             t.isVariableDeclarator(decl) &&
             t.isCallExpression(decl.init) &&
@@ -865,7 +865,7 @@ export class VueCodeGenerator implements FrameworkCodeGenerator {
       const variableDeclaration = t.variableDeclaration("const", [
         variableDeclarator,
       ]);
-      
+
       // 在函数体开头添加useI18n调用
       body.body.unshift(variableDeclaration);
     }
