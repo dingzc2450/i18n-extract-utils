@@ -60,7 +60,7 @@ export class CoreProcessor {
   ): ProcessingResult {
     try {
       // 规范化配置，确保一致性
-      const normalizedOptions = normalizeConfig(options);
+      const normalizedOptions = normalizeConfig(options, code, filePath);
 
       // 1. 确定处理模式 - 默认使用上下文感知模式
       const mode = this.determineProcessingMode(normalizedOptions);
@@ -93,7 +93,7 @@ export class CoreProcessor {
         ast,
         processedCode,
         mode,
-        options,
+        normalizedOptions,
         existingValueToKey || new Map(),
         filePath
       );
@@ -127,14 +127,18 @@ export class CoreProcessor {
       // 统一处理导入和hook调用
       modifiedCode = this.processImportsAndHooks(
         modifiedCode,
-        options,
+        normalizedOptions,
         context,
         plugin
       );
 
       // 插件特定的后处理（可选）
       if (plugin.postProcess) {
-        modifiedCode = plugin.postProcess(modifiedCode, options, context);
+        modifiedCode = plugin.postProcess(
+          modifiedCode,
+          normalizedOptions,
+          context
+        );
       }
 
       return {
@@ -186,10 +190,13 @@ export class CoreProcessor {
    * 快速检查代码中是否包含疑似待翻译的内容
    * 使用正则表达式进行简单判断
    */
-  private hasTranslatableContent(code: string, normalizedOptions: NormalizedTransformOptions): boolean {
+  private hasTranslatableContent(
+    code: string,
+    normalizedOptions: NormalizedTransformOptions
+  ): boolean {
     // 使用配置中的pattern创建正则表达式
     const patternRegex = new RegExp(normalizedOptions.pattern);
-  
+
     // 检查代码中是否匹配pattern
     return patternRegex.test(code);
   }
@@ -199,14 +206,12 @@ export class CoreProcessor {
    * 暂时只支持 CONTEXT_AWARE   其余模式不支持
    */
   private determineProcessingMode(
-    options: TransformOptions | NormalizedTransformOptions
+    options: NormalizedTransformOptions
   ): ProcessingMode {
     // 如果用户明确指定了字符串替换模式
     if (
       options.preserveFormatting === true ||
-      ("normalizedI18nConfig" in options
-        ? options.normalizedI18nConfig.nonReactConfig
-        : options.i18nConfig?.nonReactConfig)
+      options.normalizedI18nConfig.nonReactConfig
     ) {
       return ProcessingMode.CONTEXT_AWARE;
     }
@@ -226,7 +231,7 @@ export class CoreProcessor {
   private selectPlugin(
     code: string,
     filePath: string,
-    options: TransformOptions
+    options: NormalizedTransformOptions
   ): FrameworkPlugin {
     // 按优先级查找合适的插件
     for (const plugin of this.plugins) {
@@ -243,18 +248,18 @@ export class CoreProcessor {
    * 获取默认插件
    */
   private getDefaultPlugin(
-    options: TransformOptions | NormalizedTransformOptions
+    options: NormalizedTransformOptions
   ): FrameworkPlugin {
     // 检查是否是React15框架
-    const isReact15 =
-      "normalizedI18nConfig" in options
-        ? options.normalizedI18nConfig.framework === "react15"
-        : options.i18nConfig?.framework === "react15";
+    const isReact15 = options.normalizedI18nConfig.framework === "react15";
 
     return {
       name: isReact15 ? "default-react15" : "default-react",
       shouldApply: () => true,
-      getRequiredImportsAndHooks: (pluginOptions, context) => {
+      getRequiredImportsAndHooks: (
+        pluginOptions: NormalizedTransformOptions,
+        context
+      ) => {
         // 没有提取字符串时不需要导入
         if (context.result.changes.length === 0) {
           return { imports: [], hooks: [] };
@@ -266,7 +271,8 @@ export class CoreProcessor {
         const translationMethod = getTranslationMethodName(pluginOptions);
 
         // 检查是否是React15框架
-        const isReact15 = pluginOptions.i18nConfig?.framework === "react15";
+        const isReact15 =
+          pluginOptions.normalizedI18nConfig.framework === "react15";
 
         if (isReact15) {
           // React15处理逻辑：直接导入函数，不使用hooks
@@ -335,7 +341,7 @@ export class CoreProcessor {
     ast: t.File,
     code: string,
     mode: ProcessingMode,
-    options: TransformOptions,
+    options: NormalizedTransformOptions,
     existingValueToKey: Map<string, string | number>,
     filePath: string
   ): ExtractionResult {
@@ -345,12 +351,8 @@ export class CoreProcessor {
     if (mode === ProcessingMode.CONTEXT_AWARE) {
       // 使用上下文感知模式 - 暂时保持使用原有的方法，后续可以迁移到新的extractor
 
-      // 规范化配置获取导入信息
-      const normalizedOptions = normalizeConfig(options);
-
-      const importConfig = normalizedOptions.normalizedI18nConfig.i18nImport;
-      const nonReactConfig =
-        normalizedOptions.normalizedI18nConfig.nonReactConfig;
+      const importConfig = options.normalizedI18nConfig.i18nImport;
+      const nonReactConfig = options.normalizedI18nConfig.nonReactConfig;
 
       const importManager = new SmartImportManager(
         importConfig,
@@ -391,7 +393,7 @@ export class CoreProcessor {
    */
   private processImportsAndHooks(
     code: string,
-    options: TransformOptions,
+    options: NormalizedTransformOptions,
     context: ProcessingContext,
     plugin: FrameworkPlugin
   ): string {
@@ -431,7 +433,10 @@ export class CoreProcessor {
     importRequirements: ImportRequirement[],
     hookRequirements: HookRequirement[],
     filePath: string = "",
-    options: TransformOptions = {}
+    options: Pick<
+      NormalizedTransformOptions,
+      "normalizedI18nConfig"
+    > = {} as NormalizedTransformOptions
   ): string {
     if (importRequirements.length === 0 && hookRequirements.length === 0) {
       return code;
@@ -486,10 +491,12 @@ export class CoreProcessor {
    * @param options 转换选项
    * @returns mergeImports的布尔值
    */
-  private getMergeImports(options: TransformOptions): boolean {
+  private getMergeImports(
+    options: Pick<NormalizedTransformOptions, "normalizedI18nConfig">
+  ): boolean {
     // 优先使用新配置格式
-    if (options.i18nConfig?.i18nImport?.mergeImports !== undefined) {
-      return options.i18nConfig.i18nImport.mergeImports !== false;
+    if (options.normalizedI18nConfig.i18nImport.mergeImports !== undefined) {
+      return options.normalizedI18nConfig.i18nImport.mergeImports !== false;
     }
 
     // 默认值

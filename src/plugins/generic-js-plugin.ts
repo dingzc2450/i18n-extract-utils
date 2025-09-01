@@ -10,6 +10,7 @@ import {
   HookRequirement,
 } from "../core/types";
 import { ExtractedString, TransformOptions } from "../types";
+import { NormalizedTransformOptions } from "../core/config-normalizer";
 
 /**
  * 通用JS插件实现
@@ -21,12 +22,15 @@ export class GenericJSPlugin implements FrameworkPlugin {
    * 通用JS插件总是可以应用（作为后备选项）
    */
   shouldApply(
-    code: string,
+    _code: string,
     filePath: string,
-    options: TransformOptions
+    options: NormalizedTransformOptions
   ): boolean {
-    // 检查是否为JS/TS文件
-    return /\.(js|ts|mjs|cjs)$/.test(filePath);
+    // 只有在没有指定特定框架时才应用通用JS插件
+    if (options.normalizedI18nConfig.framework) {
+      return false;
+    }
+    return true;
   }
 
   /**

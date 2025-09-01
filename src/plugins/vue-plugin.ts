@@ -18,6 +18,7 @@ import {
   UsedExistingKey,
   ChangeDetail,
 } from "../types";
+import { NormalizedTransformOptions } from "../core/config-normalizer";
 import { getDefaultPattern } from "../core/utils";
 import { parse } from "@babel/parser";
 import traverse from "@babel/traverse";
@@ -37,38 +38,16 @@ export class VuePlugin implements FrameworkPlugin {
    * 检测是否应该应用Vue插件
    */
   shouldApply(
-    code: string,
-    filePath: string,
-    options: TransformOptions
+    _code: string,
+    _filePath: string,
+    options: NormalizedTransformOptions
   ): boolean {
-    // 检查是否明确指定为Vue框架
-    if (options.i18nConfig?.framework === "vue") {
-      return true;
-    }
-
-    // 检查文件扩展名
-    if (filePath.endsWith(".vue")) {
-      return true;
-    }
-
-    // 检查Vue特有结构
-    const hasVueTemplate = code.includes("<template>");
-    const hasVueExport =
-      code.includes("export default") &&
-      (code.includes("setup()") ||
-        code.includes("setup:") ||
-        code.includes("data()") ||
-        code.includes("methods:"));
-
-    if (hasVueTemplate) {
-      return true;
-    }
-
-    if (hasVueExport) {
-      return true;
-    }
-
-    return false;
+    // 只根据框架类型判断是否应用
+    return (
+      options.normalizedI18nConfig.framework === "vue" ||
+      options.normalizedI18nConfig.framework === "vue2" ||
+      options.normalizedI18nConfig.framework === "vue3"
+    );
   }
 
   /**

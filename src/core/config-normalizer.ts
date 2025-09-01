@@ -151,12 +151,139 @@ function normalizeI18nImport(options: TransformOptions): NormalizedI18nConfig["i
 }
 
 /**
+ * 检测是否为React15框架
+ */
+function detectReact15Framework(code: string): boolean {
+  // 强React15特征检测 - 这些是React15特有的
+  const hasStrongReact15Features = 
+    code.includes('React.createClass') || 
+    code.includes('createReactClass') ||
+    code.includes('getInitialState') ||
+    code.includes('componentWillMount') ||
+    code.includes('componentWillReceiveProps') ||
+    code.includes('componentWillUpdate') ||
+    code.includes('getDefaultProps');
+
+  // 如果有强React15特征，直接返回true
+  if (hasStrongReact15Features) {
+    return true;
+  }
+
+  // 现代React特征检测 - 这些表明不是React15
+  const hasModernReactFeatures = 
+    // Hooks
+    code.includes('useState') || 
+    code.includes('useEffect') || 
+    code.includes('useCallback') ||
+    code.includes('useMemo') ||
+    code.includes('useContext') ||
+    code.includes('useReducer') ||
+    code.includes('useRef') ||
+    code.includes('useLayoutEffect') ||
+    code.includes('useImperativeHandle') ||
+    code.includes('useDebugValue') ||
+    // React 16.3+ 特征
+    code.includes('componentDidCatch') ||
+    code.includes('getDerivedStateFromError') ||
+    code.includes('getDerivedStateFromProps') ||
+    code.includes('getSnapshotBeforeUpdate') ||
+    // React 16+ 特征
+    code.includes('React.Fragment') ||
+    code.includes('React.memo') ||
+    code.includes('React.lazy') ||
+    code.includes('React.Suspense') ||
+    code.includes('React.forwardRef') ||
+    // JSX Fragments
+    code.includes('<>') ||
+    code.includes('</>') ||
+    // 现代导入方式
+    code.includes('import React, { ') ||
+    code.includes('from "react/jsx-runtime"') ||
+    code.includes('from "react/jsx-dev-runtime"');
+
+  // 如果有现代React特征，肯定不是React15
+  if (hasModernReactFeatures) {
+    return false;
+  }
+
+  // 更严格的React15判断：
+  // 1. 必须有React导入
+  // 2. 使用的是老式的类组件语法或者老式的函数组件
+  // 3. 没有现代特征
+  const hasReactImport = code.includes('import React') || 
+                        code.includes('from "react"') || 
+                        code.includes("from 'react'");
+
+  if (!hasReactImport) {
+    return false;
+  }
+
+  // 检查是否是老式的函数组件写法（React15风格）
+  const hasOldStyleFunctionComponent = 
+    // 使用React.createElement而不是JSX语法且没有JSX标签
+    (code.includes('React.createElement') && !/\<[A-Za-z]/.test(code));
+
+  // 如果有老式函数组件或类组件特征，可能是React15
+  return hasOldStyleFunctionComponent;
+}
+
+/**
+ * 检测是否为React框架
+ */
+function detectReactFramework(code: string, filePath: string): boolean {
+  return (
+    /\.(jsx|tsx)$/.test(filePath) ||
+    code.includes("import React") ||
+    code.includes('from "react"') ||
+    code.includes("from \'react\'") ||
+    /<[A-Z][a-zA-Z0-9]*/.test(code) || 
+    /<[a-z]+/.test(code)
+  );
+}
+
+/**
+ * 检测是否为Vue框架
+ */
+function detectVueFramework(code: string, filePath: string): boolean {
+  // 检查文件扩展名
+  if (filePath.endsWith(".vue")) {
+    return true;
+  }
+
+  // 检查Vue特有结构
+  const hasVueTemplate = code.includes("<template>");
+  const hasVueExport = code.includes("export default") &&
+                    (code.includes("setup()") ||
+                     code.includes("setup:") ||
+                     code.includes("data()") ||
+                     code.includes("methods:"));
+                     
+  return hasVueTemplate || hasVueExport;
+}
+
+/**
  * 规范化框架配置
  */
-function normalizeFramework(options: TransformOptions): string {
+function normalizeFramework(options: TransformOptions, code: string = "", filePath: string = ""): string {
   // 优先使用新配置中的框架
   if (options.i18nConfig?.framework) {
     return options.i18nConfig.framework;
+  }
+
+  // 根据代码内容和文件路径检测框架
+  if (detectReact15Framework(code)) {
+    return "react15";
+  }
+  
+  if (detectReactFramework(code, filePath)) {
+    return "react";
+  }
+  
+  if (detectVueFramework(code, filePath)) {
+    return "vue";
+  }
+  if(/\.(js|ts|mjs|cjs)$/.test(filePath)){
+    return "javaScript";
   }
 
   // 否则根据文件后缀或其他特征推断
@@ -199,10 +326,10 @@ function normalizeNonReactConfig(options: TransformOptions): any {
  * 处理转换选项，生成统一的规范化配置
  * 所有配置项都会有默认值，确保返回的配置是完整的
  */
-export function normalizeConfig(options: TransformOptions): NormalizedTransformOptions {
+export function normalizeConfig(options: TransformOptions, code: string = "", filePath: string = ""): NormalizedTransformOptions {
   // 创建规范化的i18n配置
   const normalizedI18nConfig: NormalizedI18nConfig = {
-    framework: normalizeFramework(options),
+    framework: normalizeFramework(options, code, filePath),
     i18nImport: normalizeI18nImport(options),
     nonReactConfig: normalizeNonReactConfig(options),
     i18nCall: options.i18nConfig?.i18nCall // 确保传递i18nCall配置

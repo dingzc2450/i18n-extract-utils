@@ -6,15 +6,14 @@
 import * as tg from "../babel-type-guards";
 import {
   FrameworkPlugin,
-  HookRequirement,
   ImportRequirement,
+  HookRequirement,
   ProcessingContext,
 } from "../core/types";
-import { ExtractedString, TransformOptions } from "../types";
-
-import traverse from "@babel/traverse";
+import { TransformOptions } from "../types";
+import { NormalizedTransformOptions } from "../core/config-normalizer";
 import * as t from "@babel/types";
-import { isJSXElement, isJSXFragment } from "../babel-type-guards";
+
 /**
  * React 插件实现
  */
@@ -25,33 +24,12 @@ export class ReactPlugin implements FrameworkPlugin {
    * 检测是否应该应用React插件
    */
   shouldApply(
-    code: string,
-    filePath: string,
-    options: TransformOptions
+    _code: string,
+    _filePath: string,
+    options: NormalizedTransformOptions
   ): boolean {
-    // 如果明确指定了其他框架，不应该使用React插件
-    if (
-      options.i18nConfig?.framework &&
-      options.i18nConfig.framework !== "react"
-    ) {
-      return false;
-    }
-
-    // 检查是否为React文件
-    if (options.i18nConfig?.framework === "react") return true;
-
-    // 如果使用了旧格式的React配置
-    if (options.hookName || options.hookImport || options.translationMethod) {
-      return /\.(jsx|tsx|js|ts)$/.test(filePath);
-    }
-
-    return (
-      /\.(jsx|tsx)$/.test(filePath) ||
-      code.includes("import React") ||
-      code.includes('from "react"') ||
-      code.includes("from 'react'") ||
-      this.hasJSXElements(code)
-    );
+    // 只根据框架类型判断是否应用
+    return options.normalizedI18nConfig.framework === "react";
   }
 
   /**

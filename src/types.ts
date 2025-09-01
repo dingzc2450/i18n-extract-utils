@@ -89,7 +89,7 @@ export interface TransformOptions {
   /**
    * 处理模式配置
    */
-  
+
   /**
    * 是否保持原始代码格式（使用字符串替换而不是AST重新生成）
    * Whether to preserve original code formatting (use string replacement instead of AST regeneration)
@@ -168,13 +168,13 @@ export interface ChangeDetail {
  */
 export type ImportChange =
   | {
-      type: 'replace';
+      type: "replace";
       start: number;
       end: number;
       text: string;
     }
   | {
-      type: 'insert';
+      type: "insert";
       start: number; // 使用 start 以便排序
       end: number; // 使用 end 以便排序
       insertPosition: number;
@@ -276,25 +276,25 @@ export interface FrameworkCodeGenerator {
  * 非React组件上下文的国际化配置
  */
 export interface NonReactI18nConfig {
-  /** 
+  /**
    * 翻译函数名，如 't', '$t' 等
    * @default 't'
    */
   functionName?: string;
-  /** 
+  /**
    * 导入类型：'default' | 'named' | 'namespace'
    * @default 'named'
-   * @example 
+   * @example
    * - 'default': import t from 'i18n-lib'
-   * - 'named': import { t } from 'i18n-lib'  
+   * - 'named': import { t } from 'i18n-lib'
    * - 'namespace': import * as i18n from 'i18n-lib'; i18n.t()
    */
-  importType?: 'default' | 'named' | 'namespace';
-  /** 
+  importType?: "default" | "named" | "namespace";
+  /**
    * 导入源，如 'react-i18n-plus', 'i18next' 等
    */
   source?: string;
-  /** 
+  /**
    * 命名空间名称（当 importType 为 'namespace' 时使用）
    * @default 'i18n'
    */
@@ -310,13 +310,13 @@ export interface NonReactI18nConfig {
  * 多语言配置总入口
  */
 export interface I18nConfig {
-  /** 
+  /**
    * 当前框架类型（如 'react' | 'react15' | 'vue' 等）
    * @default 'react'
    * @description 'react' 表示 React 16+，'react15' 表示 React 15
-   * @description 'vue' 表示 Vue.js，'vue2' 表示 Vue 2.x，'vue3' 表示 Vue 3.x
+   * @description 'vue' 表示 Vue.js，'vue2' 表示 Vue 2.x，'vue3' 表示 Vue 3.x 'javaScript' 表示通用 JavaScript
    */
-  framework?: "react" | "react15" | "vue" | "vue2" | "vue3";
+  framework?: "react" | "react15" | "vue" | "vue2" | "vue3" | "javaScript";
   /** 国际化导入配置，支持自定义，兼容 translationMethod/hookName/hookImport */
   i18nImport?: I18nImportConfig;
   /**

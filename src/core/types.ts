@@ -9,6 +9,7 @@ import {
   ChangeDetail,
 } from "../types";
 import { I18nError } from "./error-handler";
+import { NormalizedTransformOptions } from "./config-normalizer";
 
 /**
  * 框架特定处理插件接口
@@ -22,19 +23,19 @@ export interface FrameworkPlugin {
   shouldApply(
     code: string,
     filePath: string,
-    options: TransformOptions
+    options: NormalizedTransformOptions
   ): boolean;
 
   /**
    * 预处理代码（可选）
    */
-  preProcess?(code: string, options: TransformOptions): string;
+  preProcess?(code: string, options: NormalizedTransformOptions): string;
 
   /**
    * 获取需要的导入和hook调用
    */
   getRequiredImportsAndHooks?(
-    options: TransformOptions,
+    options: NormalizedTransformOptions,
     context: ProcessingContext
   ): {
     imports: ImportRequirement[];
@@ -46,7 +47,7 @@ export interface FrameworkPlugin {
    */
   postProcess?(
     code: string,
-    options: TransformOptions,
+    options: NormalizedTransformOptions,
     context: ProcessingContext
   ): string;
 
