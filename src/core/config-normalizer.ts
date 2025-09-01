@@ -4,7 +4,7 @@
  */
 
 import type { CallExpression } from "@babel/types";
-import type { TransformOptions } from "../types";
+import type { NonReactI18nConfig, TransformOptions } from "../types";
 
 /**
  * 默认值常量 - 集中定义所有默认值
@@ -54,13 +54,7 @@ export interface NormalizedI18nConfig {
     mergeImports: boolean;
     custom?: string;
   };
-  nonReactConfig?: {
-    functionName: string;
-    importType: string;
-    namespace: string;
-    source: string;
-    customImport?: string;
-  } | null;
+  nonReactConfig?: NonReactI18nConfig | null;
   i18nCall?: (
     callName: string,
     key: string | number,
@@ -335,7 +329,9 @@ function normalizeNonReactConfig(
       options.i18nConfig.nonReactConfig;
     return {
       functionName: functionName || CONFIG_DEFAULTS.NON_REACT_FUNCTION_NAME,
-      importType: importType || CONFIG_DEFAULTS.NON_REACT_IMPORT_TYPE,
+      importType:
+        importType ||
+        (CONFIG_DEFAULTS.NON_REACT_IMPORT_TYPE as unknown as typeof importType),
       source:
         source ||
         (isVueFramework(options)
@@ -350,7 +346,7 @@ function normalizeNonReactConfig(
   if (isVueFramework(options)) {
     return {
       functionName: CONFIG_DEFAULTS.VUE_TRANSLATION_METHOD,
-      importType: CONFIG_DEFAULTS.NON_REACT_IMPORT_TYPE,
+      importType: CONFIG_DEFAULTS.NON_REACT_IMPORT_TYPE as unknown as "named",
       source: CONFIG_DEFAULTS.VUE_HOOK_SOURCE,
       namespace: CONFIG_DEFAULTS.NON_REACT_NAMESPACE,
     };

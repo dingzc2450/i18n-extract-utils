@@ -26,9 +26,12 @@ export interface ImportInfo {
 export class SmartImportManager {
   constructor(
     private reactConfig?: I18nImportConfig,
-    private nonReactConfig?: NonReactI18nConfig
+    private nonReactConfig?: NonReactI18nConfig | null
   ) {}
-  init(reactConfig?: I18nImportConfig, nonReactConfig?: NonReactI18nConfig) {
+  init(
+    reactConfig?: I18nImportConfig,
+    nonReactConfig?: NonReactI18nConfig | null
+  ) {
     this.reactConfig = reactConfig;
     this.nonReactConfig = nonReactConfig;
   }

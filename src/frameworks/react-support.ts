@@ -5,7 +5,7 @@
 
 import * as tg from "../babel-type-guards";
 
-import type { ExtractedString, TransformOptions } from "../types";
+import type { ExtractedString } from "../types";
 
 // 添加 ReactTransformer 相关的导入
 import generate from "@babel/generator";
@@ -17,6 +17,7 @@ import { formatGeneratedCode } from "./code-formatter";
 import { fallbackTransform } from "../fallback-transform";
 import type { ChangeDetail, I18nTransformer, UsedExistingKey } from "../types";
 import { isJSXElement, isJSXFragment } from "../babel-type-guards";
+import type { NormalizedTransformOptions } from "../core";
 
 /**
  * Traverses the AST to add the translation hook import and call if necessary.
@@ -205,19 +206,15 @@ export class ReactTransformer implements I18nTransformer {
   extractAndReplace(
     code: string,
     filePath: string,
-    options: TransformOptions,
+    options: NormalizedTransformOptions,
     existingValueToKey?: Map<string, string | number>
   ) {
     const translationMethod =
-      options.i18nConfig?.i18nImport?.name || options.translationMethod || "t"; // 已废弃，建议通过 options 传递框架配置
+      options.normalizedI18nConfig?.i18nImport?.name || "t"; // 已废弃，建议通过 options 传递框架配置
     const hookName =
-      options.i18nConfig?.i18nImport?.importName ||
-      options.hookName ||
-      "useTranslation"; // 已废弃
+      options.normalizedI18nConfig?.i18nImport?.importName || "useTranslation"; // 已废弃
     const hookImport =
-      options.i18nConfig?.i18nImport?.source ||
-      options.hookImport ||
-      "react-i18next"; // 已废弃
+      options.normalizedI18nConfig?.i18nImport?.source || "react-i18next"; // 已废弃
     const extractedStrings: ExtractedString[] = [];
     const usedExistingKeysList: UsedExistingKey[] = [];
     let changes: ChangeDetail[] = [];

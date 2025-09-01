@@ -4,7 +4,6 @@ import * as t from "@babel/types";
 import generate from "@babel/generator";
 import type {
   I18nTransformer,
-  TransformOptions,
   ExtractedString,
   UsedExistingKey,
   ChangeDetail,
@@ -12,6 +11,7 @@ import type {
 import { formatGeneratedCode } from "./code-formatter";
 import { fallbackTransform } from "../fallback-transform";
 import { replaceStringsWithTCalls } from "./ast-replacer";
+import type { NormalizedTransformOptions } from "../core";
 
 /**
  * React 15 版本的多语言提取与替换实现（无 hook，仅全局函数调用）
@@ -20,16 +20,13 @@ export class React15Transformer implements I18nTransformer {
   extractAndReplace(
     code: string,
     filePath: string,
-    options: TransformOptions,
+    options: NormalizedTransformOptions,
     existingValueToKey?: Map<string, string | number>
   ) {
     // 全局国际化函数名和导入路径，可通过 options 配置
     // 1. 解析多语言配置
-    const i18nConfig = options.i18nConfig || {};
-    const i18nImportConfig = i18nConfig.i18nImport || {
-      name: "t",
-      source: "i18n-lib",
-    };
+    const i18nConfig = options.normalizedI18nConfig || {};
+    const i18nImportConfig = i18nConfig.i18nImport;
     const i18nFuncName = i18nImportConfig.name;
     const i18nImport = i18nImportConfig.source;
     const extractedStrings: ExtractedString[] = [];

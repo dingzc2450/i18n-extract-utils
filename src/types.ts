@@ -325,7 +325,7 @@ export interface I18nConfig {
    * 非React组件场景下的国际化配置（仅在 framework 为 'react' 时生效）
    * 用于处理普通函数、工具函数等非组件场景
    */
-  nonReactConfig?: NonReactI18nConfig;
+  nonReactConfig?: NonReactI18nConfig | null;
   /**
    * 自定义生成调用表达式的方法（返回 t.CallExpression）
    * (callName, key, rawText) => t.CallExpression

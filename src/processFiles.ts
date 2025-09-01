@@ -349,7 +349,7 @@ export async function executeI18nExtraction(
 export function enhanceError(error: Error, filePath?: string): I18nError {
   const errorMessage = error.message;
   let errorCode = "GENERAL001";
-  let params: unknown[] = [errorMessage];
+  let params: string[] = [errorMessage];
 
   // 解析错误
   if (
