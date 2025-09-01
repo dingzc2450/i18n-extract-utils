@@ -36,6 +36,12 @@ import type {
   TransformOptions,
   UsedExistingKey,
 } from "../types";
+import { Framework } from "../types";
+
+/**
+ * 支持的框架枚举
+ */
+// 删除本地的Framework枚举定义，使用types模块中定义的统一类型
 
 /**
  * 核心处理器类 - 重构版本
@@ -225,7 +231,6 @@ export class CoreProcessor {
     ) {
       return ProcessingMode.CONTEXT_AWARE;
     }
-
     // 如果用户明确指定了AST转换模式
     if (options.useASTTransform === true) {
       throw new Error("AST转换模式暂不支持");
@@ -233,25 +238,6 @@ export class CoreProcessor {
 
     // 默认使用上下文感知模式
     return ProcessingMode.CONTEXT_AWARE;
-  }
-
-  /**
-   * 选择合适的插件
-   */
-  private selectPlugin(
-    code: string,
-    filePath: string,
-    options: NormalizedTransformOptions
-  ): FrameworkPlugin {
-    // 按优先级查找合适的插件
-    for (const plugin of this.plugins) {
-      if (plugin.shouldApply(code, filePath, options)) {
-        return plugin;
-      }
-    }
-
-    // 如果没有找到合适的插件，返回默认React插件
-    return this.getDefaultPlugin(options);
   }
 
   /**
@@ -282,7 +268,7 @@ export class CoreProcessor {
 
         // 检查是否是React15框架
         const isReact15 =
-          pluginOptions.normalizedI18nConfig.framework === "react15";
+          pluginOptions.normalizedI18nConfig.framework === Framework.React15;
 
         if (isReact15) {
           // React15处理逻辑：直接导入函数，不使用hooks
@@ -325,6 +311,25 @@ export class CoreProcessor {
         return { imports, hooks };
       },
     };
+  }
+
+  /**
+   * 选择合适的插件
+   */
+  private selectPlugin(
+    code: string,
+    filePath: string,
+    options: NormalizedTransformOptions
+  ): FrameworkPlugin {
+    // 按优先级查找合适的插件
+    for (const plugin of this.plugins) {
+      if (plugin.shouldApply(code, filePath, options)) {
+        return plugin;
+      }
+    }
+
+    // 如果没有找到合适的插件，返回默认React插件
+    return this.getDefaultPlugin(options);
   }
 
   /**

@@ -5,6 +5,7 @@
 
 import type { CallExpression } from "@babel/types";
 import type { NonReactI18nConfig, TransformOptions } from "../types";
+import { Framework } from "../types";
 
 /**
  * 默认值常量 - 集中定义所有默认值
@@ -26,7 +27,7 @@ export const CONFIG_DEFAULTS = {
   VUE_HOOK_SOURCE: "vue-i18n",
 
   // 通用框架默认值
-  DEFAULT_FRAMEWORK: "react",
+  DEFAULT_FRAMEWORK: Framework.React,
 
   // 基础配置默认值
   PATTERN: "___(.+)___",
@@ -46,7 +47,7 @@ export const CONFIG_DEFAULTS = {
  * 规范化的i18n配置接口
  */
 export interface NormalizedI18nConfig {
-  framework: string;
+  framework: Framework;
   i18nImport: {
     name: string;
     importName: string;
@@ -88,17 +89,15 @@ export interface NormalizedTransformOptions {
  */
 function isVueFramework(options: TransformOptions): boolean {
   const framework = options.i18nConfig?.framework || "";
-  return framework.toLowerCase().includes("vue");
+  return framework.toLowerCase().includes(Framework.Vue);
 }
-
 /**
  * 判断是否是React15框架
  */
 function isReact15Framework(options: TransformOptions): boolean {
   const framework = options.i18nConfig?.framework || "";
-  return framework.toLowerCase() === "react15";
+  return framework.toLowerCase() === Framework.React15;
 }
-
 /**
  * 规范化i18n导入配置
  * 处理新旧配置系统的兼容，返回统一格式的配置
@@ -290,26 +289,26 @@ function normalizeFramework(
   options: TransformOptions,
   code: string = "",
   filePath: string = ""
-): string {
+): Framework {
   // 优先使用新配置中的框架
   if (options.i18nConfig?.framework) {
-    return options.i18nConfig.framework;
+    return options.i18nConfig.framework as Framework;
   }
 
   // 根据代码内容和文件路径检测框架
   if (detectReact15Framework(code)) {
-    return "react15";
+    return Framework.React15;
   }
 
   if (detectReactFramework(code, filePath)) {
-    return "react";
+    return Framework.React;
   }
 
   if (detectVueFramework(code, filePath)) {
-    return "vue";
+    return Framework.Vue;
   }
   if (/\.(js|ts|mjs|cjs)$/.test(filePath)) {
-    return "javaScript";
+    return Framework.JavaScript;
   }
 
   // 否则根据文件后缀或其他特征推断

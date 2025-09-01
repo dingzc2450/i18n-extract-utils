@@ -309,11 +309,22 @@ export interface NonReactI18nConfig {
 }
 
 /**
+ * 支持的框架类型枚举
+ */
+export enum Framework {
+  React = "react",
+  React15 = "react15",
+  Vue = "vue",
+  Vue2 = "vue2",
+  Vue3 = "vue3",
+  JavaScript = "javaScript",
+}
+/**
  * 多语言配置总入口
  */
 export interface I18nConfig {
   /**
-   * 当前框架类型（如 'react' | 'react15' | 'vue' 等）
+   * 当前框架类型 Framework（如 'react' | 'react15' | 'vue' 等）
    * @default 'react'
    * @description 'react' 表示 React 16+，'react15' 表示 React 15
    * @description 'vue' 表示 Vue.js，'vue2' 表示 Vue 2.x，'vue3' 表示 Vue 3.x 'javaScript' 表示通用 JavaScript

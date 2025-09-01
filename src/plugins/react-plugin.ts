@@ -10,6 +10,7 @@ import type {
   ProcessingContext,
 } from "../core/types";
 import type { TransformOptions } from "../types";
+import { Framework } from "../types";
 
 import type { NormalizedTransformOptions } from "../core";
 import type { ParserOptions } from "@babel/parser";
@@ -29,7 +30,7 @@ export class ReactPlugin implements FrameworkPlugin {
     options: NormalizedTransformOptions
   ): boolean {
     // 只根据框架类型判断是否应用
-    return options.normalizedI18nConfig.framework === "react";
+    return options.normalizedI18nConfig.framework === Framework.React;
   }
 
   /**

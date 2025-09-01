@@ -6,9 +6,11 @@
 import type { TransformOptions } from "../types";
 import type { NormalizedTransformOptions } from "../core/config-normalizer";
 import { normalizeConfig } from "../core/config-normalizer";
+import { Framework } from "../types";
 
 /**
- * 配置代理类 - 包装原有功能，添加配置管理
+ * 配置代理类
+ * 处理配置的默认值填充、验证和规范化
  */
 export class ConfigProxy {
   /**
@@ -143,17 +145,20 @@ export class ConfigProxy {
   /**
    * 简单的框架检测逻辑（内联实现，避免循环依赖）
    */
-  private static simpleDetectFramework(code: string, filePath: string): string {
+  private static simpleDetectFramework(
+    code: string,
+    filePath: string
+  ): Framework {
     // 检查文件扩展名
     const extension = filePath.split(".").pop()?.toLowerCase();
 
     if (extension === "vue") {
-      return "vue";
+      return Framework.Vue;
     }
 
     // 检查是否是React.createClass（React15特征）
     if (code.includes("React.createClass")) {
-      return "react15";
+      return Framework.React15;
     }
 
     // 检查Vue特征
@@ -162,7 +167,7 @@ export class ConfigProxy {
       (code.includes("data()") || code.includes("methods:"));
 
     if (hasVueStructure) {
-      return "vue";
+      return Framework.Vue;
     }
 
     // 检查代码内容
@@ -190,10 +195,10 @@ export class ConfigProxy {
         hasReact15Features ||
         (!hasModernHooks && code.includes("React.createElement"))
       ) {
-        return "react15";
+        return Framework.React15;
       }
 
-      return "react";
+      return Framework.React;
     }
 
     if (
@@ -203,13 +208,12 @@ export class ConfigProxy {
       (code.includes("export default {") &&
         (code.includes("data()") || code.includes("methods:")))
     ) {
-      return "vue";
+      return Framework.Vue;
     }
 
     // 默认返回 react
-    return "react";
+    return Framework.React;
   }
-
   /**
    * 验证配置是否有效
    */

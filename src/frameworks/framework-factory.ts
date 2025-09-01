@@ -6,6 +6,7 @@ import type {
   I18nTransformer,
   FrameworkCodeGenerator,
 } from "../types";
+import { Framework } from "../types";
 import { ReactTransformer } from "./react-support";
 import { React15Transformer } from "./react15-support";
 import { VueTransformer } from "./vue-support";
@@ -22,18 +23,18 @@ export function createFrameworkTransformer(
   const normalizedConfig = normalizeConfig(userOptions);
   const framework = normalizedConfig.normalizedI18nConfig.framework;
 
-  switch (framework.toLowerCase()) {
-    case "react":
+  switch (framework) {
+    case Framework.React:
       return new ReactTransformer();
 
-    case "react15":
+    case Framework.React15:
       return new React15Transformer();
 
-    case "vue":
-    case "vue3":
+    case Framework.Vue:
+    case Framework.Vue3:
       return new VueTransformer();
 
-    case "vue2":
+    case Framework.Vue2:
       // Vue 2 可以复用 VueTransformer，但可能需要不同的默认配置
       return new VueTransformer();
 
@@ -46,12 +47,12 @@ export function createFrameworkTransformer(
 /**
  * 根据文件内容和配置自动检测框架类型
  */
-export function detectFramework(code: string, filePath: string): string {
+export function detectFramework(code: string, filePath: string): Framework {
   // 检查文件扩展名
   const extension = filePath.split(".").pop()?.toLowerCase();
 
   if (extension === "vue") {
-    return "vue";
+    return Framework.Vue;
   }
 
   // 强React15特征检测
@@ -65,7 +66,7 @@ export function detectFramework(code: string, filePath: string): string {
     code.includes("getDefaultProps");
 
   if (hasStrongReact15Features) {
-    return "react15";
+    return Framework.React15;
   }
 
   // 检查Vue特征
@@ -88,7 +89,7 @@ export function detectFramework(code: string, filePath: string): string {
     code.includes("setup:");
 
   if (hasVueImport || hasVueStructure || hasVue3Features) {
-    return "vue";
+    return Framework.Vue;
   }
 
   // 检查React
@@ -122,14 +123,14 @@ export function detectFramework(code: string, filePath: string): string {
         !hasModernFeatures); // ES5类但没有现代特征
 
     if (isReact15Compatible) {
-      return "react15";
+      return Framework.React15;
     }
 
-    return "react";
+    return Framework.React;
   }
 
   // 默认返回 react
-  return "react";
+  return Framework.React;
 }
 
 /**
@@ -138,11 +139,13 @@ export function detectFramework(code: string, filePath: string): string {
 export function getFrameworkDefaults(
   framework: string
 ): Partial<TransformOptions> {
-  switch (framework.toLowerCase()) {
-    case "react":
+  const normalizedFramework = framework.toLowerCase() as Lowercase<Framework>;
+
+  switch (normalizedFramework) {
+    case Framework.React:
       return {
         i18nConfig: {
-          framework: "react",
+          framework: Framework.React,
           i18nImport: {
             name: "t",
             importName: "useTranslation",
@@ -154,7 +157,7 @@ export function getFrameworkDefaults(
     case "react15":
       return {
         i18nConfig: {
-          framework: "react15",
+          framework: Framework.React15, // 使用枚举值
           i18nImport: {
             name: "t",
             // React15不使用hooks，直接从i18n导入t函数
@@ -164,23 +167,29 @@ export function getFrameworkDefaults(
         },
       };
 
-    case "vue":
-    case "vue3":
+    case Framework.Vue:
+    case Framework.Vue3:
       return {
         i18nConfig: {
-          framework: "vue",
+          framework: Framework.Vue,
           i18nImport: {
             name: "t",
             importName: "useI18n",
             source: "vue-i18n",
           },
+          nonReactConfig: {
+            functionName: "$t",
+            importType: "named",
+            source: "vue-i18n",
+            namespace: "i18n",
+          },
         },
       };
 
-    case "vue2":
+    case Framework.Vue2:
       return {
         i18nConfig: {
-          framework: "vue2", // 临时类型断言
+          framework: Framework.Vue2, // 临时类型断言
           i18nImport: {
             name: "$t",
             source: "vue-i18n",
@@ -191,7 +200,7 @@ export function getFrameworkDefaults(
     default:
       return {
         i18nConfig: {
-          framework: "react",
+          framework: Framework.React,
           i18nImport: {
             name: "t",
             importName: "useTranslation",
@@ -218,12 +227,7 @@ export function mergeWithFrameworkDefaults(
     pattern: normalizedConfig.pattern,
     outputPath: normalizedConfig.outputPath,
     i18nConfig: {
-      framework: normalizedConfig.normalizedI18nConfig.framework as
-        | "react"
-        | "react15"
-        | "vue"
-        | "vue3"
-        | "vue2",
+      framework: normalizedConfig.normalizedI18nConfig.framework as Framework,
       i18nImport: normalizedConfig.normalizedI18nConfig.i18nImport,
       nonReactConfig: normalizedConfig.normalizedI18nConfig.nonReactConfig,
     },

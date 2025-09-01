@@ -11,6 +11,7 @@ import type {
 import type { TransformOptions } from "../types";
 import type { NormalizedTransformOptions } from "../core/config-normalizer";
 import type { ParserOptions } from "@babel/parser";
+import { Framework } from "../types";
 
 /**
  * React 15 插件实现
@@ -28,7 +29,7 @@ export class React15Plugin implements FrameworkPlugin {
     options: NormalizedTransformOptions
   ): boolean {
     // 只根据框架类型判断是否应用
-    return options.normalizedI18nConfig.framework === "react15";
+    return options.normalizedI18nConfig.framework === Framework.React15;
   }
 
   /**
