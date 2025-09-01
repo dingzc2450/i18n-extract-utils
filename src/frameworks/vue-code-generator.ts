@@ -1,6 +1,7 @@
 // Vue框架专用的代码生成器，处理Vue单文件组件的完整解析和代码生成
 
 import { parse } from "@babel/parser";
+import type { NodePath } from "@babel/traverse";
 import traverse from "@babel/traverse";
 import * as t from "@babel/types";
 import generate from "@babel/generator";
@@ -238,9 +239,9 @@ export class VueCodeGenerator implements FrameworkCodeGenerator {
     const startTag = new RegExp(`<${sectionName}[^>]*>`, "i");
 
     const startMatch = code.match(startTag);
-    if (!startMatch) return undefined;
+    if (!startMatch || startMatch.index === undefined) return undefined;
 
-    const startIndex = startMatch.index! + startMatch[0].length;
+    const startIndex = startMatch.index + startMatch[0].length;
     let depth = 1;
     let currentIndex = startIndex;
 
@@ -479,7 +480,7 @@ export class VueCodeGenerator implements FrameworkCodeGenerator {
 
     let hasSetupMethod = false;
     let hasExportDefault = false;
-    let exportDefaultPath: any = null;
+    let exportDefaultPath: NodePath<t.ExportDefaultDeclaration> | null = null;
 
     traverse(ast, {
       Program: {
@@ -568,7 +569,7 @@ export class VueCodeGenerator implements FrameworkCodeGenerator {
   }
 
   private addUseI18nToSetupMethod(
-    path: any,
+    path: NodePath<t.ObjectMethod>,
     translationMethod: string,
     hookName: string
   ) {
@@ -614,7 +615,7 @@ export class VueCodeGenerator implements FrameworkCodeGenerator {
   }
 
   private addUseI18nToSetupProperty(
-    path: any,
+    path: NodePath<t.ObjectProperty>,
     translationMethod: string,
     hookName: string
   ) {
@@ -726,7 +727,7 @@ export class VueCodeGenerator implements FrameworkCodeGenerator {
    * 为Options API组件添加setup方法
    */
   private addSetupMethodToOptionsAPI(
-    exportDefaultPath: any,
+    exportDefaultPath: NodePath<t.ExportDefaultDeclaration>,
     translationMethod: string,
     hookName: string
   ) {

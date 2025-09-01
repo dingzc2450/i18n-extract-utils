@@ -269,7 +269,7 @@ const errorDefinitions: Record<string, ErrorDefinition> = {
  */
 export function createI18nError(
   errorCode: string,
-  params: any[] = [],
+  params: string[] = [],
   options: {
     filePath?: string;
     line?: number;
@@ -365,37 +365,6 @@ export function logError(error: I18nError): void {
     console.warn(formattedError);
   } else {
     console.error(formattedError);
-  }
-}
-
-/**
- * 错误处理工具 - 包装函数，用于统一处理可能抛出的错误
- */
-export function withErrorHandling<T>(
-  fn: () => T,
-  errorCode: string,
-  params: any[] = [],
-  options: {
-    filePath?: string;
-    rethrow?: boolean; // 是否重新抛出错误
-    returnValue?: any; // 发生错误时的返回值
-  } = {}
-): T | null {
-  try {
-    return fn();
-  } catch (err) {
-    const error = createI18nError(errorCode, params, {
-      filePath: options.filePath,
-      originalError: err as Error,
-    });
-
-    logError(error);
-
-    if (options.rethrow) {
-      throw error;
-    }
-
-    return options.returnValue !== undefined ? options.returnValue : null;
   }
 }
 

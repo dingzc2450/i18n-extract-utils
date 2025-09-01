@@ -180,7 +180,7 @@ export function getFrameworkDefaults(
     case "vue2":
       return {
         i18nConfig: {
-          framework: "vue2" as any, // 临时类型断言
+          framework: "vue2", // 临时类型断言
           i18nImport: {
             name: "$t",
             source: "vue-i18n",

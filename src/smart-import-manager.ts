@@ -28,7 +28,10 @@ export class SmartImportManager {
     private reactConfig?: I18nImportConfig,
     private nonReactConfig?: NonReactI18nConfig
   ) {}
-
+  init(reactConfig?: I18nImportConfig, nonReactConfig?: NonReactI18nConfig) {
+    this.reactConfig = reactConfig;
+    this.nonReactConfig = nonReactConfig;
+  }
   /**
    * 根据上下文获取导入信息
    */
@@ -40,6 +43,14 @@ export class SmartImportManager {
 
     // 非 React 组件上下文，使用普通导入
     return this.getNonReactImportInfo();
+  }
+
+  stringifyImport(importInfo: ImportInfo): string {
+    return JSON.stringify(importInfo);
+  }
+
+  parseImport(importStr: string): ImportInfo {
+    return JSON.parse(importStr);
   }
 
   /**

@@ -5,6 +5,7 @@
 import type { ExtractedString, UsedExistingKey, ChangeDetail } from "../types";
 import type { I18nError } from "./error-handler";
 import type { NormalizedTransformOptions } from "./config-normalizer";
+import type { ParserOptions } from "@babel/parser";
 
 /**
  * 框架特定处理插件接口
@@ -49,7 +50,7 @@ export interface FrameworkPlugin {
   /**
    * 获取解析器配置
    */
-  getParserConfig?(): object;
+  getParserConfig?(): ParserOptions;
 }
 
 /**

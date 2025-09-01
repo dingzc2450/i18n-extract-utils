@@ -19,7 +19,7 @@ import { ConfigProxy } from "./config/config-proxy";
 import {
   createI18nError,
   logError,
-  enhanceError,
+  enhanceError as baseEnhanceError,
   formatErrorForUser,
 } from "./core/error-handler";
 
@@ -145,7 +145,7 @@ export function transformCode(
   } catch (error) {
     // 使用统一的错误处理机制
     let errorCode = "GENERAL001";
-    let params: any[] = [];
+    let params: string[] = [];
 
     // 根据错误类型确定错误代码
     if (error instanceof Error) {
@@ -256,7 +256,7 @@ export async function processFiles(
       }
     } catch (error) {
       // 使用增强的错误处理
-      const enhancedError = enhanceError(
+      const enhancedError = baseEnhanceError(
         error instanceof Error ? error : new Error(String(error)),
         filePath
       );
@@ -315,8 +315,8 @@ export async function executeI18nExtraction(
 
     if (hasErrors) {
       // 生成用户友好的错误总结消息
-      const errorMessages = result.errors!.map(err => formatErrorForUser(err));
-      const friendlyErrorMessage = `国际化处理过程中发生了 ${result.errors!.length} 个错误:\n\n${errorMessages.join("\n\n---------------\n\n")}`;
+      const errorMessages = result.errors?.map(err => formatErrorForUser(err));
+      const friendlyErrorMessage = `国际化处理过程中发生了 ${result.errors?.length} 个错误:\n\n${errorMessages?.join("\n\n---------------\n\n")}`;
 
       return {
         ...result,
@@ -331,7 +331,7 @@ export async function executeI18nExtraction(
     };
   } catch (error) {
     // 处理顶层异常
-    const topLevelError = enhanceError(
+    const topLevelError = baseEnhanceError(
       error instanceof Error ? error : new Error(String(error))
     );
 
@@ -344,4 +344,67 @@ export async function executeI18nExtraction(
       friendlyErrorMessage: formatErrorForUser(topLevelError),
     };
   }
+}
+
+export function enhanceError(error: Error, filePath?: string): I18nError {
+  const errorMessage = error.message;
+  let errorCode = "GENERAL001";
+  let params: unknown[] = [errorMessage];
+
+  // 解析错误
+  if (
+    errorMessage.includes("Unexpected token") ||
+    errorMessage.includes("BABEL_PARSER_SYNTAX_ERROR")
+  ) {
+    errorCode = "PARSING001";
+    params = [errorMessage];
+
+    // 提取行列信息
+    const lineMatch = errorMessage.match(/\((\d+):(\d+)\)/);
+    if (lineMatch) {
+      params.push(lineMatch[1]); // 行号作为第二个参数
+    }
+  }
+  // 文件错误
+  else if (
+    errorMessage.includes("ENOENT") ||
+    errorMessage.includes("no such file")
+  ) {
+    errorCode = "FILE001";
+    params = [filePath || errorMessage];
+  }
+  // 插件错误
+  else if (errorMessage.includes("No plugin found")) {
+    errorCode = "PLUGIN002";
+    params = [filePath || ""];
+  }
+  // Vue 特定错误
+  else if (errorMessage.includes("Vue") || errorMessage.includes(".vue")) {
+    if (errorMessage.includes("template")) {
+      errorCode = "VUE003";
+    } else if (errorMessage.includes("script setup")) {
+      errorCode = "VUE004";
+    } else if (errorMessage.includes("script")) {
+      errorCode = "VUE002";
+    } else {
+      errorCode = "VUE001";
+    }
+    params = [errorMessage];
+  }
+  // React 特定错误
+  else if (errorMessage.includes("React") || errorMessage.includes("JSX")) {
+    if (errorMessage.includes("Hook")) {
+      errorCode = "REACT002";
+    } else if (errorMessage.includes("JSX")) {
+      errorCode = "REACT003";
+    } else {
+      errorCode = "REACT001";
+    }
+    params = [errorMessage];
+  }
+
+  return createI18nError(errorCode, params, {
+    filePath,
+    originalError: error,
+  });
 }

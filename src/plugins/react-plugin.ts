@@ -12,6 +12,7 @@ import type {
 import type { TransformOptions } from "../types";
 
 import type { NormalizedTransformOptions } from "../core";
+import type { ParserOptions } from "@babel/parser";
 
 /**
  * React 插件实现
@@ -34,7 +35,7 @@ export class ReactPlugin implements FrameworkPlugin {
   /**
    * 获取React解析器配置
    */
-  getParserConfig(): object {
+  getParserConfig(): ParserOptions {
     return {
       plugins: ["jsx"],
     };

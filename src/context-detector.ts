@@ -1,5 +1,6 @@
 import * as t from "@babel/types";
 import type { NodePath } from "@babel/traverse";
+import traverse from "@babel/traverse";
 
 /**
  * 代码上下文类型枚举
@@ -224,32 +225,16 @@ function containsJSXReturn(node: t.Function): boolean {
  * 检查节点是否包含 JSX
  */
 function containsJSX(node: t.Node): boolean {
+  // 直接检查是否是 JSX 元素或片段
   if (t.isJSXElement(node) || t.isJSXFragment(node)) {
     return true;
   }
 
-  // 递归检查子节点
-  for (const key in node) {
-    const value = (node as any)[key];
-    if (value && typeof value === "object") {
-      if (Array.isArray(value)) {
-        for (const item of value) {
-          if (
-            item &&
-            typeof item === "object" &&
-            item.type &&
-            containsJSX(item)
-          ) {
-            return true;
-          }
-        }
-      } else if (value.type && containsJSX(value)) {
-        return true;
-      }
-    }
-  }
-
-  return false;
+  // 使用 Babel 提供的 hasType 方法检查子树中是否包含 JSX 元素
+  return (
+    traverse.hasType(node, "JSXElement") ||
+    traverse.hasType(node, "JSXFragment")
+  );
 }
 
 /**

@@ -20,6 +20,7 @@ import type {
 } from "../types";
 import type { NormalizedTransformOptions } from "../core/config-normalizer";
 import { getDefaultPattern } from "../core/utils";
+import type { ParserOptions } from "@babel/parser";
 import { parse } from "@babel/parser";
 import traverse from "@babel/traverse";
 import * as t from "@babel/types";
@@ -53,7 +54,7 @@ export class VuePlugin implements FrameworkPlugin {
   /**
    * 获取Vue解析器配置
    */
-  getParserConfig(): object {
+  getParserConfig(): ParserOptions {
     return {
       plugins: ["typescript", "jsx"], // Vue支持TypeScript和JSX语法
     };

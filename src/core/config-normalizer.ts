@@ -54,7 +54,13 @@ export interface NormalizedI18nConfig {
     mergeImports: boolean;
     custom?: string;
   };
-  nonReactConfig?: any;
+  nonReactConfig?: {
+    functionName: string;
+    importType: string;
+    namespace: string;
+    source: string;
+    customImport?: string;
+  } | null;
   i18nCall?: (
     callName: string,
     key: string | number,
@@ -320,7 +326,9 @@ function normalizeFramework(
 /**
  * 规范化非React配置
  */
-function normalizeNonReactConfig(options: TransformOptions): any {
+function normalizeNonReactConfig(
+  options: TransformOptions
+): NormalizedI18nConfig["nonReactConfig"] {
   // 如果有新配置中的nonReactConfig，直接使用
   if (options.i18nConfig?.nonReactConfig) {
     const { functionName, importType, source, namespace, customImport } =
@@ -466,7 +474,9 @@ export function getMergeImports(
 /**
  * 获取i18nCall配置
  */
-export function getI18nCall(options: NormalizedTransformOptions): any {
+export function getI18nCall(
+  options: NormalizedTransformOptions
+): NormalizedI18nConfig["i18nCall"] {
   if (
     "normalizedI18nConfig" in options &&
     options.normalizedI18nConfig.i18nCall

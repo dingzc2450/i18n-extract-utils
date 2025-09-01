@@ -8,6 +8,7 @@ import generate from "@babel/generator";
 import traverse from "@babel/traverse";
 import * as t from "@babel/types";
 import { StringReplacer } from "../string-replacer";
+import type { ImportInfo } from "../smart-import-manager";
 import { SmartImportManager } from "../smart-import-manager";
 import { fallbackTransform } from "../fallback-transform";
 import { ASTParserUtils, ImportHookUtils } from "./utils";
@@ -41,6 +42,7 @@ import type {
  */
 export class CoreProcessor {
   private plugins: FrameworkPlugin[] = [];
+  private importManager: SmartImportManager = new SmartImportManager();
   constructor() {
     // 插件将在外部注册，不在此处硬编码
   }
@@ -91,7 +93,12 @@ export class CoreProcessor {
       const parserConfig = this.getParserConfig(plugin, filePath);
       const ast = parse(processedCode, parserConfig);
 
-      // 5. 提取和替换
+      // 5. 初始化智能导入管理器
+      this.importManager.init(
+        normalizedOptions.normalizedI18nConfig.i18nImport,
+        normalizedOptions.normalizedI18nConfig.nonReactConfig
+      );
+      //  提取和替换
       const result = this.extractAndReplace(
         ast,
         processedCode,
@@ -101,7 +108,7 @@ export class CoreProcessor {
         filePath
       );
 
-      // 6. 如果没有修改，直接返回
+      //  如果没有修改，直接返回
       if (!result.modified || result.changes.length === 0) {
         return {
           code: processedCode,
@@ -111,13 +118,13 @@ export class CoreProcessor {
         };
       }
 
-      // 7. 应用字符串替换
+      //  应用字符串替换
       let modifiedCode = StringReplacer.applyChanges(
         processedCode,
         result.changes
       );
 
-      // 8. 后处理 - 添加导入、hooks等
+      //  后处理 - 添加导入、hooks等
       const context: ProcessingContext = {
         filePath,
         originalCode: code,
@@ -331,8 +338,8 @@ export class CoreProcessor {
       ...defaultConfig,
       ...pluginConfig,
       plugins: [
-        ...(defaultConfig as any).plugins,
-        ...((pluginConfig as any).plugins || []),
+        ...(defaultConfig.plugins || []),
+        ...(pluginConfig.plugins || []),
       ],
     };
   }
@@ -354,21 +361,13 @@ export class CoreProcessor {
     if (mode === ProcessingMode.CONTEXT_AWARE) {
       // 使用上下文感知模式 - 暂时保持使用原有的方法，后续可以迁移到新的extractor
 
-      const importConfig = options.normalizedI18nConfig.i18nImport;
-      const nonReactConfig = options.normalizedI18nConfig.nonReactConfig;
-
-      const importManager = new SmartImportManager(
-        importConfig,
-        nonReactConfig
-      );
-
       const result = collectContextAwareReplacementInfo(
         ast,
         code,
         existingValueToKey,
         extractedStrings,
         usedExistingKeysList,
-        importManager,
+        this.importManager,
         options,
         filePath
       );
@@ -678,7 +677,7 @@ export class CoreProcessor {
       const addedImports = new Set<string>();
 
       for (const importInfoStr of requiredImports) {
-        const parsedImport = JSON.parse(importInfoStr);
+        const parsedImport = this.importManager.parseImport(importInfoStr);
 
         // 根据导入类型创建唯一标识符
         const importKey =
@@ -719,7 +718,10 @@ export class CoreProcessor {
   /**
    * 检查是否已存在导入（遗留方法）
    */
-  private hasExistingImportLegacy(code: string, importInfo: any): boolean {
+  private hasExistingImportLegacy(
+    code: string,
+    importInfo: ImportInfo
+  ): boolean {
     if (importInfo.needsHook && importInfo.hookImport) {
       // 检查 Hook 导入
       const hookPattern = new RegExp(
@@ -794,11 +796,11 @@ export class CoreProcessor {
   /**
    * 添加导入语句（遗留方法）
    */
-  private addImportStatementLegacy(code: string, importInfo: any): string {
-    const importStatement =
-      importInfo.needsHook && importInfo.hookImport
-        ? importInfo.hookImport.importStatement || importInfo.importStatement
-        : importInfo.importStatement;
+  private addImportStatementLegacy(
+    code: string,
+    importInfo: ImportInfo
+  ): string {
+    const importStatement = importInfo.importStatement;
 
     // 这里可以使用简单的字符串插入，因为是上下文感知导入的fallback
     const lines = code.split("\n");
@@ -1008,7 +1010,10 @@ export class CoreProcessor {
   /**
    * 添加 Hook 调用（遗留方法）
    */
-  private addHookCallIfNeededLegacy(code: string, hookInfo: any): string {
+  private addHookCallIfNeededLegacy(
+    code: string,
+    hookInfo: NonNullable<ImportInfo["hookImport"]>
+  ): string {
     const hookCall = hookInfo.hookCall;
 
     // 检查是否已经存在 Hook 调用

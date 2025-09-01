@@ -1,6 +1,7 @@
 import type { NodePath } from "@babel/traverse";
 import traverse from "@babel/traverse";
 import * as t from "@babel/types";
+import type { GeneratorOptions } from "@babel/generator";
 import generate from "@babel/generator";
 import type { ExtractedString, UsedExistingKey, ChangeDetail } from "./types";
 import { getKeyAndRecord } from "./key-manager";
@@ -153,7 +154,7 @@ export function collectContextAwareReplacementInfo(
   const getImportInfoForContext = (context: ContextInfo): ImportInfo => {
     const importInfo = importManager.getImportInfo(context);
     // 序列化导入信息以便后续处理
-    requiredImports.add(JSON.stringify(importInfo));
+    requiredImports.add(importManager.stringifyImport(importInfo));
     return importInfo;
   };
 
@@ -509,7 +510,7 @@ export function collectContextAwareReplacementInfo(
 
               // 使用 traverse 遍历表达式，查找并替换嵌套的字符串字面量和模板字面量
               traverse(
-                clonedExpr as any,
+                clonedExpr,
                 {
                   StringLiteral(nestedPath) {
                     const nodeValue = nestedPath.node.value;
@@ -1181,7 +1182,7 @@ export function collectContextAwareReplacementInfo(
     const { originalNode, replacementNode } = replacement;
 
     if (originalNode.loc) {
-      const generatorOptions = {
+      const generatorOptions: GeneratorOptions = {
         jsescOption: { minimal: true },
         minified: false,
         concise: true,
@@ -1237,7 +1238,7 @@ export function collectContextAwareReplacementInfo(
  */
 function generateJSXElementsCode(
   elements: t.Node[],
-  generatorOptions: any
+  generatorOptions: GeneratorOptions
 ): string {
   if (elements.length === 0) return "";
   if (elements.length === 1) {

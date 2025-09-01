@@ -25,7 +25,6 @@ export {
   formatError,
   formatErrorForUser,
   logError,
-  withErrorHandling,
   ErrorCategory,
   ErrorSeverity,
   I18nError,

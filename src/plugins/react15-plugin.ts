@@ -10,6 +10,7 @@ import type {
 } from "../core/types";
 import type { TransformOptions } from "../types";
 import type { NormalizedTransformOptions } from "../core/config-normalizer";
+import type { ParserOptions } from "@babel/parser";
 
 /**
  * React 15 插件实现
@@ -33,7 +34,7 @@ export class React15Plugin implements FrameworkPlugin {
   /**
    * 获取React15解析器配置
    */
-  getParserConfig(): object {
+  getParserConfig(): ParserOptions {
     return {
       plugins: ["jsx"],
     };

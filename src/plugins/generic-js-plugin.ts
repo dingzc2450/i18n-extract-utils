@@ -36,7 +36,7 @@ export class GenericJSPlugin implements FrameworkPlugin {
   /**
    * 获取通用JS解析器配置
    */
-  getParserConfig(): object {
+  getParserConfig() {
     return {
       plugins: [], // 只使用基础解析器插件
     };
