@@ -10,10 +10,7 @@ import {
   ImportRequirement,
   ProcessingContext,
 } from "../core/types";
-import {
-  ExtractedString,
-  TransformOptions,
-} from "../types";
+import { ExtractedString, TransformOptions } from "../types";
 
 import traverse from "@babel/traverse";
 import * as t from "@babel/types";
@@ -33,10 +30,13 @@ export class ReactPlugin implements FrameworkPlugin {
     options: TransformOptions
   ): boolean {
     // 如果明确指定了其他框架，不应该使用React插件
-    if (options.i18nConfig?.framework && options.i18nConfig.framework !== "react") {
+    if (
+      options.i18nConfig?.framework &&
+      options.i18nConfig.framework !== "react"
+    ) {
       return false;
     }
-    
+
     // 检查是否为React文件
     if (options.i18nConfig?.framework === "react") return true;
 
@@ -74,17 +74,12 @@ export class ReactPlugin implements FrameworkPlugin {
    * 获取React所需的导入和Hook需求
    */
   getRequiredImportsAndHooks(
-    extractedStrings: ExtractedString[],
     options: TransformOptions,
     _context: ProcessingContext
   ): {
     imports: ImportRequirement[];
     hooks: HookRequirement[];
   } {
-    if (extractedStrings.length === 0) {
-      return { imports: [], hooks: [] };
-    }
-
     // 检查是否有非React配置，如果有，则回退到上下文感知逻辑
     if (options.i18nConfig?.nonReactConfig) {
       return { imports: [], hooks: [] }; // 让上下文感知逻辑处理
@@ -105,9 +100,15 @@ export class ReactPlugin implements FrameworkPlugin {
     const hooks: HookRequirement[] = [
       {
         hookName,
-        variableName: translationMethod === "default" ? ReactPlugin.defaultTranslationMethod : translationMethod,
+        variableName:
+          translationMethod === "default"
+            ? ReactPlugin.defaultTranslationMethod
+            : translationMethod,
         isDestructured: translationMethod !== "default",
-        callExpression: this.generateHookCallExpression(hookName, translationMethod),
+        callExpression: this.generateHookCallExpression(
+          hookName,
+          translationMethod
+        ),
       },
     ];
 
@@ -117,13 +118,7 @@ export class ReactPlugin implements FrameworkPlugin {
   /**
    * React特定的后处理
    */
-  postProcess(
-    code: string,
-    _extractedStrings: ExtractedString[],
-    _options: TransformOptions,
-    _context: ProcessingContext
-  ): string {
-    // 新的统一格式已经在 processImportsAndHooks 中处理，这里跳过后处理
+  postProcess(code: string): string {
     return code;
   }
 
@@ -154,16 +149,17 @@ export class ReactPlugin implements FrameworkPlugin {
    */
   private getTranslationMethod(options: TransformOptions): string {
     return (
-      options.i18nConfig?.i18nImport?.name ||
-      options.translationMethod ||
-      "t"
+      options.i18nConfig?.i18nImport?.name || options.translationMethod || "t"
     );
   }
 
   /**
    * 生成Hook调用表达式
    */
-  private generateHookCallExpression(hookName: string, translationMethod: string): string {
+  private generateHookCallExpression(
+    hookName: string,
+    translationMethod: string
+  ): string {
     if (translationMethod === "default") {
       return `const ${ReactPlugin.defaultTranslationMethod} = ${hookName}();`;
     } else {
@@ -171,7 +167,6 @@ export class ReactPlugin implements FrameworkPlugin {
     }
   }
 }
-
 
 /**
  * Traverses the AST to add the translation hook import and call if necessary.

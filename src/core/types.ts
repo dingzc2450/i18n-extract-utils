@@ -2,7 +2,12 @@
  * 核心处理器相关类型定义
  */
 
-import { ExtractedString, TransformOptions, UsedExistingKey, ChangeDetail } from "../types";
+import {
+  ExtractedString,
+  TransformOptions,
+  UsedExistingKey,
+  ChangeDetail,
+} from "../types";
 import { I18nError } from "./error-handler";
 
 /**
@@ -29,7 +34,6 @@ export interface FrameworkPlugin {
    * 获取需要的导入和hook调用
    */
   getRequiredImportsAndHooks?(
-    extractedStrings: ExtractedString[],
     options: TransformOptions,
     context: ProcessingContext
   ): {
@@ -42,7 +46,6 @@ export interface FrameworkPlugin {
    */
   postProcess?(
     code: string,
-    extractedStrings: ExtractedString[],
     options: TransformOptions,
     context: ProcessingContext
   ): string;
@@ -60,8 +63,12 @@ export interface ProcessingContext {
   filePath: string;
   originalCode: string;
   hasModifications: boolean;
+  /**
+   * @deprecated Use result instead
+   */
   requiredImports?: Set<string>;
   detectedFramework?: string;
+  result: ExtractionResult;
 }
 
 /**
@@ -71,7 +78,8 @@ export interface ImportRequirement {
   source: string;
   specifiers: { name: string; alias?: string }[];
   isDefault?: boolean;
-}/**
+}
+/**
  * Hook调用需求接口
  */
 export interface HookRequirement {
@@ -105,13 +113,13 @@ export interface ExtractionResult {
  */
 export type ImportChange =
   | {
-      type: 'replace';
+      type: "replace";
       start: number;
       end: number;
       text: string;
     }
   | {
-      type: 'insert';
+      type: "insert";
       start: number;
       end: number;
       insertPosition: number;

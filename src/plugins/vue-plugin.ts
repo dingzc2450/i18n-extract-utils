@@ -1,7 +1,7 @@
 /**
  * Vue 框架插件
  * 提供完整的Vue SFC支持，包括模板、脚本和样式的处理
- * 
+ *
  * 此插件已经整合了原frameworks目录中VueCodeGenerator的所有功能
  * 不再依赖于frameworks目录
  */
@@ -41,7 +41,6 @@ export class VuePlugin implements FrameworkPlugin {
     filePath: string,
     options: TransformOptions
   ): boolean {
-    
     // 检查是否明确指定为Vue框架
     if (options.i18nConfig?.framework === "vue") {
       return true;
@@ -51,23 +50,24 @@ export class VuePlugin implements FrameworkPlugin {
     if (filePath.endsWith(".vue")) {
       return true;
     }
-    
+
     // 检查Vue特有结构
     const hasVueTemplate = code.includes("<template>");
-    const hasVueExport = code.includes("export default") &&
-                      (code.includes("setup()") ||
-                       code.includes("setup:") ||
-                       code.includes("data()") ||
-                       code.includes("methods:"));
-                       
+    const hasVueExport =
+      code.includes("export default") &&
+      (code.includes("setup()") ||
+        code.includes("setup:") ||
+        code.includes("data()") ||
+        code.includes("methods:"));
+
     if (hasVueTemplate) {
       return true;
     }
-    
+
     if (hasVueExport) {
       return true;
     }
-    
+
     return false;
   }
 
@@ -89,7 +89,7 @@ export class VuePlugin implements FrameworkPlugin {
     const pattern = options?.pattern
       ? new RegExp(options.pattern).source
       : getDefaultPattern().source;
-    
+
     // 返回一个匹配模式的占位符，确保会被处理
     return "const __VUE_PLACEHOLDER__ = '___VUE_PROCESS___';";
   }
@@ -98,14 +98,13 @@ export class VuePlugin implements FrameworkPlugin {
    * 获取Vue所需的导入和Hook需求
    */
   getRequiredImportsAndHooks(
-    extractedStrings: ExtractedString[],
     options: TransformOptions,
     context: ProcessingContext
   ): {
     imports: ImportRequirement[];
     hooks: HookRequirement[];
   } {
-    if (extractedStrings.length === 0) {
+    if (context.result.extractedStrings.length === 0) {
       return { imports: [], hooks: [] };
     }
 
@@ -138,15 +137,15 @@ export class VuePlugin implements FrameworkPlugin {
    * Vue特定的后处理：处理Vue文件
    */
   postProcess(
-    code: string,
-    extractedStrings: ExtractedString[],
+    _code: string,
     options: TransformOptions,
     context: ProcessingContext
   ): string {
+    const { extractedStrings } = context.result;
     // 使用集成后的Vue处理方法处理整个文件
     const result = this.processCode(
       context.originalCode,
-      context.filePath,  // 保留文件路径参数，用于AST解析和框架检测
+      context.filePath, // 保留文件路径参数，用于AST解析和框架检测
       options,
       new Map() // 暂时不处理existingValueToKey，这可以在后续优化
     );
@@ -430,8 +429,7 @@ export class VuePlugin implements FrameworkPlugin {
       filePath
     );
   }
-  
-  
+
   /**
    * 使用正则表达式直接处理模板
    */
@@ -452,74 +450,84 @@ export class VuePlugin implements FrameworkPlugin {
 
     // 特别情况: 处理三元运算符中的字符串，如: {{ condition ? '___字符串1___' : '___字符串2___' }}
     // 这个正则表达式匹配Vue模板中的三元表达式
-    const ternaryRegex = /{{(.+?)\?\s*['"](___[^'"]+___)['"]\s*:\s*['"](___[^'"]+___)['"]\s*}}/g;
-    processedTemplate = processedTemplate.replace(ternaryRegex, (match, condition, trueStr, falseStr) => {
-      // 处理true分支
-      const trueKey = getKeyAndRecord(
-        `'${trueStr}'`,
-        { filePath, line: 0, column: 0 },
-        existingValueToKey,
-        new Map(),
-        extractedStrings,
-        usedExistingKeysList,
-        options
-      );
-      
-      const trueCallExpr = t.callExpression(t.identifier(translationMethod), [
-        t.stringLiteral(String(trueKey)),
-      ]);
-      
-      const { code: trueCallCode } = generate(trueCallExpr, {
-        compact: true,
-        jsescOption: { minimal: true, quotes: "double" }
-      });
-      
-      // 处理false分支
-      const falseKey = getKeyAndRecord(
-        `'${falseStr}'`,
-        { filePath, line: 0, column: 0 },
-        existingValueToKey,
-        new Map(),
-        extractedStrings,
-        usedExistingKeysList,
-        options
-      );
-      
-      const falseCallExpr = t.callExpression(t.identifier(translationMethod), [
-        t.stringLiteral(String(falseKey)),
-      ]);
-      
-      const { code: falseCallCode } = generate(falseCallExpr, {
-        compact: true,
-        jsescOption: { minimal: true, quotes: "double" }
-      });
-      
-      // 重新组装三元表达式
-      return `{{ ${condition.trim()} ? ${trueCallCode} : ${falseCallCode} }}`;
-    });
+    const ternaryRegex =
+      /{{(.+?)\?\s*['"](___[^'"]+___)['"]\s*:\s*['"](___[^'"]+___)['"]\s*}}/g;
+    processedTemplate = processedTemplate.replace(
+      ternaryRegex,
+      (match, condition, trueStr, falseStr) => {
+        // 处理true分支
+        const trueKey = getKeyAndRecord(
+          `'${trueStr}'`,
+          { filePath, line: 0, column: 0 },
+          existingValueToKey,
+          new Map(),
+          extractedStrings,
+          usedExistingKeysList,
+          options
+        );
+
+        const trueCallExpr = t.callExpression(t.identifier(translationMethod), [
+          t.stringLiteral(String(trueKey)),
+        ]);
+
+        const { code: trueCallCode } = generate(trueCallExpr, {
+          compact: true,
+          jsescOption: { minimal: true, quotes: "double" },
+        });
+
+        // 处理false分支
+        const falseKey = getKeyAndRecord(
+          `'${falseStr}'`,
+          { filePath, line: 0, column: 0 },
+          existingValueToKey,
+          new Map(),
+          extractedStrings,
+          usedExistingKeysList,
+          options
+        );
+
+        const falseCallExpr = t.callExpression(
+          t.identifier(translationMethod),
+          [t.stringLiteral(String(falseKey))]
+        );
+
+        const { code: falseCallCode } = generate(falseCallExpr, {
+          compact: true,
+          jsescOption: { minimal: true, quotes: "double" },
+        });
+
+        // 重新组装三元表达式
+        return `{{ ${condition.trim()} ? ${trueCallCode} : ${falseCallCode} }}`;
+      }
+    );
 
     // 处理所有其他的普通字符串
     processedTemplate = processedTemplate.replace(
       patternRegex,
       (fullMatch, extractedValue) => {
         if (!extractedValue) return fullMatch;
-        
+
         // 检查是否在三元表达式内部（避免重复处理）
         const isInTernary = (position: number) => {
           let lastTernaryMatch = null;
           const ternaryRegex = /{{.+?\?.+?:.+?}}/g;
           let ternaryMatch;
-          
+
           // 寻找最后一个匹配的三元表达式
-          while ((ternaryMatch = ternaryRegex.exec(processedTemplate)) !== null) {
-            if (ternaryMatch.index < position && position < ternaryMatch.index + ternaryMatch[0].length) {
+          while (
+            (ternaryMatch = ternaryRegex.exec(processedTemplate)) !== null
+          ) {
+            if (
+              ternaryMatch.index < position &&
+              position < ternaryMatch.index + ternaryMatch[0].length
+            ) {
               return true;
             }
           }
-          
+
           return false;
         };
-        
+
         // 如果这个字符串在三元表达式内，跳过它
         const matchIndex = processedTemplate.indexOf(fullMatch);
         if (isInTernary(matchIndex)) {
@@ -541,14 +549,14 @@ export class VuePlugin implements FrameworkPlugin {
         const callExpr = t.callExpression(t.identifier(translationMethod), [
           t.stringLiteral(String(key)),
         ]);
-        
+
         const { code: callCode } = generate(callExpr, {
           compact: true,
-          jsescOption: { minimal: true, quotes: "double" }
+          jsescOption: { minimal: true, quotes: "double" },
         });
-        
+
         // 判断是否在表达式内部
-        if (fullMatch.includes('{{') && fullMatch.includes('}}')) {
+        if (fullMatch.includes("{{") && fullMatch.includes("}}")) {
           // 已经在插值表达式中，不需要额外添加 {{}}
           const replacement = callCode;
           if (options.appendExtractedComment) {
@@ -598,32 +606,32 @@ export class VuePlugin implements FrameworkPlugin {
       // 专门为Vue <script setup>中的注释处理添加的逻辑
       const extractedCommentType = options.extractedCommentType || "line";
       const appendExtractedComment = options.appendExtractedComment || false;
-      
+
       // 处理脚本中的字符串
       // 为<script setup>格式特别处理，将注释放到语句级别而不是函数调用
       if (isSetup && appendExtractedComment) {
         // 保存函数调用与原始文本的映射，用于后续添加注释
         const callExpressionMap = new Map<t.CallExpression, string>();
-        
+
         // 修改遍历逻辑以收集调用表达式和原始文本
         traverse(ast, {
           StringLiteral(path) {
             const { value } = path.node;
             if (!value) return;
-            
+
             const pattern = options?.pattern
               ? new RegExp(options.pattern, "g")
               : new RegExp(getDefaultPattern().source, "g");
-              
+
             const matches = [...value.matchAll(pattern)];
             if (matches.length === 0) return;
-            
+
             for (const match of matches) {
               const fullMatch = match[0];
               const extractedValue = match[1];
-              
+
               if (!extractedValue) continue;
-              
+
               // 获取或生成键值
               const key = getKeyAndRecord(
                 fullMatch,
@@ -638,37 +646,37 @@ export class VuePlugin implements FrameworkPlugin {
                 usedExistingKeysList,
                 options
               );
-              
+
               // 创建函数调用
               const callExpr = t.callExpression(
-                t.identifier(translationMethod), 
+                t.identifier(translationMethod),
                 [t.stringLiteral(String(key))]
               );
-              
+
               // 存储映射关系
               callExpressionMap.set(callExpr, extractedValue);
-              
+
               // 替换当前字符串
               path.replaceWith(callExpr);
               path.skip();
             }
           },
         });
-        
+
         // 第二次遍历，为函数调用添加注释到所在语句
         if (callExpressionMap.size > 0) {
           traverse(ast, {
             CallExpression(path) {
               if (callExpressionMap.has(path.node)) {
                 const extractedValue = callExpressionMap.get(path.node)!;
-                const statement = path.findParent(p => p.isStatement());
-                
+                const statement = path.findParent((p) => p.isStatement());
+
                 if (statement) {
                   // 找到了语句级别的父节点，添加注释到语句
                   if (!statement.node.trailingComments) {
                     statement.node.trailingComments = [];
                   }
-                  
+
                   if (extractedCommentType === "line") {
                     statement.node.trailingComments.push({
                       type: "CommentLine",
@@ -682,10 +690,14 @@ export class VuePlugin implements FrameworkPlugin {
                   }
                 } else {
                   // 找不到语句级别的父节点，直接在函数调用上添加注释
-                  attachExtractedCommentToNode(path.node, extractedValue, extractedCommentType);
+                  attachExtractedCommentToNode(
+                    path.node,
+                    extractedValue,
+                    extractedCommentType
+                  );
                 }
               }
-            }
+            },
           });
         }
       } else {
@@ -742,7 +754,7 @@ export class VuePlugin implements FrameworkPlugin {
 
     // 使用self捕获外部的this上下文，用于在traverse内部调用类方法
     const self = this;
-    
+
     // 遍历AST，寻找匹配的字符串
     traverse(ast, {
       StringLiteral(path) {
@@ -858,7 +870,11 @@ export class VuePlugin implements FrameworkPlugin {
 
                 // 添加提取的注释
                 if (options.appendExtractedComment) {
-                  attachExtractedCommentToNode(callExpr, extractedValue, "block");
+                  attachExtractedCommentToNode(
+                    callExpr,
+                    extractedValue,
+                    "block"
+                  );
                 }
 
                 parts.push(callExpr);
@@ -917,7 +933,7 @@ export class VuePlugin implements FrameworkPlugin {
     // 检查导入是否已存在
     let hasImport = false;
     let hasUseI18n = false;
-    
+
     // 使用self捕获外部的this上下文，用于在traverse内部调用类方法
     const self = this;
 
@@ -960,12 +976,7 @@ export class VuePlugin implements FrameworkPlugin {
     // 添加导入语句
     if (!hasImport) {
       const importStmt = t.importDeclaration(
-        [
-          t.importSpecifier(
-            t.identifier(hookName),
-            t.identifier(hookName)
-          ),
-        ],
+        [t.importSpecifier(t.identifier(hookName), t.identifier(hookName))],
         t.stringLiteral(hookImport)
       );
 
@@ -982,7 +993,7 @@ export class VuePlugin implements FrameworkPlugin {
           translationMethod,
           hookName
         );
-        
+
         // 插入到导入语句之后
         let insertIndex = 0;
         for (let i = 0; i < ast.program.body.length; i++) {
@@ -1009,7 +1020,7 @@ export class VuePlugin implements FrameworkPlugin {
                 if (t.isBlockStatement(path.node.body)) {
                   const setupBody = path.node.body.body;
                   let hasExistingUseI18n = false;
-                  
+
                   // 检查是否已有useI18n调用
                   for (const stmt of setupBody) {
                     if (
@@ -1030,19 +1041,19 @@ export class VuePlugin implements FrameworkPlugin {
                       break;
                     }
                   }
-                  
+
                   // 如果没有找到useI18n调用，添加一个
                   if (!hasExistingUseI18n) {
                     setupBody.unshift(
                       self.createUseI18nStatement(translationMethod, hookName)
                     );
                   }
-                  
+
                   hasAddedUseI18n = true;
                   path.stop();
                 }
               }
-            }
+            },
           },
           ObjectProperty: {
             enter(path) {
@@ -1056,7 +1067,7 @@ export class VuePlugin implements FrameworkPlugin {
                 if (t.isBlockStatement(funcNode.body)) {
                   const setupBody = funcNode.body.body;
                   let hasExistingUseI18n = false;
-                  
+
                   // 检查是否已有useI18n调用
                   for (const stmt of setupBody) {
                     if (
@@ -1077,19 +1088,19 @@ export class VuePlugin implements FrameworkPlugin {
                       break;
                     }
                   }
-                  
+
                   // 如果没有找到useI18n调用，添加一个
                   if (!hasExistingUseI18n) {
                     setupBody.unshift(
                       self.createUseI18nStatement(translationMethod, hookName)
                     );
                   }
-                  
+
                   hasAddedUseI18n = true;
                   path.stop();
                 }
               }
-            }
+            },
           },
           ExportDefaultDeclaration: {
             enter(path) {
@@ -1100,7 +1111,7 @@ export class VuePlugin implements FrameworkPlugin {
                 // 检查export default对象是否有setup方法
                 let hasSetupMethod = false;
                 const objProps = path.node.declaration.properties;
-  
+
                 for (const prop of objProps) {
                   if (
                     (t.isObjectMethod(prop) &&
@@ -1114,7 +1125,7 @@ export class VuePlugin implements FrameworkPlugin {
                     break;
                   }
                 }
-  
+
                 // 如果没有setup方法，添加一个
                 if (!hasSetupMethod) {
                   const setupMethod = t.objectMethod(
@@ -1126,14 +1137,14 @@ export class VuePlugin implements FrameworkPlugin {
                       t.returnStatement(t.objectExpression([])),
                     ])
                   );
-  
+
                   path.node.declaration.properties.unshift(setupMethod);
                   hasAddedUseI18n = true;
                   path.stop();
                 }
               }
-            }
-          }
+            },
+          },
         });
 
         // 如果既没有setup方法也没有export default，可能是React函数组件被强制设置为Vue
@@ -1177,7 +1188,7 @@ export class VuePlugin implements FrameworkPlugin {
   ) {
     // 使用self捕获外部的this上下文，用于在traverse内部调用类方法
     const self = this;
-    
+
     traverse(ast, {
       FunctionDeclaration: {
         enter(path) {
@@ -1190,7 +1201,7 @@ export class VuePlugin implements FrameworkPlugin {
           ) {
             // 检查是否已有useI18n调用
             let hasUseI18n = false;
-            
+
             path.node.body.body.forEach((stmt) => {
               if (
                 t.isVariableDeclaration(stmt) &&
@@ -1209,7 +1220,7 @@ export class VuePlugin implements FrameworkPlugin {
                 hasUseI18n = true;
               }
             });
-  
+
             // 如果没有找到useI18n调用，添加一个
             if (!hasUseI18n) {
               path.node.body.body.unshift(
@@ -1217,7 +1228,7 @@ export class VuePlugin implements FrameworkPlugin {
               );
             }
           }
-        }
+        },
       },
       ArrowFunctionExpression: {
         enter(path) {
@@ -1231,7 +1242,7 @@ export class VuePlugin implements FrameworkPlugin {
           ) {
             // 检查是否已有useI18n调用
             let hasUseI18n = false;
-            
+
             path.node.body.body.forEach((stmt) => {
               if (
                 t.isVariableDeclaration(stmt) &&
@@ -1250,7 +1261,7 @@ export class VuePlugin implements FrameworkPlugin {
                 hasUseI18n = true;
               }
             });
-  
+
             // 如果没有找到useI18n调用，添加一个
             if (!hasUseI18n) {
               path.node.body.body.unshift(
@@ -1258,8 +1269,8 @@ export class VuePlugin implements FrameworkPlugin {
               );
             }
           }
-        }
-      }
+        },
+      },
     });
   }
 

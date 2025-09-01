@@ -9,10 +9,7 @@ import {
   ImportRequirement,
   HookRequirement,
 } from "../core/types";
-import {
-  ExtractedString,
-  TransformOptions,
-} from "../types";
+import { ExtractedString, TransformOptions } from "../types";
 
 /**
  * 通用JS插件实现
@@ -45,17 +42,12 @@ export class GenericJSPlugin implements FrameworkPlugin {
    * 获取通用JS所需的导入需求
    */
   getRequiredImportsAndHooks(
-    extractedStrings: ExtractedString[],
     options: TransformOptions,
     context: ProcessingContext
   ): {
     imports: ImportRequirement[];
     hooks: HookRequirement[];
   } {
-    if (extractedStrings.length === 0) {
-      return { imports: [], hooks: [] };
-    }
-
     // 对于通用JS，通常只需要导入翻译函数，不需要hooks
     const imports: ImportRequirement[] = [];
     const hooks: HookRequirement[] = [];
@@ -63,11 +55,13 @@ export class GenericJSPlugin implements FrameworkPlugin {
     // 如果配置了i18n导入，添加相应的导入
     if (options.i18nConfig?.i18nImport) {
       const { source, importName, name } = options.i18nConfig.i18nImport;
-      
+
       if (source && importName) {
         imports.push({
           source,
-          specifiers: [{ name: importName, alias: name !== importName ? name : undefined }],
+          specifiers: [
+            { name: importName, alias: name !== importName ? name : undefined },
+          ],
           isDefault: false,
         });
       }
@@ -79,12 +73,7 @@ export class GenericJSPlugin implements FrameworkPlugin {
   /**
    * 通用JS的后处理
    */
-  postProcess(
-    code: string,
-    extractedStrings: ExtractedString[],
-    options: TransformOptions,
-    context: ProcessingContext
-  ): string {
+  postProcess(code: string): string {
     // 通用JS通常不需要特殊的后处理
     return code;
   }

@@ -38,7 +38,6 @@ import { ExtractedString, TransformOptions, UsedExistingKey } from "../types";
  */
 export class CoreProcessor {
   private plugins: FrameworkPlugin[] = [];
-
   constructor() {
     // 插件将在外部注册，不在此处硬编码
   }
@@ -109,6 +108,7 @@ export class CoreProcessor {
         filePath,
         originalCode: code,
         hasModifications: true,
+        result,
         requiredImports: result.requiredImports,
         detectedFramework: plugin.name,
       };
@@ -116,7 +116,6 @@ export class CoreProcessor {
       // 统一处理导入和hook调用
       modifiedCode = this.processImportsAndHooks(
         modifiedCode,
-        result.extractedStrings,
         options,
         context,
         plugin
@@ -124,12 +123,7 @@ export class CoreProcessor {
 
       // 插件特定的后处理（可选）
       if (plugin.postProcess) {
-        modifiedCode = plugin.postProcess(
-          modifiedCode,
-          result.extractedStrings,
-          options,
-          context
-        );
+        modifiedCode = plugin.postProcess(modifiedCode, options, context);
       }
 
       return {
@@ -237,13 +231,9 @@ export class CoreProcessor {
     return {
       name: isReact15 ? "default-react15" : "default-react",
       shouldApply: () => true,
-      getRequiredImportsAndHooks: (
-        extractedStrings,
-        pluginOptions,
-        context
-      ) => {
+      getRequiredImportsAndHooks: (pluginOptions, context) => {
         // 没有提取字符串时不需要导入
-        if (extractedStrings.length === 0) {
+        if (context.result.changes.length === 0) {
           return { imports: [], hooks: [] };
         }
 
@@ -378,20 +368,15 @@ export class CoreProcessor {
    */
   private processImportsAndHooks(
     code: string,
-    extractedStrings: ExtractedString[],
     options: TransformOptions,
     context: ProcessingContext,
     plugin: FrameworkPlugin
   ): string {
     let modifiedCode = code;
-
+    // 先统一处理 判断是否有导入需求
     // 优先处理插件定义的导入和hook需求（统一格式）
     if (plugin.getRequiredImportsAndHooks) {
-      const requirements = plugin.getRequiredImportsAndHooks(
-        extractedStrings,
-        options,
-        context
-      );
+      const requirements = plugin.getRequiredImportsAndHooks(options, context);
       if (requirements.imports.length > 0 || requirements.hooks.length > 0) {
         modifiedCode = this.addImportsAndHooks(
           modifiedCode,
@@ -431,21 +416,29 @@ export class CoreProcessor {
 
     try {
       let modifiedCode = code;
-      
+
       // 从规范化配置中获取 mergeImports，默认为 true
       const mergeImports = this.getMergeImports(options);
 
       // 处理导入
       if (importRequirements.length > 0) {
         if (mergeImports) {
-          modifiedCode = this.addOrMergeImports(modifiedCode, importRequirements, filePath);
+          modifiedCode = this.addOrMergeImports(
+            modifiedCode,
+            importRequirements,
+            filePath
+          );
         } else {
           // 旧的、非合并的添加逻辑
           for (const importReq of importRequirements) {
-            const importStatement = ImportHookUtils.generateImportStatement(importReq);
+            const importStatement =
+              ImportHookUtils.generateImportStatement(importReq);
             // 修复：应该检查 modifiedCode，而不是原始的 code
             if (!modifiedCode.includes(importStatement)) {
-               modifiedCode = this.addImportToCode(modifiedCode, importStatement);
+              modifiedCode = this.addImportToCode(
+                modifiedCode,
+                importStatement
+              );
             }
           }
         }
@@ -475,7 +468,7 @@ export class CoreProcessor {
     if (options.i18nConfig?.i18nImport?.mergeImports !== undefined) {
       return options.i18nConfig.i18nImport.mergeImports !== false;
     }
-    
+
     // 默认值
     return true;
   }
