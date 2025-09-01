@@ -10,7 +10,6 @@ import {
   attachExtractedCommentToNode,
   parseJSXTextPlaceholders,
 } from "./core/ast-utils";
-import { getDefaultPattern } from "./core/utils";
 import type { NormalizedTransformOptions } from "./core/config-normalizer";
 import { getI18nCall } from "./core/config-normalizer";
 import * as tg from "./babel-type-guards";
@@ -55,9 +54,7 @@ export function collectContextAwareReplacementInfo(
     }
   >();
 
-  const patternRegex = options?.pattern
-    ? new RegExp(options.pattern, "g")
-    : new RegExp(getDefaultPattern().source, "g");
+  const patternRegex = new RegExp(options.pattern, "g");
 
   // 智能调用工厂函数，根据是否有自定义 i18nCall 来决定参数
   const smartCallFactory = (
@@ -482,9 +479,7 @@ export function collectContextAwareReplacementInfo(
         });
 
         // 使用非全局模式检查整体结构是否匹配
-        const singleMatchPattern = options?.pattern
-          ? new RegExp(options.pattern)
-          : new RegExp(getDefaultPattern().source);
+        const singleMatchPattern = new RegExp(options.pattern);
 
         const match = singleMatchPattern.exec(originalRawStringForPatternCheck);
 
@@ -516,9 +511,7 @@ export function collectContextAwareReplacementInfo(
                     const nodeValue = nestedPath.node.value;
 
                     // 检查是否匹配模式
-                    const pattern = options?.pattern
-                      ? new RegExp(options.pattern)
-                      : new RegExp(getDefaultPattern().source);
+                    const pattern = new RegExp(options.pattern);
 
                     const match = pattern.exec(nodeValue);
                     if (match && match[1] !== undefined) {
@@ -579,9 +572,7 @@ export function collectContextAwareReplacementInfo(
                       });
 
                       // 检查是否匹配模式
-                      const singleMatchPattern = options?.pattern
-                        ? new RegExp(options.pattern)
-                        : new RegExp(getDefaultPattern().source);
+                      const singleMatchPattern = new RegExp(options.pattern);
 
                       const nestedMatch = singleMatchPattern.exec(
                         nestedOriginalRawString
@@ -621,9 +612,7 @@ export function collectContextAwareReplacementInfo(
                                 // 处理 consequent
                                 if (t.isStringLiteral(consequent)) {
                                   const consequentValue = consequent.value;
-                                  const pattern = options?.pattern
-                                    ? new RegExp(options.pattern)
-                                    : new RegExp(getDefaultPattern().source);
+                                  const pattern = new RegExp(options.pattern);
 
                                   const match = pattern.exec(consequentValue);
                                   if (match && match[1] !== undefined) {
@@ -662,9 +651,7 @@ export function collectContextAwareReplacementInfo(
                                 // 处理 alternate
                                 if (t.isStringLiteral(alternate)) {
                                   const alternateValue = alternate.value;
-                                  const pattern = options?.pattern
-                                    ? new RegExp(options.pattern)
-                                    : new RegExp(getDefaultPattern().source);
+                                  const pattern = new RegExp(options.pattern);
 
                                   const match = pattern.exec(alternateValue);
                                   if (match && match[1] !== undefined) {
@@ -758,9 +745,7 @@ export function collectContextAwareReplacementInfo(
 
             const originalNode = path.node;
             // 提取去除分隔符的原始文本用于 i18nCall
-            const pattern = options?.pattern
-              ? new RegExp(options.pattern)
-              : new RegExp(getDefaultPattern().source);
+            const pattern = new RegExp(options.pattern);
             const rawTextMatch = pattern.exec(originalRawStringForPatternCheck);
             const rawText = rawTextMatch
               ? rawTextMatch[1]

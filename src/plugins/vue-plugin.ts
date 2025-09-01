@@ -19,7 +19,6 @@ import type {
   ChangeDetail,
 } from "../types";
 import type { NormalizedTransformOptions } from "../core/config-normalizer";
-import { getDefaultPattern } from "../core/utils";
 import type { ParserOptions } from "@babel/parser";
 import { parse } from "@babel/parser";
 import traverse from "@babel/traverse";
@@ -75,7 +74,7 @@ export class VuePlugin implements FrameworkPlugin {
    * 获取Vue所需的导入和Hook需求
    */
   getRequiredImportsAndHooks(
-    options: TransformOptions,
+    options: NormalizedTransformOptions,
     context: ProcessingContext
   ): {
     imports: ImportRequirement[];
@@ -86,9 +85,9 @@ export class VuePlugin implements FrameworkPlugin {
     }
 
     // Vue的i18n通常使用vue-i18n
-    const i18nSource = options.i18nConfig?.i18nImport?.source || "vue-i18n";
-    const i18nMethod = options.i18nConfig?.i18nImport?.importName || "useI18n";
-    const translationMethod = options.i18nConfig?.i18nImport?.name || "t";
+    const i18nSource = options.normalizedI18nConfig.i18nImport.source;
+    const i18nMethod = options.normalizedI18nConfig.i18nImport.importName;
+    const translationMethod = options.normalizedI18nConfig.i18nImport.name;
 
     const imports: ImportRequirement[] = [
       {
@@ -115,7 +114,7 @@ export class VuePlugin implements FrameworkPlugin {
    */
   postProcess(
     _code: string,
-    options: TransformOptions,
+    options: NormalizedTransformOptions,
     context: ProcessingContext
   ): string {
     const { extractedStrings } = context.result;
@@ -141,7 +140,7 @@ export class VuePlugin implements FrameworkPlugin {
   processCode(
     code: string,
     filePath: string,
-    options: TransformOptions,
+    options: NormalizedTransformOptions,
     existingValueToKey?: Map<string, string | number>
   ) {
     // 检查是否为Vue单文件组件
@@ -170,7 +169,7 @@ export class VuePlugin implements FrameworkPlugin {
   private processSFC(
     code: string,
     filePath: string,
-    options: TransformOptions,
+    options: NormalizedTransformOptions,
     existingValueToKey?: Map<string, string | number>
   ) {
     const extractedStrings: ExtractedString[] = [];
@@ -178,12 +177,8 @@ export class VuePlugin implements FrameworkPlugin {
     const changes: ChangeDetail[] = [];
 
     // 获取i18n配置
-    const i18nConfig = options.i18nConfig || {};
-    const i18nImportConfig = i18nConfig.i18nImport || {
-      name: "t",
-      importName: "useI18n",
-      source: "vue-i18n",
-    };
+    const i18nConfig = options.normalizedI18nConfig || {};
+    const i18nImportConfig = i18nConfig.i18nImport;
 
     const translationMethod = i18nImportConfig.name;
 
@@ -234,7 +229,7 @@ export class VuePlugin implements FrameworkPlugin {
   private processJavaScriptVue(
     code: string,
     filePath: string,
-    options: TransformOptions,
+    options: NormalizedTransformOptions,
     existingValueToKey?: Map<string, string | number>
   ) {
     const extractedStrings: ExtractedString[] = [];
@@ -242,15 +237,11 @@ export class VuePlugin implements FrameworkPlugin {
     const changes: ChangeDetail[] = [];
 
     // 获取i18n配置
-    const i18nConfig = options.i18nConfig || {};
-    const i18nImportConfig = i18nConfig.i18nImport || {
-      name: "t",
-      importName: "useI18n",
-      source: "vue-i18n",
-    };
+    const i18nConfig = options.normalizedI18nConfig || {};
+    const i18nImportConfig = i18nConfig.i18nImport;
 
     const translationMethod = i18nImportConfig.name;
-    const hookName = i18nImportConfig.importName || "useI18n";
+    const hookName = i18nImportConfig.importName;
     const hookImport = i18nImportConfig.source;
 
     try {
@@ -380,7 +371,7 @@ export class VuePlugin implements FrameworkPlugin {
     translationMethod: string,
     extractedStrings: ExtractedString[],
     usedExistingKeysList: UsedExistingKey[],
-    options: TransformOptions,
+    options: NormalizedTransformOptions,
     existingValueToKey: Map<string, string | number>,
     filePath: string
   ): string {
@@ -405,13 +396,11 @@ export class VuePlugin implements FrameworkPlugin {
     translationMethod: string,
     extractedStrings: ExtractedString[],
     usedExistingKeysList: UsedExistingKey[],
-    options: TransformOptions,
+    options: NormalizedTransformOptions,
     existingValueToKey: Map<string, string | number>,
     filePath: string
   ): string {
-    const patternRegex = options?.pattern
-      ? new RegExp(options.pattern, "g")
-      : new RegExp(getDefaultPattern().source, "g");
+    const patternRegex = new RegExp(options.pattern, "g");
 
     let processedTemplate = template;
 
@@ -549,7 +538,7 @@ export class VuePlugin implements FrameworkPlugin {
   private processScript(
     script: string,
     isSetup: boolean,
-    options: TransformOptions,
+    options: NormalizedTransformOptions,
     extractedStrings: ExtractedString[],
     usedExistingKeysList: UsedExistingKey[],
     existingValueToKey: Map<string, string | number>,
@@ -565,13 +554,13 @@ export class VuePlugin implements FrameworkPlugin {
       });
 
       // 获取i18n配置
-      const translationMethod = options.i18nConfig?.i18nImport?.name || "t";
-      const hookName = options.i18nConfig?.i18nImport?.importName || "useI18n";
-      const hookSource = options.i18nConfig?.i18nImport?.source || "vue-i18n";
+      const translationMethod = options.normalizedI18nConfig.i18nImport?.name;
+      const hookName = options.normalizedI18nConfig.i18nImport.importName;
+      const hookSource = options.normalizedI18nConfig.i18nImport?.source;
 
       // 专门为Vue <script setup>中的注释处理添加的逻辑
-      const extractedCommentType = options.extractedCommentType || "line";
-      const appendExtractedComment = options.appendExtractedComment || false;
+      const extractedCommentType = options.extractedCommentType;
+      const appendExtractedComment = options.appendExtractedComment;
 
       // 处理脚本中的字符串
       // 为<script setup>格式特别处理，将注释放到语句级别而不是函数调用
@@ -585,9 +574,7 @@ export class VuePlugin implements FrameworkPlugin {
             const { value } = path.node;
             if (!value) return;
 
-            const pattern = options?.pattern
-              ? new RegExp(options.pattern, "g")
-              : new RegExp(getDefaultPattern().source, "g");
+            const pattern = new RegExp(options.pattern, "g");
 
             const matches = [...value.matchAll(pattern)];
             if (matches.length === 0) return;
@@ -710,13 +697,11 @@ export class VuePlugin implements FrameworkPlugin {
     translationMethod: string,
     extractedStrings: ExtractedString[],
     usedExistingKeysList: UsedExistingKey[],
-    options: TransformOptions,
+    options: NormalizedTransformOptions,
     existingValueToKey: Map<string, string | number>,
     filePath: string
   ) {
-    const patternRegex = options?.pattern
-      ? new RegExp(options.pattern, "g")
-      : new RegExp(getDefaultPattern().source, "g");
+    const patternRegex = new RegExp(options.pattern, "g");
 
     // 使用self捕获外部的this上下文，用于在traverse内部调用类方法
 

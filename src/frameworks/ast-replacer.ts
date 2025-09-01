@@ -9,7 +9,6 @@ import {
   attachExtractedCommentToNode,
   parseJSXTextPlaceholders,
 } from "../core/ast-utils";
-import { getDefaultPattern } from "../core/utils";
 import type { NormalizedTransformOptions } from "../core/config-normalizer";
 import { getI18nCall } from "../core/config-normalizer";
 import * as tg from "../babel-type-guards";
@@ -35,9 +34,7 @@ export function replaceStringsWithTCalls(
 
   const effectiveMethodName =
     translationMethod === "default" ? "t" : translationMethod;
-  const patternRegex = options?.pattern
-    ? new RegExp(options.pattern, "g")
-    : new RegExp(getDefaultPattern().source, "g");
+  const patternRegex = new RegExp(options.pattern, "g");
 
   // 获取自定义i18nCall或使用默认的createTranslationCall
   const customI18nCall = getI18nCall(options);
@@ -155,9 +152,7 @@ export function replaceStringsWithTCalls(
             stringParts.push("");
           }
           // Extract the raw text without delimiters for i18nCall
-          const pattern = options?.pattern
-            ? new RegExp(options.pattern)
-            : new RegExp(getDefaultPattern().source);
+          const pattern = new RegExp(options.pattern);
           const rawTextMatch = pattern.exec(matchedTextWithDelimiters);
           const rawText = rawTextMatch
             ? rawTextMatch[1]
@@ -206,9 +201,7 @@ export function replaceStringsWithTCalls(
           // 修复：使用最后一次匹配到的内容
           let rawText = "";
           if (lastMatch && lastMatchedTextWithDelimiters) {
-            const pattern = options?.pattern
-              ? new RegExp(options.pattern)
-              : new RegExp(getDefaultPattern().source);
+            const pattern = new RegExp(options.pattern);
             const rawTextMatch = pattern.exec(lastMatchedTextWithDelimiters);
             rawText = rawTextMatch
               ? rawTextMatch[1]
@@ -241,9 +234,7 @@ export function replaceStringsWithTCalls(
           column: path.node.loc?.start.column ?? 0,
         };
 
-        const singleMatchPattern = options?.pattern
-          ? new RegExp(options.pattern)
-          : new RegExp(getDefaultPattern().source);
+        const singleMatchPattern = new RegExp(options.pattern);
 
         const match = singleMatchPattern.exec(nodeValue);
         if (match && match[0] === nodeValue && match[1] !== undefined) {
@@ -315,9 +306,7 @@ export function replaceStringsWithTCalls(
 
         if (translationKey !== undefined) {
           // Extract the raw text without delimiters for i18nCall
-          const pattern = options?.pattern
-            ? new RegExp(options.pattern)
-            : new RegExp(getDefaultPattern().source);
+          const pattern = new RegExp(options.pattern);
           const rawTextMatch = pattern.exec(matchedTextWithDelimiters);
           const rawText = rawTextMatch
             ? rawTextMatch[1]
@@ -406,9 +395,7 @@ export function replaceStringsWithTCalls(
         });
 
         // Use a non-global pattern to check if the overall structure matches
-        const singleMatchPattern = options?.pattern
-          ? new RegExp(options.pattern)
-          : new RegExp(getDefaultPattern().source);
+        const singleMatchPattern = new RegExp(options.pattern);
 
         const match = singleMatchPattern.exec(originalRawStringForPatternCheck);
 
@@ -439,9 +426,7 @@ export function replaceStringsWithTCalls(
 
             const originalNode = path.node;
             // Extract the raw text without delimiters for i18nCall
-            const pattern = options?.pattern
-              ? new RegExp(options.pattern)
-              : new RegExp(getDefaultPattern().source);
+            const pattern = new RegExp(options.pattern);
             const rawTextMatch = pattern.exec(originalRawStringForPatternCheck);
             const rawText = rawTextMatch
               ? rawTextMatch[1]
@@ -535,9 +520,7 @@ export function replaceStringsWithTCalls(
             stringParts.push("");
           }
           // Extract the raw text without delimiters for i18nCall
-          const pattern = options?.pattern
-            ? new RegExp(options.pattern)
-            : new RegExp(getDefaultPattern().source);
+          const pattern = new RegExp(options.pattern);
           const rawTextMatch = pattern.exec(matchedTextWithDelimiters);
           const rawText = rawTextMatch
             ? rawTextMatch[1]
@@ -587,9 +570,7 @@ export function replaceStringsWithTCalls(
           // 修复：使用最后一次匹配到的内容
           let rawText = "";
           if (lastMatch && lastMatchedTextWithDelimiters) {
-            const pattern = options?.pattern
-              ? new RegExp(options.pattern)
-              : new RegExp(getDefaultPattern().source);
+            const pattern = new RegExp(options.pattern);
             const rawTextMatch = pattern.exec(lastMatchedTextWithDelimiters);
             rawText = rawTextMatch
               ? rawTextMatch[1]
