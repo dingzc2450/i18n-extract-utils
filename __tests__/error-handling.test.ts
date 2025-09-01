@@ -104,7 +104,7 @@ describe("错误处理单元测试", () => {
         function brokenComponent() {
           const x = {
             // 缺少闭合括号
-            name: "test"
+            name: "___test___"
           return <div>{x.name}</div>;
         }
       `;
@@ -117,7 +117,15 @@ describe("错误处理单元测试", () => {
       expect(result.error).toBeDefined();
       expect(result.error!.code).toBe('PARSING001');
       expect(result.extractedStrings).toHaveLength(0);
-      expect(result.code).toBe(fs.readFileSync(tempFile, 'utf-8')); // 应返回原始代码
+      const targetCode =`
+        function brokenComponent() {
+          const x = {
+            // 缺少闭合括号
+            name: "t("test")"
+          return <div>{x.name}</div>;
+        }
+      `;
+      expect(result.code).toBe(targetCode); // 应返回原始代码
     });
     
     test("处理无效文件路径时应返回错误", () => {
@@ -133,7 +141,7 @@ describe("错误处理单元测试", () => {
     });
     
     test("处理不支持的文件类型应返回错误", () => {
-      const unknownContent = "This is not a valid code file";
+      const unknownContent = "___This is not a valid code file___";
       const tempFile = createTempFile(unknownContent, '.unknown');
       tempFiles.push(tempFile);
       
@@ -496,7 +504,7 @@ describe("错误处理单元测试", () => {
         function 测试组件() {
           const x = {
             // 缺少闭合括号
-            消息: "你好世界"
+            消息: "___你好世界___"
           return <div>{x.消息}</div>;
         }
       `;

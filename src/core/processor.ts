@@ -73,6 +73,17 @@ export class CoreProcessor {
         ? plugin.preProcess(code, normalizedOptions)
         : code;
 
+      // 快速检查代码中是否包含疑似待翻译的内容
+      if (!this.hasTranslatableContent(processedCode, normalizedOptions)) {
+        // 如果没有疑似待翻译内容，直接返回原代码
+        return {
+          code: processedCode,
+          extractedStrings: [],
+          usedExistingKeysList: [],
+          changes: [],
+        };
+      }
+
       // 4. 解析AST
       const parserConfig = this.getParserConfig(plugin, filePath);
       const ast = parse(processedCode, parserConfig);
@@ -169,6 +180,18 @@ export class CoreProcessor {
         error: i18nError, // 包含错误信息
       };
     }
+  }
+
+  /**
+   * 快速检查代码中是否包含疑似待翻译的内容
+   * 使用正则表达式进行简单判断
+   */
+  private hasTranslatableContent(code: string, normalizedOptions: NormalizedTransformOptions): boolean {
+    // 使用配置中的pattern创建正则表达式
+    const patternRegex = new RegExp(normalizedOptions.pattern);
+  
+    // 检查代码中是否匹配pattern
+    return patternRegex.test(code);
   }
 
   /**
