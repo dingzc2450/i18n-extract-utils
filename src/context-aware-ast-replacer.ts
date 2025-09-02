@@ -20,6 +20,70 @@ import type { SmartImportManager, ImportInfo } from "./smart-import-manager";
 import { isJSXAttribute } from "./babel-type-guards";
 
 /**
+ * 节点处理器配置接口
+ */
+interface NodeProcessorConfig<T extends t.Node> {
+  // 节点值提取函数
+  extractValue: (node: T) => string;
+
+  // 跳过条件检查函数
+  shouldSkip: (path: NodePath<T>, effectiveMethodName: string) => boolean;
+
+  // 替换节点构建函数
+  buildReplacement: {
+    single: (
+      callExpression: t.Expression,
+      isFullReplacement: boolean,
+      originalValue: string,
+      path: NodePath<T>
+    ) => t.Node | t.Node[];
+    multiple: (
+      templateLiteral: t.TemplateLiteral,
+      path: NodePath<T>
+    ) => t.Node | t.Node[];
+  };
+
+  // 特殊处理函数（可选）
+  specialHandler?: (
+    path: NodePath<T>,
+    matches: RegExpMatchArray[],
+    context: SharedProcessingContext
+  ) => boolean;
+}
+
+/**
+ * 共享处理上下文
+ */
+interface SharedProcessingContext {
+  patternRegex: RegExp;
+  options: NormalizedTransformOptions;
+  filePath: string;
+  existingValueToKey: Map<string, string | number>;
+  generatedKeysMap: Map<string, string | number>;
+  extractedStrings: ExtractedString[];
+  usedExistingKeysList: UsedExistingKey[];
+  getContextInfo: (path: NodePath<t.Node>) => ContextInfo;
+  getImportInfoForContext: (context: ContextInfo) => ImportInfo;
+  smartCallFactory: (
+    callName: string,
+    key: string | number,
+    rawText: string,
+    interpolations?: t.ObjectExpression,
+    originalText?: string
+  ) => t.Expression;
+  recordPendingReplacement: (
+    path: NodePath<t.Node>,
+    originalNode: t.Node,
+    replacementNode: t.Node | t.Node[],
+    originalText?: string
+  ) => void;
+  buildTemplateLiteral: (
+    parts: string[],
+    expressions: t.Expression[]
+  ) => t.TemplateLiteral;
+}
+
+/**
  * 上下文感知的AST替换器
  * 根据代码上下文智能选择处理策略
  */
@@ -155,15 +219,194 @@ export function collectContextAwareReplacementInfo(
     return importInfo;
   };
 
-  traverse(ast, {
-    StringLiteral(path) {
-      // 检测代码上下文
-      const context = getContextInfo(path);
-      const importInfo = getImportInfoForContext(context);
-      const effectiveMethodName = importInfo.callName;
+  // 创建共享处理上下文
+  const sharedContext: SharedProcessingContext = {
+    patternRegex,
+    options,
+    filePath,
+    existingValueToKey,
+    generatedKeysMap,
+    extractedStrings,
+    usedExistingKeysList,
+    getContextInfo,
+    getImportInfoForContext,
+    smartCallFactory,
+    recordPendingReplacement,
+    buildTemplateLiteral,
+  };
 
-      // 跳过逻辑
-      if (
+  /**
+   * 通用节点处理函数
+   */
+  function processNodeWithPattern<T extends t.Node>(
+    path: NodePath<T>,
+    config: NodeProcessorConfig<T>
+  ): void {
+    // 检测代码上下文
+    const context = sharedContext.getContextInfo(path);
+    const importInfo = sharedContext.getImportInfoForContext(context);
+    const effectiveMethodName = importInfo.callName;
+
+    // 跳过逻辑检查
+    if (config.shouldSkip(path, effectiveMethodName)) {
+      return;
+    }
+
+    // 提取节点值
+    const nodeValue = config.extractValue(path.node);
+    const location = {
+      filePath: sharedContext.filePath,
+      line: path.node.loc?.start.line ?? 0,
+      column: path.node.loc?.start.column ?? 0,
+    };
+
+    // 模式匹配
+    sharedContext.patternRegex.lastIndex = 0;
+    const matches = Array.from(nodeValue.matchAll(sharedContext.patternRegex));
+
+    if (matches.length === 0) return;
+
+    // 检查是否有特殊处理函数
+    if (
+      config.specialHandler &&
+      config.specialHandler(path, matches, sharedContext)
+    ) {
+      return;
+    }
+
+    // 处理单个匹配
+    if (matches.length === 1) {
+      const match = matches[0];
+      const fullMatch = match[0];
+      const extractedValue = match[1];
+      const matchStart = match.index!;
+      const matchEnd = matchStart + fullMatch.length;
+
+      const key = getKeyAndRecord(
+        fullMatch,
+        location,
+        sharedContext.existingValueToKey,
+        sharedContext.generatedKeysMap,
+        sharedContext.extractedStrings,
+        sharedContext.usedExistingKeysList,
+        sharedContext.options
+      );
+
+      if (key === undefined) return;
+
+      const standardizedValue =
+        sharedContext.extractedStrings.find(s => s.key === key)?.value ||
+        extractedValue;
+
+      const callExpression = sharedContext.smartCallFactory(
+        importInfo.callName,
+        key,
+        standardizedValue,
+        undefined,
+        standardizedValue
+      );
+
+      // 添加注释
+      if (sharedContext.options.appendExtractedComment) {
+        attachExtractedCommentToNode(
+          callExpression,
+          standardizedValue,
+          sharedContext.options.extractedCommentType || "block"
+        );
+      }
+
+      // 检查是否是完整替换
+      const isFullReplacement =
+        matchStart === 0 && matchEnd === nodeValue.length;
+      const replacementNode = config.buildReplacement.single(
+        callExpression,
+        isFullReplacement,
+        nodeValue,
+        path
+      );
+
+      sharedContext.recordPendingReplacement(path, path.node, replacementNode);
+      return;
+    }
+
+    // 处理多个匹配
+    const parts: string[] = [];
+    const expressions: t.Expression[] = [];
+    let lastIndex = 0;
+
+    for (const match of matches) {
+      const matchStart = match.index!;
+      const matchEnd = matchStart + match[0].length;
+      const fullMatch = match[0];
+      const extractedValue = match[1];
+
+      // 添加匹配前的文本
+      if (matchStart > lastIndex) {
+        parts.push(nodeValue.substring(lastIndex, matchStart));
+      } else if (parts.length === 0) {
+        parts.push("");
+      }
+
+      // 处理提取的值
+      const key = getKeyAndRecord(
+        fullMatch,
+        location,
+        sharedContext.existingValueToKey,
+        sharedContext.generatedKeysMap,
+        sharedContext.extractedStrings,
+        sharedContext.usedExistingKeysList,
+        sharedContext.options
+      );
+
+      if (key === undefined) continue;
+
+      const standardizedValue =
+        sharedContext.extractedStrings.find(s => s.key === key)?.value ||
+        extractedValue;
+      const callExpression = sharedContext.smartCallFactory(
+        importInfo.callName,
+        key,
+        standardizedValue,
+        undefined,
+        standardizedValue
+      );
+
+      if (sharedContext.options.appendExtractedComment) {
+        attachExtractedCommentToNode(
+          callExpression,
+          standardizedValue,
+          sharedContext.options.extractedCommentType || "block"
+        );
+      }
+
+      expressions.push(callExpression);
+      parts.push("");
+      lastIndex = matchEnd;
+    }
+
+    // 添加剩余文本
+    if (lastIndex < nodeValue.length) {
+      parts.push(nodeValue.substring(lastIndex));
+    }
+
+    if (expressions.length > 0) {
+      const templateLiteral = sharedContext.buildTemplateLiteral(
+        parts,
+        expressions
+      );
+      const replacementNode = config.buildReplacement.multiple(
+        templateLiteral,
+        path
+      );
+      sharedContext.recordPendingReplacement(path, path.node, replacementNode);
+    }
+  }
+
+  // 创建各节点类型的配置对象
+  const stringLiteralConfig: NodeProcessorConfig<t.StringLiteral> = {
+    extractValue: node => node.value,
+    shouldSkip: (path, effectiveMethodName) => {
+      return (
         (tg.isCallExpression(path.parent) &&
           tg.isIdentifier(path.parent.callee) &&
           path.parent.callee.name === effectiveMethodName &&
@@ -171,287 +414,333 @@ export function collectContextAwareReplacementInfo(
         isJSXAttribute(path.parent) ||
         tg.isImportDeclaration(path.parent) ||
         tg.isExportDeclaration(path.parent)
-      ) {
-        return;
-      }
-
-      const nodeValue = path.node.value;
-      const location = {
-        filePath,
-        line: path.node.loc?.start.line ?? 0,
-        column: path.node.loc?.start.column ?? 0,
-      };
-
-      patternRegex.lastIndex = 0;
-      const matches = Array.from(nodeValue.matchAll(patternRegex));
-
-      if (matches.length === 0) return;
-
-      if (matches.length === 1) {
-        // 单个匹配的情况 - 检查是否是完整替换还是部分替换
-        const match = matches[0];
-        const fullMatch = match[0];
-        const extractedValue = match[1];
-        const matchStart = match.index!;
-        const matchEnd = matchStart + fullMatch.length;
-
-        const key = getKeyAndRecord(
-          fullMatch,
-          location,
-          existingValueToKey,
-          generatedKeysMap,
-          extractedStrings,
-          usedExistingKeysList,
-          options
-        );
-
-        if (key === undefined) return;
-
-        const standardizedValue =
-          extractedStrings.find(s => s.key === key)?.value || extractedValue;
-
-        const callExpression = smartCallFactory(
-          importInfo.callName,
-          key,
-          standardizedValue,
-          undefined,
-          standardizedValue // 传递原始文本用于自定义 i18nCall
-        );
-
-        // 如果需要添加注释
-        if (options.appendExtractedComment) {
-          attachExtractedCommentToNode(
-            callExpression,
-            standardizedValue,
-            options.extractedCommentType || "block"
-          );
-        }
-
-        // 检查是否是完整替换（整个字符串就是模式）
-        const isFullReplacement =
-          matchStart === 0 && matchEnd === nodeValue.length;
-
+      );
+    },
+    buildReplacement: {
+      single: (callExpression, isFullReplacement, originalValue, _path) => {
         if (isFullReplacement) {
-          // 完整替换，直接使用callExpression
-          recordPendingReplacement(path, path.node, callExpression);
+          return callExpression;
         } else {
           // 部分替换，需要保留周围的文本，转换为模板字符串
-          const parts: string[] = [];
-          const expressions: t.Expression[] = [];
+          // 重新进行模式匹配以获取正确的位置信息
+          const nodeValue = originalValue;
+          sharedContext.patternRegex.lastIndex = 0;
+          const matches = Array.from(
+            nodeValue.matchAll(sharedContext.patternRegex)
+          );
+
+          if (matches.length > 0) {
+            const match = matches[0];
+            const matchStart = match.index!;
+            const matchEnd = matchStart + match[0].length;
+
+            const parts: string[] = [];
+            const expressions: t.Expression[] = [];
+
+            // 添加匹配前的文本
+            if (matchStart > 0) {
+              parts.push(nodeValue.substring(0, matchStart));
+            } else {
+              parts.push("");
+            }
+
+            // 添加翻译调用
+            expressions.push(callExpression);
+            parts.push("");
+
+            // 添加匹配后的文本
+            if (matchEnd < nodeValue.length) {
+              parts[parts.length - 1] = nodeValue.substring(matchEnd);
+            }
+
+            return sharedContext.buildTemplateLiteral(parts, expressions);
+          }
+
+          // 如果没有匹配，直接返回调用表达式
+          return callExpression;
+        }
+      },
+      multiple: templateLiteral => templateLiteral,
+    },
+  };
+
+  const jsxAttributeConfig: NodeProcessorConfig<t.JSXAttribute> = {
+    extractValue: node => {
+      if (!tg.isStringLiteral(node.value)) return "";
+      return node.value.value;
+    },
+    shouldSkip: path => {
+      return (
+        !tg.isJSXAttribute(path.node) ||
+        !path.node.value ||
+        !tg.isStringLiteral(path.node.value)
+      );
+    },
+    buildReplacement: {
+      single: (callExpression, _isFullReplacement, _originalValue, path) => {
+        const jsxExpressionContainer = t.jsxExpressionContainer(callExpression);
+        return t.jsxAttribute(path.node.name, jsxExpressionContainer);
+      },
+      multiple: (templateLiteral, path) => {
+        const jsxExpressionContainer =
+          t.jsxExpressionContainer(templateLiteral);
+        return t.jsxAttribute(path.node.name, jsxExpressionContainer);
+      },
+    },
+  };
+
+  const jsxTextConfig: NodeProcessorConfig<t.JSXText> = {
+    extractValue: node => node.value,
+    shouldSkip: path => {
+      return !path.node.value.trim(); // 跳过只包含空白字符的文本节点
+    },
+    buildReplacement: {
+      single: (callExpression, _isFullReplacement, originalValue, _path) => {
+        const jsxExpressionContainer = t.jsxExpressionContainer(callExpression);
+
+        // 检查是否有前后文本需要保留
+        const nodeValue = originalValue;
+        const matches = Array.from(
+          nodeValue.matchAll(sharedContext.patternRegex)
+        );
+        if (matches.length > 0) {
+          const match = matches[0];
+          const matchStart = match.index!;
+          const matchEnd = matchStart + match[0].length;
+
+          const beforeText = nodeValue.substring(0, matchStart);
+          const afterText = nodeValue.substring(matchEnd);
+          const hasBeforeText = /\S/.test(beforeText);
+          const hasAfterText = /\S/.test(afterText);
+
+          if (!hasBeforeText && !hasAfterText) {
+            // 没有前后文本，直接替换
+            return jsxExpressionContainer;
+          } else {
+            // 有前后文本，构建多元素数组
+            const elements: (t.JSXText | t.JSXExpressionContainer)[] = [];
+
+            if (hasBeforeText) {
+              elements.push(t.jsxText(beforeText));
+            }
+
+            elements.push(jsxExpressionContainer);
+
+            if (hasAfterText) {
+              elements.push(t.jsxText(afterText));
+            }
+
+            return elements;
+          }
+        }
+
+        return jsxExpressionContainer;
+      },
+      multiple: (_templateLiteral, path) => {
+        // 多个匹配的JSX文本需要特殊处理
+        const nodeValue = path.node.value;
+        const elements: (t.JSXText | t.JSXExpressionContainer)[] = [];
+        let lastIndex = 0;
+
+        const matches = Array.from(
+          nodeValue.matchAll(sharedContext.patternRegex)
+        );
+
+        for (const match of matches) {
+          const matchStart = match.index!;
+          const matchEnd = matchStart + match[0].length;
+          const fullMatch = match[0];
+          const extractedValue = match[1];
 
           // 添加匹配前的文本
-          if (matchStart > 0) {
-            parts.push(nodeValue.substring(0, matchStart));
-          } else {
-            parts.push("");
+          if (matchStart > lastIndex) {
+            const beforeText = nodeValue.substring(lastIndex, matchStart);
+            if (/\S/.test(beforeText)) {
+              elements.push(t.jsxText(beforeText));
+            }
           }
 
-          // 添加翻译调用
-          expressions.push(callExpression);
-          parts.push("");
+          // 处理提取的值 - 这里需要重新生成调用表达式
+          const location = {
+            filePath: sharedContext.filePath,
+            line: path.node.loc?.start.line ?? 0,
+            column: path.node.loc?.start.column ?? 0,
+          };
 
-          // 添加匹配后的文本
-          if (matchEnd < nodeValue.length) {
-            parts[parts.length - 1] = nodeValue.substring(matchEnd);
+          const key = getKeyAndRecord(
+            fullMatch,
+            location,
+            sharedContext.existingValueToKey,
+            sharedContext.generatedKeysMap,
+            sharedContext.extractedStrings,
+            sharedContext.usedExistingKeysList,
+            sharedContext.options
+          );
+
+          if (key !== undefined) {
+            // Parse JSX text placeholders to generate interpolation
+            const parsedPlaceholders = parseJSXTextPlaceholders(extractedValue);
+
+            let callExpression;
+            if (parsedPlaceholders && parsedPlaceholders.interpolationObject) {
+              // Use canonical text as key and provide interpolation object
+              callExpression = sharedContext.smartCallFactory(
+                sharedContext.getImportInfoForContext(
+                  sharedContext.getContextInfo(path)
+                ).callName,
+                key,
+                parsedPlaceholders.canonicalText,
+                parsedPlaceholders.interpolationObject
+              );
+            } else {
+              // No placeholders, use simple call
+              callExpression = sharedContext.smartCallFactory(
+                sharedContext.getImportInfoForContext(
+                  sharedContext.getContextInfo(path)
+                ).callName,
+                key,
+                extractedValue,
+                undefined,
+                extractedValue
+              );
+            }
+
+            if (sharedContext.options.appendExtractedComment) {
+              // Use the canonical text for comment (with {argN} format)
+              const commentText = parsedPlaceholders
+                ? parsedPlaceholders.canonicalText
+                : extractedValue;
+              attachExtractedCommentToNode(
+                callExpression,
+                commentText,
+                sharedContext.options.extractedCommentType || "block"
+              );
+            }
+
+            elements.push(t.jsxExpressionContainer(callExpression));
           }
 
-          const templateLiteral = buildTemplateLiteral(parts, expressions);
-          recordPendingReplacement(path, path.node, templateLiteral);
+          lastIndex = matchEnd;
         }
-        return;
-      }
 
-      // 处理多个匹配的情况 - 构建模板字符串
-      const parts: string[] = [];
-      const expressions: t.Expression[] = [];
-      let lastIndex = 0;
+        // 添加剩余文本
+        if (lastIndex < nodeValue.length) {
+          const afterText = nodeValue.substring(lastIndex);
+          if (/\S/.test(afterText)) {
+            elements.push(t.jsxText(afterText));
+          }
+        }
 
-      for (const match of matches) {
-        const matchStart = match.index!;
-        const matchEnd = matchStart + match[0].length;
-        const fullMatch = match[0];
+        return elements.length === 1 ? elements[0] : elements;
+      },
+    },
+    specialHandler: (path, matches, context) => {
+      // JSXText 的特殊处理：处理占位符
+      if (matches.length === 1) {
+        const match = matches[0];
         const extractedValue = match[1];
 
-        // 添加匹配前的文本部分
-        if (matchStart > lastIndex) {
-          parts.push(nodeValue.substring(lastIndex, matchStart));
-        }
+        // Parse JSX text placeholders to generate interpolation
+        const parsedPlaceholders = parseJSXTextPlaceholders(extractedValue);
 
-        // 处理提取的值
-        const key = getKeyAndRecord(
-          fullMatch,
-          location,
-          existingValueToKey,
-          generatedKeysMap,
-          extractedStrings,
-          usedExistingKeysList,
-          options
-        );
+        if (parsedPlaceholders && parsedPlaceholders.interpolationObject) {
+          // 有占位符的情况，需要特殊处理
+          const location = {
+            filePath: context.filePath,
+            line: path.node.loc?.start.line ?? 0,
+            column: path.node.loc?.start.column ?? 0,
+          };
 
-        if (key === undefined) continue;
-
-        const standardizedValue =
-          extractedStrings.find(s => s.key === key)?.value || extractedValue;
-        const callExpression = smartCallFactory(
-          importInfo.callName,
-          key,
-          standardizedValue,
-          undefined,
-          standardizedValue // 传递原始文本用于自定义 i18nCall
-        );
-
-        if (options.appendExtractedComment) {
-          attachExtractedCommentToNode(
-            callExpression,
-            standardizedValue,
-            options.extractedCommentType || "block"
+          const key = getKeyAndRecord(
+            match[0],
+            location,
+            context.existingValueToKey,
+            context.generatedKeysMap,
+            context.extractedStrings,
+            context.usedExistingKeysList,
+            context.options
           );
+
+          if (key !== undefined) {
+            const callExpression = context.smartCallFactory(
+              context.getImportInfoForContext(context.getContextInfo(path))
+                .callName,
+              key,
+              parsedPlaceholders.canonicalText,
+              parsedPlaceholders.interpolationObject
+            );
+
+            if (context.options.appendExtractedComment) {
+              attachExtractedCommentToNode(
+                callExpression,
+                parsedPlaceholders.canonicalText,
+                context.options.extractedCommentType || "block"
+              );
+            }
+
+            const jsxExpressionContainer =
+              t.jsxExpressionContainer(callExpression);
+
+            // 检查是否有前后文本需要保留
+            const nodeValue = path.node.value;
+            const matchStart = match.index!;
+            const matchEnd = matchStart + match[0].length;
+
+            const beforeText = nodeValue.substring(0, matchStart);
+            const afterText = nodeValue.substring(matchEnd);
+            const hasBeforeText = /\S/.test(beforeText);
+            const hasAfterText = /\S/.test(afterText);
+
+            if (!hasBeforeText && !hasAfterText) {
+              // 没有前后文本，直接替换
+              context.recordPendingReplacement(
+                path,
+                path.node,
+                jsxExpressionContainer
+              );
+            } else {
+              // 有前后文本，构建多元素数组
+              const elements: (t.JSXText | t.JSXExpressionContainer)[] = [];
+
+              if (hasBeforeText) {
+                elements.push(t.jsxText(beforeText));
+              }
+
+              elements.push(jsxExpressionContainer);
+
+              if (hasAfterText) {
+                elements.push(t.jsxText(afterText));
+              }
+
+              context.recordPendingReplacement(
+                path,
+                path.node,
+                elements,
+                nodeValue
+              );
+            }
+
+            return true; // 表示已处理
+          }
         }
-
-        expressions.push(callExpression);
-        parts.push(""); // 为表达式占位
-
-        lastIndex = matchEnd;
       }
 
-      // 添加剩余的文本
-      if (lastIndex < nodeValue.length) {
-        parts.push(nodeValue.substring(lastIndex));
-      }
+      return false; // 表示未处理，继续通用逻辑
+    },
+  };
 
-      const templateLiteral = buildTemplateLiteral(parts, expressions);
-      recordPendingReplacement(path, path.node, templateLiteral);
+  traverse(ast, {
+    StringLiteral(path) {
+      processNodeWithPattern(path, stringLiteralConfig);
     },
 
     JSXAttribute(path) {
-      if (!tg.isJSXAttribute(path.node) || !path.node.value) return;
-      if (!tg.isStringLiteral(path.node.value)) return;
-
-      const nodeValue = path.node.value.value;
-      const location = {
-        filePath,
-        line: path.node.loc?.start.line ?? 0,
-        column: path.node.loc?.start.column ?? 0,
-      };
-
-      patternRegex.lastIndex = 0;
-      const matches = Array.from(nodeValue.matchAll(patternRegex));
-
-      if (matches.length === 0) return;
-
-      // 检测代码上下文
-      const context = getContextInfo(path);
-      const importInfo = getImportInfoForContext(context);
-
-      if (matches.length === 1) {
-        // 单个匹配的JSX属性
-        const match = matches[0];
-        const fullMatch = match[0];
-        const extractedValue = match[1];
-
-        const key = getKeyAndRecord(
-          fullMatch,
-          location,
-          existingValueToKey,
-          generatedKeysMap,
-          extractedStrings,
-          usedExistingKeysList,
-          options
-        );
-
-        if (key === undefined) return;
-
-        const standardizedValue =
-          extractedStrings.find(s => s.key === key)?.value || extractedValue;
-        const callExpression = smartCallFactory(
-          importInfo.callName,
-          key,
-          standardizedValue,
-          undefined,
-          standardizedValue // 传递原始文本用于自定义 i18nCall
-        );
-
-        if (options.appendExtractedComment) {
-          attachExtractedCommentToNode(
-            callExpression,
-            standardizedValue,
-            options.extractedCommentType || "block"
-          );
-        }
-
-        const jsxExpressionContainer = t.jsxExpressionContainer(callExpression);
-        const newAttr = t.jsxAttribute(path.node.name, jsxExpressionContainer);
-
-        recordPendingReplacement(path, path.node, newAttr);
-        return;
-      }
-
-      // 处理多个匹配的JSX属性
-      const parts: string[] = [];
-      const expressions: t.Expression[] = [];
-      let lastIndex = 0;
-
-      for (const match of matches) {
-        const matchStart = match.index!;
-        const matchEnd = matchStart + match[0].length;
-        const fullMatch = match[0];
-        const extractedValue = match[1];
-
-        // 添加匹配前的文本
-        if (matchStart > lastIndex) {
-          parts.push(nodeValue.substring(lastIndex, matchStart));
-        }
-
-        // 处理提取的值
-        const key = getKeyAndRecord(
-          fullMatch,
-          location,
-          existingValueToKey,
-          generatedKeysMap,
-          extractedStrings,
-          usedExistingKeysList,
-          options
-        );
-
-        if (key === undefined) continue;
-
-        const standardizedValue =
-          extractedStrings.find(s => s.key === key)?.value || extractedValue;
-        const callExpression = smartCallFactory(
-          importInfo.callName,
-          key,
-          standardizedValue,
-          undefined,
-          standardizedValue // 传递原始文本用于自定义 i18nCall
-        );
-
-        if (options.appendExtractedComment) {
-          attachExtractedCommentToNode(
-            callExpression,
-            standardizedValue,
-            options.extractedCommentType || "block"
-          );
-        }
-
-        expressions.push(callExpression);
-        parts.push("");
-
-        lastIndex = matchEnd;
-      }
-
-      // 添加剩余的文本
-      if (lastIndex < nodeValue.length) {
-        parts.push(nodeValue.substring(lastIndex));
-      }
-
-      const templateLiteral = buildTemplateLiteral(parts, expressions);
-      const jsxExpressionContainer = t.jsxExpressionContainer(templateLiteral);
-      const newAttr = t.jsxAttribute(path.node.name, jsxExpressionContainer);
-
-      recordPendingReplacement(path, path.node, newAttr);
+      processNodeWithPattern(path, jsxAttributeConfig);
     },
 
     TemplateLiteral(path) {
+      // TemplateLiteral 有复杂的特殊处理逻辑，暂时保持原有实现
+      // 后续可以进一步优化
       // 跳过tagged template literals
       if (tg.isTaggedTemplateExpression(path.parent)) return;
 
@@ -949,196 +1238,7 @@ export function collectContextAwareReplacementInfo(
     },
 
     JSXText(path) {
-      const nodeValue = path.node.value;
-
-      // 跳过只包含空白字符的文本节点
-      if (!nodeValue.trim()) return;
-
-      const location = {
-        filePath,
-        line: path.node.loc?.start.line ?? 0,
-        column: path.node.loc?.start.column ?? 0,
-      };
-
-      patternRegex.lastIndex = 0;
-      const matches = Array.from(nodeValue.matchAll(patternRegex));
-
-      if (matches.length === 0) return;
-
-      // 检测代码上下文
-      const context = getContextInfo(path);
-      const importInfo = getImportInfoForContext(context);
-
-      if (matches.length === 1) {
-        // 单个匹配的JSX文本
-        const match = matches[0];
-        const fullMatch = match[0];
-        const extractedValue = match[1];
-        const matchStart = match.index!;
-        const matchEnd = matchStart + fullMatch.length;
-
-        const key = getKeyAndRecord(
-          fullMatch,
-          location,
-          existingValueToKey,
-          generatedKeysMap,
-          extractedStrings,
-          usedExistingKeysList,
-          options
-        );
-
-        if (key === undefined) return;
-
-        // Parse JSX text placeholders to generate interpolation
-        const parsedPlaceholders = parseJSXTextPlaceholders(extractedValue);
-
-        let callExpression;
-        if (parsedPlaceholders && parsedPlaceholders.interpolationObject) {
-          // Use canonical text as key and provide interpolation object
-          callExpression = smartCallFactory(
-            importInfo.callName,
-            key,
-            parsedPlaceholders.canonicalText,
-            parsedPlaceholders.interpolationObject
-          );
-        } else {
-          // No placeholders, use simple call
-          callExpression = smartCallFactory(
-            importInfo.callName,
-            key,
-            extractedValue,
-            undefined,
-            extractedValue
-          );
-        }
-
-        if (options.appendExtractedComment) {
-          // Use the canonical text for comment (with {argN} format)
-          const commentText = parsedPlaceholders
-            ? parsedPlaceholders.canonicalText
-            : extractedValue;
-          attachExtractedCommentToNode(
-            callExpression,
-            commentText,
-            options.extractedCommentType || "block"
-          );
-        }
-
-        const jsxExpressionContainer = t.jsxExpressionContainer(callExpression);
-
-        // 检查是否有前后文本需要保留
-        const beforeText = nodeValue.substring(0, matchStart);
-        const afterText = nodeValue.substring(matchEnd);
-        const hasBeforeText = /\S/.test(beforeText);
-        const hasAfterText = /\S/.test(afterText);
-
-        if (!hasBeforeText && !hasAfterText) {
-          // 没有前后文本，直接替换
-          recordPendingReplacement(path, path.node, jsxExpressionContainer);
-        } else {
-          // 有前后文本，构建多元素数组
-          const elements: (t.JSXText | t.JSXExpressionContainer)[] = [];
-
-          if (hasBeforeText) {
-            elements.push(t.jsxText(beforeText));
-          }
-
-          elements.push(jsxExpressionContainer);
-
-          if (hasAfterText) {
-            elements.push(t.jsxText(afterText));
-          }
-
-          recordPendingReplacement(path, path.node, elements, nodeValue);
-        }
-        return;
-      }
-
-      // 处理多个匹配的JSX文本
-      const elements: (t.JSXText | t.JSXExpressionContainer)[] = [];
-      let lastIndex = 0;
-
-      for (const match of matches) {
-        const matchStart = match.index!;
-        const matchEnd = matchStart + match[0].length;
-        const fullMatch = match[0];
-        const extractedValue = match[1];
-
-        // 添加匹配前的文本
-        if (matchStart > lastIndex) {
-          const beforeText = nodeValue.substring(lastIndex, matchStart);
-          if (/\S/.test(beforeText)) {
-            elements.push(t.jsxText(beforeText));
-          }
-        }
-
-        // 处理提取的值
-        const key = getKeyAndRecord(
-          fullMatch,
-          location,
-          existingValueToKey,
-          generatedKeysMap,
-          extractedStrings,
-          usedExistingKeysList,
-          options
-        );
-
-        if (key === undefined) continue;
-
-        // Parse JSX text placeholders to generate interpolation
-        const parsedPlaceholders = parseJSXTextPlaceholders(extractedValue);
-
-        let callExpression;
-        if (parsedPlaceholders && parsedPlaceholders.interpolationObject) {
-          // Use canonical text as key and provide interpolation object
-          callExpression = smartCallFactory(
-            importInfo.callName,
-            key,
-            parsedPlaceholders.canonicalText,
-            parsedPlaceholders.interpolationObject
-          );
-        } else {
-          // No placeholders, use simple call
-          callExpression = smartCallFactory(
-            importInfo.callName,
-            key,
-            extractedValue,
-            undefined,
-            extractedValue
-          );
-        }
-
-        if (options.appendExtractedComment) {
-          // Use the canonical text for comment (with {argN} format)
-          const commentText = parsedPlaceholders
-            ? parsedPlaceholders.canonicalText
-            : extractedValue;
-          attachExtractedCommentToNode(
-            callExpression,
-            commentText,
-            options.extractedCommentType || "block"
-          );
-        }
-
-        elements.push(t.jsxExpressionContainer(callExpression));
-        lastIndex = matchEnd;
-      }
-
-      // 添加剩余文本
-      if (lastIndex < nodeValue.length) {
-        const afterText = nodeValue.substring(lastIndex);
-        if (/\S/.test(afterText)) {
-          elements.push(t.jsxText(afterText));
-        }
-      }
-
-      if (elements.length === 1) {
-        recordPendingReplacement(path, path.node, elements[0]);
-      } else if (elements.length > 1) {
-        // 对于多个元素，我们需要替换整个JSX元素的children
-        // 记录一个特殊的多元素替换
-        recordPendingReplacement(path, path.node, elements, nodeValue);
-      }
+      processNodeWithPattern(path, jsxTextConfig);
     },
   });
 
