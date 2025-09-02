@@ -25,7 +25,7 @@ export function getKeyAndRecord(
   generatedKeysMap: Map<string, string | number>,
   extractedStrings: ExtractedString[],
   usedExistingKeysList: UsedExistingKey[],
-  options: TransformOptions
+  options: Pick<TransformOptions, "pattern" | "generateKey"> = {}
 ): string | number | undefined {
   // Use a non-global regex based on the options pattern to extract the content
   const pattern = options?.pattern
