@@ -57,7 +57,7 @@ function hasTranslationHook(
 
 /**
  * Fallback transformation for React: simple regex replacement and basic hook/import insertion.
- * 仅适用于 React。Vue 请使用 vue-support.ts 内的 vueFallbackTransform。
+ * 仅适用于 React。Vue 请使用 VuePlugin 的回退机制。
  * Uses the captured text as the key, similar to the default AST behavior without key generation/reuse.
  */
 export function fallbackTransform(
