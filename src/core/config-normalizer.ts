@@ -277,43 +277,60 @@ function detectVueFramework(code: string, filePath: string): boolean {
     (code.includes("setup()") ||
       code.includes("setup:") ||
       code.includes("data()") ||
-      code.includes("methods:"));
+      code.includes("methods:") ||
+      code.includes("name:") || // Vue 组件名称属性
+      code.includes("props:") || // Vue 组件 props
+      code.includes("components:") || // Vue 组件子组件
+      code.includes("computed:") || // Vue computed 属性
+      code.includes("watch:") || // Vue 侦听器
+      code.includes("mounted:") || // Vue 生命周期钩子
+      code.includes("created:") ||
+      code.includes("beforeDestroy:") ||
+      code.includes("destroyed:"));
 
-  return hasVueTemplate || hasVueExport;
+  // 检查Vue导入
+  const hasVueImport =
+    code.includes("import Vue") ||
+    code.includes('from "vue"') ||
+    code.includes("from 'vue'");
+
+  return hasVueTemplate || hasVueExport || hasVueImport;
 }
 
 /**
  * 规范化框架配置
  */
 function normalizeFramework(
-  options: TransformOptions,
+  userOptions: TransformOptions,
   code: string = "",
   filePath: string = ""
 ): Framework {
   // 优先使用新配置中的框架
-  if (options.i18nConfig?.framework) {
-    return options.i18nConfig.framework as Framework;
+  if (userOptions.i18nConfig?.framework) {
+    return userOptions.i18nConfig.framework as Framework;
   }
 
-  // 根据代码内容和文件路径检测框架
+  // Vue 检测优先级最高，因为 Vue 的模式更具体
+  if (detectVueFramework(code, filePath)) {
+    return Framework.Vue;
+  }
+
+  // 然后检测 React15
   if (detectReact15Framework(code)) {
     return Framework.React15;
   }
 
+  // 再检测一般 React
   if (detectReactFramework(code, filePath)) {
     return Framework.React;
   }
 
-  if (detectVueFramework(code, filePath)) {
-    return Framework.Vue;
-  }
   if (/\.(js|ts|mjs|cjs)$/.test(filePath)) {
     return Framework.JavaScript;
   }
 
-  // 否则根据文件后缀或其他特征推断
-  // 这里可以添加框架自动检测逻辑
-  return CONFIG_DEFAULTS.DEFAULT_FRAMEWORK; // 默认使用React
+  // 默认使用React
+  return CONFIG_DEFAULTS.DEFAULT_FRAMEWORK;
 }
 
 /**
@@ -361,43 +378,55 @@ function normalizeNonReactConfig(
  * 所有配置项都会有默认值，确保返回的配置是完整的
  */
 export function normalizeConfig(
-  options: TransformOptions,
+  userOptions: TransformOptions = {},
   code: string = "",
   filePath: string = ""
 ): NormalizedTransformOptions {
+  // 首先检测框架
+  const detectedFramework = normalizeFramework(userOptions, code, filePath);
+
+  // 创建带有检测到框架的配置
+  const optionsWithFramework = {
+    ...userOptions,
+    i18nConfig: {
+      ...userOptions.i18nConfig,
+      framework: detectedFramework as any,
+    },
+  };
+
   // 创建规范化的i18n配置
   const normalizedI18nConfig: NormalizedI18nConfig = {
-    framework: normalizeFramework(options, code, filePath),
-    i18nImport: normalizeI18nImport(options),
-    nonReactConfig: normalizeNonReactConfig(options),
-    i18nCall: options.i18nConfig?.i18nCall, // 确保传递i18nCall配置
+    framework: detectedFramework,
+    i18nImport: normalizeI18nImport(optionsWithFramework),
+    nonReactConfig: normalizeNonReactConfig(optionsWithFramework),
+    i18nCall: userOptions.i18nConfig?.i18nCall, // 确保传递i18nCall配置
   };
 
   // 创建规范化的转换选项
   return {
     // 基础配置 - 使用用户配置或默认值
-    pattern: options.pattern || CONFIG_DEFAULTS.PATTERN,
-    outputPath: options.outputPath || CONFIG_DEFAULTS.OUTPUT_PATH,
+    pattern: userOptions.pattern || CONFIG_DEFAULTS.PATTERN,
+    outputPath: userOptions.outputPath || CONFIG_DEFAULTS.OUTPUT_PATH,
     appendExtractedComment:
-      options.appendExtractedComment ??
+      userOptions.appendExtractedComment ??
       CONFIG_DEFAULTS.APPEND_EXTRACTED_COMMENT,
     extractedCommentType:
-      (options.extractedCommentType as "block" | "line") ||
+      (userOptions.extractedCommentType as "block" | "line") ||
       (CONFIG_DEFAULTS.EXTRACTED_COMMENT_TYPE as "block"),
     preserveFormatting:
-      options.preserveFormatting ?? CONFIG_DEFAULTS.PRESERVE_FORMATTING,
+      userOptions.preserveFormatting ?? CONFIG_DEFAULTS.PRESERVE_FORMATTING,
     useASTTransform:
-      options.useASTTransform ?? CONFIG_DEFAULTS.USE_AST_TRANSFORM,
+      userOptions.useASTTransform ?? CONFIG_DEFAULTS.USE_AST_TRANSFORM,
 
     // i18n配置
     normalizedI18nConfig,
 
     // 可选配置（直接传递，不处理）
-    generateKey: options.generateKey,
-    existingTranslations: options.existingTranslations,
+    generateKey: userOptions.generateKey,
+    existingTranslations: userOptions.existingTranslations,
 
     // 传递其他原始配置（向后兼容）
-    ...options,
+    ...userOptions,
   };
 }
 

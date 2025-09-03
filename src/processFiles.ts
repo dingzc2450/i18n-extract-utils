@@ -15,7 +15,7 @@ import type {
 } from "./types";
 import { FileCacheUtils } from "./core/utils";
 import { createProcessorWithDefaultPlugins } from "./plugins";
-import { ConfigProxy } from "./config/config-proxy";
+import { ConfigDetector } from "./config/config-detector";
 import {
   createI18nError,
   logError,
@@ -126,22 +126,9 @@ export function transformCode(
     // 处理器包含所有已注册的框架插件（React、Vue等）
     const processor = createProcessorWithDefaultPlugins();
 
-    // 第三步：通过ConfigProxy进行框架检测和配置预处理
-    // filePath参数在此处用于框架类型检测，不可移除
-    const enhancedOptions = ConfigProxy.preprocessOptions(
-      options,
-      code,
-      filePath
-    );
-
-    // 第四步：执行代码处理并返回结果
+    // 第三步：执行代码处理并返回结果
     // filePath在processCode中用于AST解析配置和插件选择，不可移除
-    return processor.processCode(
-      code,
-      filePath,
-      enhancedOptions,
-      existingValueToKey
-    );
+    return processor.processCode(code, filePath, options, existingValueToKey);
   } catch (error) {
     // 使用统一的错误处理机制
     let errorCode = "GENERAL001";
@@ -208,6 +195,19 @@ export async function processFiles(
   sourceJsonObject?: Record<string, string | number>;
   errors?: I18nError[]; // 添加错误列表字段
 }> {
+  // 第一步：使用 ConfigDetector 检查配置
+  const configCheck = ConfigDetector.validateConfig(options);
+  if (!configCheck.valid) {
+    console.warn("⚠️ 配置验证失败:");
+    configCheck.errors.forEach(error => console.error(`  ✗ ${error}`));
+  }
+
+  if (configCheck.warnings.length > 0) {
+    console.warn("📦 配置警告:");
+    configCheck.warnings.forEach(warning => console.warn(`  ⚠️ ${warning}`));
+  }
+
+  // 第二步：加载现有翻译和处理文件
   const { existingValueToKey, sourceJsonObject } =
     loadExistingTranslations(options);
 
@@ -308,6 +308,48 @@ export async function executeI18nExtraction(
   friendlyErrorMessage?: string;
 }> {
   try {
+    // 在开始处理前进行详细的配置检查
+    const configReport = ConfigDetector.generateConfigReport(options);
+
+    if (
+      !configReport.details.validation.valid ||
+      !configReport.details.compatibility.compatible
+    ) {
+      console.warn("🔍 配置检查结果:");
+      console.warn(configReport.summary);
+
+      // 显示详细的错误和警告
+      if (configReport.details.validation.errors.length > 0) {
+        console.error("  错误:");
+        configReport.details.validation.errors.forEach(error =>
+          console.error(`    ✗ ${error}`)
+        );
+      }
+
+      if (configReport.details.validation.warnings.length > 0) {
+        console.warn("  警告:");
+        configReport.details.validation.warnings.forEach(warning =>
+          console.warn(`    ⚠️ ${warning}`)
+        );
+      }
+
+      if (configReport.details.compatibility.issues.length > 0) {
+        console.warn("  兼容性问题:");
+        configReport.details.compatibility.issues.forEach(issue =>
+          console.warn(`    🔄 ${issue}`)
+        );
+
+        if (configReport.details.compatibility.suggestions.length > 0) {
+          console.info("  建议:");
+          configReport.details.compatibility.suggestions.forEach(suggestion =>
+            console.info(`    💡 ${suggestion}`)
+          );
+        }
+      }
+    } else {
+      console.log("✅ 配置检查通过");
+    }
+
     const result = await processFiles(pattern, options);
 
     // 处理完成后整体检查错误
