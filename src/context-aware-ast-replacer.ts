@@ -84,6 +84,281 @@ interface SharedProcessingContext {
 }
 
 /**
+ * 处理模板字面量表达式中的嵌套字符串和模板字面量
+ * 这是一个纯函数，专门用于递归处理嵌套结构
+ */
+function processNestedExpressionsInTemplate(
+  expressions: (t.Expression | t.TSType)[],
+  context: SharedProcessingContext,
+  importCallName: string,
+  _basePath: NodePath<t.Node>
+): t.Expression[] {
+  return expressions
+    .filter((expr): expr is t.Expression => t.isExpression(expr))
+    .map(expr => {
+      // 克隆表达式并递归替换其中的字符串字面量
+      const clonedExpr = t.cloneNode(expr);
+
+      // 创建一个临时的文件结构来包装表达式，以便traverse可以正确处理
+      const tempProgram = t.program([t.expressionStatement(clonedExpr)]);
+      const tempFile = t.file(tempProgram, [], []);
+
+      // 使用 traverse 遍历表达式，查找并替换嵌套的字符串字面量和模板字面量
+      traverse(tempFile, {
+        StringLiteral(nestedPath) {
+          processNestedStringLiteral(nestedPath, context, importCallName);
+        },
+
+        TemplateLiteral(nestedTemplatePath) {
+          processNestedTemplateLiteral(
+            nestedTemplatePath,
+            context,
+            importCallName
+          );
+        },
+      });
+
+      // 从临时文件结构中提取处理后的表达式
+      const processedStatement = tempProgram.body[0] as t.ExpressionStatement;
+      return processedStatement.expression;
+    });
+}
+
+/**
+ * 处理嵌套的字符串字面量
+ */
+function processNestedStringLiteral(
+  nestedPath: NodePath<t.StringLiteral>,
+  context: SharedProcessingContext,
+  importCallName: string
+): void {
+  const nodeValue = nestedPath.node.value;
+
+  // 检查是否匹配模式
+  const pattern = new RegExp(context.options.pattern);
+  const match = pattern.exec(nodeValue);
+
+  if (match && match[1] !== undefined) {
+    const fullMatch = match[0];
+
+    // 构建嵌套字符串的位置信息
+    const nestedLocation = {
+      filePath: context.filePath,
+      line: nestedPath.node.loc?.start.line ?? 0,
+      column: nestedPath.node.loc?.start.column ?? 0,
+    };
+
+    // 主动调用 getKeyAndRecord 提取这个嵌套字符串
+    const nestedKey = getKeyAndRecord(
+      fullMatch,
+      nestedLocation,
+      context.existingValueToKey,
+      context.generatedKeysMap,
+      context.extractedStrings,
+      context.usedExistingKeysList,
+      context.options
+    );
+
+    if (nestedKey !== undefined) {
+      // 创建翻译调用的AST节点
+      const callExpression = t.callExpression(t.identifier(importCallName), [
+        t.stringLiteral(String(nestedKey)),
+      ]);
+
+      nestedPath.replaceWith(callExpression);
+    }
+  }
+}
+
+/**
+ * 处理嵌套的模板字面量
+ */
+function processNestedTemplateLiteral(
+  nestedTemplatePath: NodePath<t.TemplateLiteral>,
+  context: SharedProcessingContext,
+  importCallName: string
+): void {
+  // 跳过tagged template literals
+  if (tg.isTaggedTemplateExpression(nestedTemplatePath.parent)) return;
+
+  const nestedNode = nestedTemplatePath.node;
+
+  // 如果嵌套的模板字面量有表达式，递归处理
+  if (nestedNode.expressions.length > 0) {
+    // 构建字符串表示以进行模式匹配
+    let nestedOriginalRawString = "";
+    nestedNode.quasis.forEach((quasi, i) => {
+      nestedOriginalRawString += quasi.value.raw;
+      if (i < nestedNode.expressions.length) {
+        nestedOriginalRawString += "${...}";
+      }
+    });
+
+    // 检查是否匹配模式
+    const singleMatchPattern = new RegExp(context.options.pattern);
+    const nestedMatch = singleMatchPattern.exec(nestedOriginalRawString);
+
+    if (nestedMatch && nestedMatch[1] !== undefined) {
+      // 构建嵌套模板字面量的位置信息
+      const nestedLocation = {
+        filePath: context.filePath,
+        line: nestedNode.loc?.start.line ?? 0,
+        column: nestedNode.loc?.start.column ?? 0,
+      };
+
+      // 主动调用 getKeyAndRecord 提取这个嵌套模板字面量
+      const nestedKey = getKeyAndRecord(
+        nestedOriginalRawString,
+        nestedLocation,
+        context.existingValueToKey,
+        context.generatedKeysMap,
+        context.extractedStrings,
+        context.usedExistingKeysList,
+        context.options
+      );
+
+      if (nestedKey !== undefined) {
+        // 递归处理嵌套模板字面量的表达式
+        const nestedProcessedExpressions = processNestedExpressionsInTemplate(
+          nestedNode.expressions,
+          context,
+          importCallName,
+          nestedTemplatePath
+        );
+
+        // 构建嵌套模板字面量的 interpolation 对象
+        const nestedProperties = nestedProcessedExpressions.map(
+          (nestedExpr, i) =>
+            t.objectProperty(
+              t.identifier(`arg${i + 1}`),
+              nestedExpr as t.Expression
+            )
+        );
+        const nestedInterpolations = t.objectExpression(nestedProperties);
+
+        // 获取标准化后的值
+        const nestedStandardizedValue =
+          context.extractedStrings.find(s => s.key === nestedKey)?.value ||
+          nestedMatch[1];
+
+        // 创建翻译调用替换嵌套模板字面量
+        const nestedReplacementNode = context.smartCallFactory(
+          importCallName,
+          nestedKey,
+          nestedStandardizedValue,
+          nestedInterpolations
+        );
+
+        nestedTemplatePath.replaceWith(nestedReplacementNode);
+      }
+    }
+  }
+}
+
+/**
+ * 处理条件表达式中的字符串字面量
+ * 专门处理三元表达式 condition ? t("key1") : t("key2") 的情况
+ * 目前未使用，保留以备后用
+ */
+function _processConditionalExpression(
+  conditionalExpr: t.ConditionalExpression,
+  context: SharedProcessingContext,
+  importCallName: string
+): t.ConditionalExpression {
+  let consequent = conditionalExpr.consequent;
+  let alternate = conditionalExpr.alternate;
+
+  // 处理 consequent
+  if (t.isStringLiteral(consequent)) {
+    consequent = processConditionalStringLiteral(
+      consequent,
+      context,
+      importCallName
+    );
+  }
+
+  // 处理 alternate
+  if (t.isStringLiteral(alternate)) {
+    alternate = processConditionalStringLiteral(
+      alternate,
+      context,
+      importCallName
+    );
+  }
+
+  return t.conditionalExpression(conditionalExpr.test, consequent, alternate);
+}
+
+/**
+ * 处理条件表达式中的字符串字面量节点
+ */
+function processConditionalStringLiteral(
+  stringLiteral: t.StringLiteral,
+  context: SharedProcessingContext,
+  importCallName: string
+): t.Expression {
+  const nodeValue = stringLiteral.value;
+  const pattern = new RegExp(context.options.pattern);
+  const match = pattern.exec(nodeValue);
+
+  if (match && match[1] !== undefined) {
+    const fullMatch = match[0];
+
+    const deepLocation = {
+      filePath: context.filePath,
+      line: stringLiteral.loc?.start.line ?? 0,
+      column: stringLiteral.loc?.start.column ?? 0,
+    };
+
+    const deepKey = getKeyAndRecord(
+      fullMatch,
+      deepLocation,
+      context.existingValueToKey,
+      context.generatedKeysMap,
+      context.extractedStrings,
+      context.usedExistingKeysList,
+      context.options
+    );
+
+    if (deepKey !== undefined) {
+      return t.callExpression(t.identifier(importCallName), [
+        t.stringLiteral(String(deepKey)),
+      ]);
+    }
+  }
+
+  return stringLiteral;
+}
+
+/**
+ * 构建模板字面量的字符串表示用于模式匹配
+ */
+function buildRawStringForPatternCheck(node: t.TemplateLiteral): string {
+  let rawString = "";
+  node.quasis.forEach((quasi, i) => {
+    rawString += quasi.value.raw;
+    if (i < node.expressions.length) {
+      rawString += "${...}";
+    }
+  });
+  return rawString;
+}
+
+/**
+ * 从模板字面量节点构建原始文本
+ */
+function buildTemplateTextFromNode(node: t.TemplateLiteral): string {
+  let templateText = "";
+  node.quasis.forEach((quasi, i) => {
+    templateText += quasi.value.raw;
+    if (i < node.expressions.length) {
+      templateText += "${...}";
+    }
+  });
+  return templateText;
+}
+
+/**
  * 上下文感知的AST替换器
  * 根据代码上下文智能选择处理策略
  */
@@ -739,8 +1014,6 @@ export function collectContextAwareReplacementInfo(
     },
 
     TemplateLiteral(path) {
-      // TemplateLiteral 有复杂的特殊处理逻辑，暂时保持原有实现
-      // 后续可以进一步优化
       // 跳过tagged template literals
       if (tg.isTaggedTemplateExpression(path.parent)) return;
 
@@ -755,29 +1028,16 @@ export function collectContextAwareReplacementInfo(
       const context = getContextInfo(path);
       const importInfo = getImportInfoForContext(context);
 
-      // --- Handle TemplateLiterals WITH existing expressions ---
+      // 处理带有表达式的模板字面量
       if (node.expressions.length > 0) {
-        // 构建字符串表示以进行模式匹配，使用占位符
-        let originalRawStringForPatternCheck = "";
-        node.quasis.forEach((quasi, i) => {
-          originalRawStringForPatternCheck += quasi.value.raw;
-          if (i < node.expressions.length) {
-            // 使用简单一致的占位符进行匹配
-            originalRawStringForPatternCheck += "${...}";
-          }
-        });
-
-        // 使用非全局模式检查整体结构是否匹配
+        const originalRawStringForPatternCheck =
+          buildRawStringForPatternCheck(node);
         const singleMatchPattern = new RegExp(options.pattern);
-
         const match = singleMatchPattern.exec(originalRawStringForPatternCheck);
 
-        // 检查结构是否匹配模式
         if (match && match[1] !== undefined) {
-          // 调用 getKeyAndRecord 处理包含占位符的字符串
-          // getKeyAndRecord 会内部派生规范值 ("...{argN}...")
           const translationKey = getKeyAndRecord(
-            originalRawStringForPatternCheck, // 传递包含 ${...} 的字符串
+            originalRawStringForPatternCheck,
             location,
             existingValueToKey,
             generatedKeysMap,
@@ -787,274 +1047,29 @@ export function collectContextAwareReplacementInfo(
           );
 
           if (translationKey !== undefined) {
-            // 处理表达式中的嵌套字符串替换
-            const processedExpressions = node.expressions.map(expr => {
-              // 克隆表达式并递归替换其中的字符串字面量
-              const clonedExpr = t.cloneNode(expr);
+            // 使用提取的纯函数处理表达式中的嵌套内容
+            const processedExpressions = processNestedExpressionsInTemplate(
+              node.expressions,
+              sharedContext,
+              importInfo.callName,
+              path
+            );
 
-              // 使用 traverse 遍历表达式，查找并替换嵌套的字符串字面量和模板字面量
-              traverse(
-                clonedExpr,
-                {
-                  StringLiteral(nestedPath) {
-                    const nodeValue = nestedPath.node.value;
-
-                    // 检查是否匹配模式
-                    const pattern = new RegExp(options.pattern);
-
-                    const match = pattern.exec(nodeValue);
-                    if (match && match[1] !== undefined) {
-                      // 这是一个可提取的字符串，主动提取它
-                      // const extractedValue = match[1];
-                      const fullMatch = match[0];
-
-                      // 构建嵌套字符串的位置信息
-                      const nestedLocation = {
-                        filePath,
-                        line: nestedPath.node.loc?.start.line ?? location.line,
-                        column:
-                          nestedPath.node.loc?.start.column ?? location.column,
-                      };
-
-                      // 主动调用 getKeyAndRecord 提取这个嵌套字符串
-                      const nestedKey = getKeyAndRecord(
-                        fullMatch,
-                        nestedLocation,
-                        existingValueToKey,
-                        generatedKeysMap,
-                        extractedStrings,
-                        usedExistingKeysList,
-                        options
-                      );
-
-                      if (nestedKey !== undefined) {
-                        // 创建翻译调用的AST节点
-                        const callExpression = t.callExpression(
-                          t.identifier(importInfo.callName),
-                          [t.stringLiteral(String(nestedKey))]
-                        );
-
-                        nestedPath.replaceWith(callExpression);
-                      }
-                    }
-                  },
-
-                  TemplateLiteral(nestedTemplatePath) {
-                    // 递归处理嵌套的模板字面量
-                    // 跳过tagged template literals
-                    if (
-                      tg.isTaggedTemplateExpression(nestedTemplatePath.parent)
-                    )
-                      return;
-
-                    const nestedNode = nestedTemplatePath.node;
-
-                    // 如果嵌套的模板字面量有表达式，递归处理
-                    if (nestedNode.expressions.length > 0) {
-                      // 构建字符串表示以进行模式匹配
-                      let nestedOriginalRawString = "";
-                      nestedNode.quasis.forEach((quasi, i) => {
-                        nestedOriginalRawString += quasi.value.raw;
-                        if (i < nestedNode.expressions.length) {
-                          nestedOriginalRawString += "${...}";
-                        }
-                      });
-
-                      // 检查是否匹配模式
-                      const singleMatchPattern = new RegExp(options.pattern);
-
-                      const nestedMatch = singleMatchPattern.exec(
-                        nestedOriginalRawString
-                      );
-
-                      if (nestedMatch && nestedMatch[1] !== undefined) {
-                        // 构建嵌套模板字面量的位置信息
-                        const nestedLocation = {
-                          filePath,
-                          line: nestedNode.loc?.start.line ?? location.line,
-                          column:
-                            nestedNode.loc?.start.column ?? location.column,
-                        };
-
-                        // 主动调用 getKeyAndRecord 提取这个嵌套模板字面量
-                        const nestedKey = getKeyAndRecord(
-                          nestedOriginalRawString,
-                          nestedLocation,
-                          existingValueToKey,
-                          generatedKeysMap,
-                          extractedStrings,
-                          usedExistingKeysList,
-                          options
-                        );
-
-                        if (nestedKey !== undefined) {
-                          // 递归处理嵌套模板字面量的表达式
-                          const nestedProcessedExpressions =
-                            nestedNode.expressions.map(nestedExpr => {
-                              // 对于嵌套表达式，我们直接检查是否有匹配的字符串字面量
-                              // 由于这已经是相当深的嵌套，我们保持简单的处理方式
-                              if (t.isConditionalExpression(nestedExpr)) {
-                                // 处理三元表达式 condition ? t("key1") : t("key2")
-                                let consequent = nestedExpr.consequent;
-                                let alternate = nestedExpr.alternate;
-
-                                // 处理 consequent
-                                if (t.isStringLiteral(consequent)) {
-                                  const consequentValue = consequent.value;
-                                  const pattern = new RegExp(options.pattern);
-
-                                  const match = pattern.exec(consequentValue);
-                                  if (match && match[1] !== undefined) {
-                                    // const extractedValue = match[1];
-                                    const fullMatch = match[0];
-
-                                    const deepLocation = {
-                                      filePath,
-                                      line:
-                                        consequent.loc?.start.line ??
-                                        location.line,
-                                      column:
-                                        consequent.loc?.start.column ??
-                                        location.column,
-                                    };
-
-                                    const deepKey = getKeyAndRecord(
-                                      fullMatch,
-                                      deepLocation,
-                                      existingValueToKey,
-                                      generatedKeysMap,
-                                      extractedStrings,
-                                      usedExistingKeysList,
-                                      options
-                                    );
-
-                                    if (deepKey !== undefined) {
-                                      consequent = t.callExpression(
-                                        t.identifier(importInfo.callName),
-                                        [t.stringLiteral(String(deepKey))]
-                                      );
-                                    }
-                                  }
-                                }
-
-                                // 处理 alternate
-                                if (t.isStringLiteral(alternate)) {
-                                  const alternateValue = alternate.value;
-                                  const pattern = new RegExp(options.pattern);
-
-                                  const match = pattern.exec(alternateValue);
-                                  if (match && match[1] !== undefined) {
-                                    // const extractedValue = match[1];
-                                    const fullMatch = match[0];
-
-                                    const deepLocation = {
-                                      filePath,
-                                      line:
-                                        alternate.loc?.start.line ??
-                                        location.line,
-                                      column:
-                                        alternate.loc?.start.column ??
-                                        location.column,
-                                    };
-
-                                    const deepKey = getKeyAndRecord(
-                                      fullMatch,
-                                      deepLocation,
-                                      existingValueToKey,
-                                      generatedKeysMap,
-                                      extractedStrings,
-                                      usedExistingKeysList,
-                                      options
-                                    );
-
-                                    if (deepKey !== undefined) {
-                                      alternate = t.callExpression(
-                                        t.identifier(importInfo.callName),
-                                        [t.stringLiteral(String(deepKey))]
-                                      );
-                                    }
-                                  }
-                                }
-
-                                return t.conditionalExpression(
-                                  nestedExpr.test,
-                                  consequent,
-                                  alternate
-                                );
-                              }
-
-                              return nestedExpr;
-                            });
-
-                          // 构建嵌套模板字面量的 interpolation 对象
-                          const nestedProperties =
-                            nestedProcessedExpressions.map((nestedExpr, i) =>
-                              t.objectProperty(
-                                t.identifier(`arg${i + 1}`),
-                                nestedExpr as t.Expression
-                              )
-                            );
-                          const nestedInterpolations =
-                            t.objectExpression(nestedProperties);
-
-                          // 获取标准化后的值
-                          const nestedStandardizedValue =
-                            extractedStrings.find(s => s.key === nestedKey)
-                              ?.value || nestedMatch[1];
-
-                          // 创建翻译调用替换嵌套模板字面量
-                          const nestedReplacementNode = smartCallFactory(
-                            importInfo.callName,
-                            nestedKey,
-                            nestedStandardizedValue,
-                            nestedInterpolations
-                          );
-
-                          nestedTemplatePath.replaceWith(nestedReplacementNode);
-                        }
-                      }
-                    }
-                  },
-                },
-                path.scope,
-                path
-              );
-
-              return clonedExpr;
-            });
-
-            // 构建 interpolation 对象 { arg1: expr1, arg2: expr2 }
+            // 构建 interpolation 对象
             const properties = processedExpressions.map((expr, i) =>
               t.objectProperty(
-                t.identifier(`arg${i + 1}`), // key 是 argN
-                expr as t.Expression // value 是处理后的表达式
+                t.identifier(`arg${i + 1}`),
+                expr as t.Expression
               )
             );
             const interpolations = t.objectExpression(properties);
 
-            const originalNode = path.node;
-            // 提取去除分隔符的原始文本用于 i18nCall
-            const pattern = new RegExp(options.pattern);
-            const rawTextMatch = pattern.exec(originalRawStringForPatternCheck);
-            const rawText = rawTextMatch
-              ? rawTextMatch[1]
-              : originalRawStringForPatternCheck;
-
-            // 从 extractedStrings 中获取标准化后的值
             const standardizedValue =
               extractedStrings.find(s => s.key === translationKey)?.value ||
-              rawText;
+              match[1];
 
-            // 构造原始模板字符串文本，去除分隔符并将实际的表达式替换为 ${...} 占位符
-            let originalTemplateText = "";
-            node.quasis.forEach((quasi, i) => {
-              originalTemplateText += quasi.value.raw;
-              if (i < node.expressions.length) {
-                originalTemplateText += "${...}";
-              }
-            });
-
-            // 去除分隔符，得到干净的原始文本
+            const originalTemplateText = buildTemplateTextFromNode(node);
+            const pattern = new RegExp(options.pattern);
             const cleanOriginalText =
               pattern.exec(originalTemplateText)?.[1] || originalTemplateText;
 
@@ -1062,11 +1077,10 @@ export function collectContextAwareReplacementInfo(
               importInfo.callName,
               translationKey,
               standardizedValue,
-              interpolations, // 传递 interpolations 对象
-              cleanOriginalText // 传递去除分隔符的原始文本用于自定义 i18nCall
+              interpolations,
+              cleanOriginalText
             );
 
-            // 插入注释
             if (options.appendExtractedComment) {
               attachExtractedCommentToNode(
                 replacementNode,
@@ -1075,166 +1089,56 @@ export function collectContextAwareReplacementInfo(
               );
             }
 
-            recordPendingReplacement(path, originalNode, replacementNode);
+            recordPendingReplacement(path, path.node, replacementNode);
           }
         }
-        return; // 处理了有表达式的情况，不继续执行
-      }
-
-      // --- Handle TemplateLiterals WITHOUT expressions (原有逻辑) ---
-      const nodeValue = node.quasis.map(q => q.value.raw).join("");
-
-      patternRegex.lastIndex = 0;
-      if (!patternRegex.test(nodeValue)) {
         return;
       }
-      patternRegex.lastIndex = 0;
 
-      // 处理无表达式的模板字符串
-      const matches = Array.from(nodeValue.matchAll(patternRegex));
-
-      if (matches.length === 1) {
-        // 单个匹配 - 检查是否是完整替换还是部分替换
-        const match = matches[0];
-        const fullMatch = match[0];
-        const extractedValue = match[1];
-        const matchStart = match.index!;
-        const matchEnd = matchStart + fullMatch.length;
-
-        const key = getKeyAndRecord(
-          fullMatch,
-          location,
-          existingValueToKey,
-          generatedKeysMap,
-          extractedStrings,
-          usedExistingKeysList,
-          options
-        );
-
-        if (key !== undefined) {
-          const callExpression = smartCallFactory(
-            importInfo.callName,
-            key,
-            extractedValue,
-            undefined,
-            extractedValue
-          );
-
-          if (options.appendExtractedComment) {
-            attachExtractedCommentToNode(
-              callExpression,
-              extractedValue,
-              options.extractedCommentType || "block"
-            );
-          }
-
-          // 检查是否是完整替换（整个模板字符串就是模式）
-          const isFullReplacement =
-            matchStart === 0 && matchEnd === nodeValue.length;
-
-          if (isFullReplacement) {
-            // 完整替换，直接使用callExpression
-            recordPendingReplacement(path, path.node, callExpression);
-          } else {
-            // 部分替换，需要保留周围的文本
-            const parts: string[] = [];
-            const expressions: t.Expression[] = [];
-
-            // 添加匹配前的文本
-            if (matchStart > 0) {
-              parts.push(nodeValue.substring(0, matchStart));
+      // 处理无表达式的模板字面量
+      const templateLiteralConfig: NodeProcessorConfig<t.TemplateLiteral> = {
+        extractValue: node => node.quasis.map(q => q.value.raw).join(""),
+        shouldSkip: () => false,
+        buildReplacement: {
+          single: (callExpression, isFullReplacement, originalValue, _path) => {
+            if (isFullReplacement) {
+              return callExpression;
             } else {
-              parts.push("");
-            }
-
-            // 添加翻译调用
-            expressions.push(callExpression);
-            parts.push("");
-
-            // 添加匹配后的文本
-            if (matchEnd < nodeValue.length) {
-              parts[parts.length - 1] = nodeValue.substring(matchEnd);
-            }
-
-            const templateLiteral = buildTemplateLiteral(parts, expressions);
-            recordPendingReplacement(path, path.node, templateLiteral);
-          }
-        }
-      } else if (matches.length > 1) {
-        // 多个匹配，构建混合的模板字面量
-        const parts: string[] = [];
-        const expressions: t.Expression[] = [];
-        let lastIndex = 0;
-
-        for (const match of matches) {
-          const matchStart = match.index!;
-          const matchEnd = matchStart + match[0].length;
-          const fullMatch = match[0];
-          const extractedValue = match[1];
-
-          // 添加匹配前的文本
-          if (matchStart > lastIndex) {
-            const beforeText = nodeValue.substring(lastIndex, matchStart);
-            parts.push(beforeText);
-          } else if (parts.length === 0) {
-            parts.push("");
-          }
-
-          // 处理提取的值
-          const key = getKeyAndRecord(
-            fullMatch,
-            location,
-            existingValueToKey,
-            generatedKeysMap,
-            extractedStrings,
-            usedExistingKeysList,
-            options
-          );
-
-          if (key !== undefined) {
-            const callExpression = smartCallFactory(
-              importInfo.callName,
-              key,
-              extractedValue,
-              undefined,
-              extractedValue
-            );
-
-            if (options.appendExtractedComment) {
-              attachExtractedCommentToNode(
-                callExpression,
-                extractedValue,
-                options.extractedCommentType || "block"
+              // 部分替换，使用模板字面量
+              const nodeValue = originalValue;
+              const matches = Array.from(
+                nodeValue.matchAll(sharedContext.patternRegex)
               );
+              if (matches.length > 0) {
+                const match = matches[0];
+                const matchStart = match.index!;
+                const matchEnd = matchStart + match[0].length;
+                const parts: string[] = [];
+                const expressions: t.Expression[] = [];
+
+                if (matchStart > 0) {
+                  parts.push(nodeValue.substring(0, matchStart));
+                } else {
+                  parts.push("");
+                }
+
+                expressions.push(callExpression);
+                parts.push("");
+
+                if (matchEnd < nodeValue.length) {
+                  parts[parts.length - 1] = nodeValue.substring(matchEnd);
+                }
+
+                return sharedContext.buildTemplateLiteral(parts, expressions);
+              }
+              return callExpression;
             }
+          },
+          multiple: templateLiteral => templateLiteral,
+        },
+      };
 
-            expressions.push(callExpression);
-            parts.push("");
-          } else {
-            // 如果无法生成key，保留原文本
-            const currentPart = parts[parts.length - 1] || "";
-            parts[parts.length - 1] = currentPart + fullMatch;
-          }
-
-          lastIndex = matchEnd;
-        }
-
-        // 添加剩余文本
-        if (lastIndex < nodeValue.length) {
-          const afterText = nodeValue.substring(lastIndex);
-          if (parts.length > 0) {
-            parts[parts.length - 1] += afterText;
-          } else {
-            parts.push(afterText);
-          }
-        }
-
-        if (expressions.length > 0) {
-          const templateLiteral = buildTemplateLiteral(parts, expressions);
-          recordPendingReplacement(path, path.node, templateLiteral);
-        }
-      }
-      return;
+      processNodeWithPattern(path, templateLiteralConfig);
     },
 
     JSXText(path) {
