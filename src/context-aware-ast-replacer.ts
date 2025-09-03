@@ -13,11 +13,17 @@ import {
 import type { NormalizedTransformOptions } from "./core/config-normalizer";
 import { getI18nCall } from "./core/config-normalizer";
 import * as tg from "./babel-type-guards";
-import { StringReplacer } from "./string-replacer";
 import type { ContextInfo } from "./context-detector";
 import { detectCodeContext } from "./context-detector";
 import type { SmartImportManager, ImportInfo } from "./smart-import-manager";
 import { isJSXAttribute } from "./babel-type-guards";
+// 性能优化工具
+import {
+  CodePositionCalculator,
+  PerformanceMonitor,
+  RegexCache,
+  type LocationInfo,
+} from "./performance";
 
 /**
  * 节点处理器配置接口
@@ -361,6 +367,7 @@ function buildTemplateTextFromNode(node: t.TemplateLiteral): string {
 /**
  * 上下文感知的AST替换器
  * 根据代码上下文智能选择处理策略
+ * 优化版本：集成性能监控和批量处理
  */
 export function collectContextAwareReplacementInfo(
   ast: t.File,
@@ -376,11 +383,20 @@ export function collectContextAwareReplacementInfo(
   changes: ChangeDetail[];
   requiredImports: Set<string>;
 } {
+  // 性能监控
+  const monitor = new PerformanceMonitor();
+  monitor.startTiming("total-processing");
+
   let modified = false;
   const changes: ChangeDetail[] = [];
   const generatedKeysMap = new Map<string, string | number>();
   const requiredImports = new Set<string>();
   const contextCache = new Map<NodePath<t.Node>, ContextInfo>();
+
+  // 创建高性能代码位置计算器
+  monitor.startTiming("position-calculator-init");
+  const positionCalculator = new CodePositionCalculator(originalCode);
+  monitor.endTiming("position-calculator-init");
 
   // 存储所有待替换的节点信息
   const pendingReplacements = new Map<
@@ -393,7 +409,10 @@ export function collectContextAwareReplacementInfo(
     }
   >();
 
-  const patternRegex = new RegExp(options.pattern, "g");
+  // 使用缓存的正则表达式，避免重复编译
+  monitor.startTiming("regex-compilation");
+  const patternRegex = RegexCache.getGlobalRegex(options.pattern);
+  monitor.endTiming("regex-compilation");
 
   // 智能调用工厂函数，根据是否有自定义 i18nCall 来决定参数
   const smartCallFactory = (
@@ -436,37 +455,6 @@ export function collectContextAwareReplacementInfo(
     });
   };
 
-  const extractOriginalText = (
-    code: string,
-    startLine: number,
-    startColumn: number,
-    endLine: number,
-    endColumn: number
-  ): string => {
-    const lines = code.split("\n");
-
-    if (startLine === endLine) {
-      // 单行情况
-      return lines[startLine - 1].substring(startColumn, endColumn);
-    } else {
-      // 多行情况
-      let result = "";
-      for (let i = startLine - 1; i < endLine; i++) {
-        if (i === startLine - 1) {
-          // 第一行：从startColumn开始
-          result += lines[i].substring(startColumn);
-        } else if (i === endLine - 1) {
-          // 最后一行：到endColumn结束
-          result += "\n" + lines[i].substring(0, endColumn);
-        } else {
-          // 中间行：完整行
-          result += "\n" + lines[i];
-        }
-      }
-      return result;
-    }
-  };
-
   const buildTemplateLiteral = (
     parts: string[],
     expressions: t.Expression[]
@@ -477,11 +465,14 @@ export function collectContextAwareReplacementInfo(
     return t.templateLiteral(quasis, expressions);
   };
 
+  // 优化的上下文检测函数 - 使用缓存
   const getContextInfo = (path: NodePath<t.Node>): ContextInfo => {
     if (contextCache.has(path)) {
+      monitor.recordCacheHit("context-detection");
       return contextCache.get(path)!;
     }
 
+    monitor.recordCacheMiss("context-detection");
     const context = detectCodeContext(path);
     contextCache.set(path, context);
     return context;
@@ -1004,16 +995,22 @@ export function collectContextAwareReplacementInfo(
     },
   };
 
+  // 开始AST遍历阶段
+  monitor.startTiming("ast-traversal");
+
   traverse(ast, {
     StringLiteral(path) {
+      monitor.incrementProcessedItems();
       processNodeWithPattern(path, stringLiteralConfig);
     },
 
     JSXAttribute(path) {
+      monitor.incrementProcessedItems();
       processNodeWithPattern(path, jsxAttributeConfig);
     },
 
     TemplateLiteral(path) {
+      monitor.incrementProcessedItems();
       // 跳过tagged template literals
       if (tg.isTaggedTemplateExpression(path.parent)) return;
 
@@ -1142,9 +1139,12 @@ export function collectContextAwareReplacementInfo(
     },
 
     JSXText(path) {
+      monitor.incrementProcessedItems();
       processNodeWithPattern(path, jsxTextConfig);
     },
   });
+
+  monitor.endTiming("ast-traversal");
 
   // 分析待替换节点，标识哪些是顶级节点
   for (const [path, replacement] of pendingReplacements.entries()) {
@@ -1163,11 +1163,49 @@ export function collectContextAwareReplacementInfo(
     }
   }
 
-  // 只处理顶级替换，避免嵌套冲突
+  // 开始批量处理阶段
+  monitor.startTiming("batch-processing");
 
+  // 批量收集位置信息，避免重复计算
+  const locationInfos: LocationInfo[] = [];
+  const replacementInfos: Array<{
+    replacement: any;
+    index: number;
+  }> = [];
+
+  let index = 0;
   for (const [, replacement] of pendingReplacements.entries()) {
-    if (!replacement.isTopLevel) continue; // 跳过非顶级替换
+    if (!replacement.isTopLevel) continue;
 
+    const { originalNode } = replacement;
+    if (originalNode.loc) {
+      locationInfos.push({
+        startLine: originalNode.loc.start.line,
+        startColumn: originalNode.loc.start.column,
+        endLine: originalNode.loc.end.line,
+        endColumn: originalNode.loc.end.column,
+      });
+
+      replacementInfos.push({
+        replacement,
+        index,
+      });
+
+      index++;
+    }
+  }
+
+  // 批量计算所有位置信息
+  monitor.startTiming("batch-position-calculation");
+  const positionInfos =
+    positionCalculator.batchCalculatePositions(locationInfos);
+  monitor.endTiming("batch-position-calculation");
+
+  // 批量生成 ChangeDetail 对象
+  monitor.startTiming("change-detail-generation");
+  for (let i = 0; i < replacementInfos.length; i++) {
+    const { replacement } = replacementInfos[i];
+    const positionInfo = positionInfos[i];
     const { originalNode, replacementNode } = replacement;
 
     if (originalNode.loc) {
@@ -1176,46 +1214,34 @@ export function collectContextAwareReplacementInfo(
         minified: false,
         concise: true,
       };
+
       const replacementCode = Array.isArray(replacementNode)
         ? generateJSXElementsCode(replacementNode, generatorOptions)
         : generate(replacementNode, generatorOptions).code;
 
-      const realOriginalText = extractOriginalText(
-        originalCode,
-        originalNode.loc.start.line,
-        originalNode.loc.start.column,
-        originalNode.loc.end.line,
-        originalNode.loc.end.column
-      );
-
-      const { start, end } = StringReplacer.calculatePosition(
-        originalCode,
-        originalNode.loc.start.line,
-        originalNode.loc.start.column,
-        realOriginalText.length
-      );
-
-      const matchContext = StringReplacer.generateMatchContext(
-        originalCode,
-        originalNode.loc.start.line,
-        originalNode.loc.start.column,
-        realOriginalText
-      );
-
       changes.push({
         filePath,
-        original: realOriginalText,
+        original: positionInfo.text,
         replacement: replacementCode,
         line: originalNode.loc.start.line,
         column: originalNode.loc.start.column,
         endLine: originalNode.loc.end.line,
         endColumn: originalNode.loc.end.column,
-        start,
-        end,
-        matchContext,
+        start: positionInfo.start,
+        end: positionInfo.end,
+        matchContext: positionInfo.matchContext,
       });
       modified = true;
     }
+  }
+
+  monitor.endTiming("change-detail-generation");
+  monitor.endTiming("batch-processing");
+  monitor.endTiming("total-processing");
+
+  // 输出性能报告（仅在开发模式下）
+  if (process.env.NODE_ENV === "development" || process.env.PERFORMANCE_DEBUG) {
+    monitor.printReport();
   }
 
   return { modified, changes, requiredImports };
