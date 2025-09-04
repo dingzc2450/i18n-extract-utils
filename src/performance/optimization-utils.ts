@@ -178,7 +178,7 @@ export class ChunkedProcessor {
  * 缓存装饰器工厂
  * 为函数添加结果缓存功能
  */
-export function createCachedFunction<Args extends any[], Return>(
+export function createCachedFunction<Args extends unknown[], Return>(
   fn: (...args: Args) => Return,
   keyGenerator?: (...args: Args) => string,
   maxCacheSize: number = 1000

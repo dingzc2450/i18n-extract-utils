@@ -390,7 +390,7 @@ export function normalizeConfig(
     ...userOptions,
     i18nConfig: {
       ...userOptions.i18nConfig,
-      framework: detectedFramework as any,
+      framework: detectedFramework,
     },
   };
 
