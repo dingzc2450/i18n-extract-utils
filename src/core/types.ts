@@ -2,7 +2,12 @@
  * 核心处理器相关类型定义
  */
 
-import type { ExtractedString, UsedExistingKey, ChangeDetail } from "../types";
+import type {
+  ExtractedString,
+  UsedExistingKey,
+  ChangeDetail,
+  Framework,
+} from "../types";
 import type { I18nError } from "./error-handler";
 import type { NormalizedTransformOptions } from "./config-normalizer";
 import type { ParserOptions } from "@babel/parser";
@@ -132,4 +137,8 @@ export interface ProcessingResult {
   usedExistingKeysList: UsedExistingKey[];
   changes: ChangeDetail[];
   error?: I18nError; // 错误信息，如果处理过程中出现错误
+  /**
+   * 当前处理用到的框架
+   */
+  framework: Framework;
 }

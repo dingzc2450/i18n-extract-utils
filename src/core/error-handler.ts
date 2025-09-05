@@ -311,7 +311,7 @@ export function createI18nError(
 
   // 从原始错误中提取更详细的信息
   const details = options.originalError
-    ? options.originalError.message
+    ? `${options.originalError.message}\n${options.originalError.stack}`
     : undefined;
 
   return {

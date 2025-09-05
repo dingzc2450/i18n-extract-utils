@@ -10,10 +10,8 @@ import * as t from "@babel/types";
 import { StringReplacer } from "../string-replacer";
 import type { ImportInfo } from "../smart-import-manager";
 import { SmartImportManager } from "../smart-import-manager";
-import { fallbackTransform } from "../fallback-transform";
 import { ASTParserUtils, ImportHookUtils } from "./utils";
 import { collectContextAwareReplacementInfo } from "../context-aware-ast-replacer";
-import { createI18nError, logError } from "./error-handler";
 import type { NormalizedTransformOptions } from "./config-normalizer";
 import {
   normalizeConfig,
@@ -69,141 +67,106 @@ export class CoreProcessor {
     options: TransformOptions,
     existingValueToKey?: Map<string, string | number>
   ): ProcessingResult {
-    try {
-      // 规范化配置，确保一致性
-      const normalizedOptions = normalizeConfig(options, code, filePath);
+    // 规范化配置，确保一致性
+    const normalizedOptions = normalizeConfig(options, code, filePath);
 
-      // 1. 确定处理模式 - 默认使用上下文感知模式
-      const mode = this.determineProcessingMode(normalizedOptions);
+    // 1. 确定处理模式 - 默认使用上下文感知模式
+    const mode = this.determineProcessingMode(normalizedOptions);
 
-      // 2. 选择合适的插件
-      const plugin = this.selectPlugin(code, filePath, normalizedOptions);
+    // 2. 选择合适的插件
+    const plugin = this.selectPlugin(code, filePath, normalizedOptions);
 
-      // 3. 预处理
-      const processedCode = plugin.preProcess
-        ? plugin.preProcess(code, normalizedOptions)
-        : code;
+    // 3. 预处理
+    const processedCode = plugin.preProcess
+      ? plugin.preProcess(code, normalizedOptions)
+      : code;
 
-      // 快速检查代码中是否包含疑似待翻译的内容
-      if (!this.hasTranslatableContent(processedCode, normalizedOptions)) {
-        // 如果没有疑似待翻译内容，直接返回原代码
-        return {
-          code: processedCode,
-          extractedStrings: [],
-          usedExistingKeysList: [],
-          changes: [],
-        };
-      }
-
-      // 4. 解析AST
-      const parserConfig = this.getParserConfig(
-        plugin,
-        filePath,
-        normalizedOptions
-      );
-      const ast = parse(processedCode, parserConfig);
-
-      // 5. 初始化智能导入管理器
-      this.importManager.init(
-        normalizedOptions.normalizedI18nConfig.i18nImport,
-        normalizedOptions.normalizedI18nConfig.nonReactConfig
-      );
-      //  提取和替换
-      const result = this.extractAndReplace(
-        ast,
-        processedCode,
-        mode,
-        normalizedOptions,
-        existingValueToKey || new Map(),
-        filePath
-      );
-
-      //  如果没有修改，直接返回
-      if (!result.modified || result.changes.length === 0) {
-        return {
-          code: processedCode,
-          extractedStrings: result.extractedStrings,
-          usedExistingKeysList: result.usedExistingKeysList,
-          changes: result.changes,
-        };
-      }
-
-      //  应用字符串替换
-      let modifiedCode = StringReplacer.applyChanges(
-        processedCode,
-        result.changes
-      );
-
-      //  后处理 - 添加导入、hooks等
-      const context: ProcessingContext = {
-        filePath,
-        originalCode: code,
-        hasModifications: true,
-        result,
-        requiredImports: result.requiredImports,
-        detectedFramework: plugin.name,
-      };
-
-      // 统一处理导入和hook调用
-      modifiedCode = this.processImportsAndHooks(
-        modifiedCode,
-        normalizedOptions,
-        context,
-        plugin
-      );
-
-      // 插件特定的后处理（可选）
-      if (plugin.postProcess) {
-        modifiedCode = plugin.postProcess(
-          modifiedCode,
-          normalizedOptions,
-          context
-        );
-      }
-
+    // 快速检查代码中是否包含疑似待翻译的内容
+    if (!this.hasTranslatableContent(processedCode, normalizedOptions)) {
+      // 如果没有疑似待翻译内容，直接返回原代码
       return {
-        code: modifiedCode,
+        code: processedCode,
+        extractedStrings: [],
+        usedExistingKeysList: [],
+        changes: [],
+        framework: normalizedOptions.normalizedI18nConfig.framework,
+      };
+    }
+
+    // 4. 解析AST
+    const parserConfig = this.getParserConfig(
+      plugin,
+      filePath,
+      normalizedOptions
+    );
+    const ast = parse(processedCode, parserConfig);
+
+    // 5. 初始化智能导入管理器
+    this.importManager.init(
+      normalizedOptions.normalizedI18nConfig.i18nImport,
+      normalizedOptions.normalizedI18nConfig.nonReactConfig
+    );
+    //  提取和替换
+    const result = this.extractAndReplace(
+      ast,
+      processedCode,
+      mode,
+      normalizedOptions,
+      existingValueToKey || new Map(),
+      filePath
+    );
+
+    //  如果没有修改，直接返回
+    if (!result.modified || result.changes.length === 0) {
+      return {
+        code: processedCode,
         extractedStrings: result.extractedStrings,
         usedExistingKeysList: result.usedExistingKeysList,
         changes: result.changes,
-      };
-    } catch (error) {
-      // 使用统一的错误处理
-      let errorCode = "PARSING001"; // 默认为解析错误
-      let params = [String(error)];
-
-      if (error instanceof Error) {
-        if (error.message.includes("No plugin found")) {
-          errorCode = "PLUGIN002";
-          params = [filePath];
-        } else if (error.message.includes("Vue")) {
-          errorCode = "VUE001";
-          params = [error.message];
-        } else if (error.message.includes("React")) {
-          errorCode = "REACT001";
-          params = [error.message];
-        }
-      }
-
-      // 创建并记录错误
-      const i18nError = createI18nError(errorCode, params, {
-        filePath,
-        originalError: error instanceof Error ? error : undefined,
-      });
-
-      logError(i18nError);
-
-      const extractedStrings: ExtractedString[] = [];
-      const usedExistingKeysList: UsedExistingKey[] = [];
-
-      return {
-        code: fallbackTransform(code, extractedStrings, options),
-        extractedStrings,
-        usedExistingKeysList,
-        changes: [],
-        error: i18nError, // 包含错误信息
+        framework: normalizedOptions.normalizedI18nConfig.framework,
       };
     }
+
+    //  应用字符串替换
+    let modifiedCode = StringReplacer.applyChanges(
+      processedCode,
+      result.changes
+    );
+
+    //  后处理 - 添加导入、hooks等
+    const context: ProcessingContext = {
+      filePath,
+      originalCode: code,
+      hasModifications: true,
+      result,
+      requiredImports: result.requiredImports,
+      detectedFramework: plugin.name,
+    };
+
+    // 统一处理导入和hook调用
+    modifiedCode = this.processImportsAndHooks(
+      modifiedCode,
+      normalizedOptions,
+      context,
+      plugin
+    );
+
+    // 插件特定的后处理（可选）
+    if (plugin.postProcess) {
+      modifiedCode = plugin.postProcess(
+        modifiedCode,
+        normalizedOptions,
+        context
+      );
+    }
+
+    return {
+      code: modifiedCode,
+      extractedStrings: result.extractedStrings,
+      usedExistingKeysList: result.usedExistingKeysList,
+      changes: result.changes,
+      framework: normalizedOptions.normalizedI18nConfig.framework,
+    };
   }
 
   /**

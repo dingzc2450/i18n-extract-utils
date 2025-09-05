@@ -137,7 +137,6 @@ export function transformCode(
     // 根据错误类型确定错误代码
     if (error instanceof Error) {
       const errorMessage = error.message;
-
       if (
         errorMessage.includes("BABEL_PARSER_SYNTAX_ERROR") ||
         errorMessage.includes("Unexpected token")
