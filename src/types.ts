@@ -132,6 +132,11 @@ export interface TransformOptions {
    * 目前仅支持plugins属性，未来可扩展其他ParserOptions属性
    */
   parserOptions?: CustomParserOptions;
+  /**
+   * 禁用兜底处理流程 react,react15框架将在失败时候直接调用兜底处理流程提取多语言
+   * Disable fallback processing
+   */
+  disabledFallback?: boolean;
 }
 
 export interface ExtractedString {

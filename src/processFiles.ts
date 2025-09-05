@@ -180,9 +180,11 @@ export function transformCode(
 
     // 即使出错也返回一致的结构，避免调用方需要处理不同的返回类型
     return {
-      code: [Framework.React, Framework.React15].includes(framework)
-        ? fallbackTransform(code, extractedStrings, options)
-        : FileCacheUtils.readFileWithCache(filePath, { noCache: true }),
+      code:
+        !options.disabledFallback &&
+        [Framework.React, Framework.React15].includes(framework)
+          ? fallbackTransform(code, extractedStrings, options)
+          : FileCacheUtils.readFileWithCache(filePath, { noCache: true }),
       extractedStrings,
       usedExistingKeysList: [],
       changes: [],
