@@ -15,9 +15,13 @@ function createTempFile(content: string): string {
 }
 const tempFiles: string[] = [];
 afterEach(() => {
-  tempFiles.forEach((file) => {
+  tempFiles.forEach(file => {
     if (fs.existsSync(file)) {
-      try { fs.unlinkSync(file); } catch (err) { console.error(`Error removing temp file ${file}:`, err); }
+      try {
+        fs.unlinkSync(file);
+      } catch (err) {
+        console.error(`Error removing temp file ${file}:`, err);
+      }
     }
   });
   tempFiles.length = 0;
@@ -47,6 +51,5 @@ describe("Fallback Mechanism", () => {
     expect(result.code).toContain('t("Welcome to our app")');
     // Extraction should still work
     expect(result.extractedStrings.length).toBe(0);
-    
   });
 });

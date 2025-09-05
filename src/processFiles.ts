@@ -6,12 +6,13 @@
 import fs from "fs";
 import path from "path";
 import { glob } from "glob";
-import type {
-  ExtractedString,
-  TransformOptions,
-  UsedExistingKey,
-  FileModificationRecord,
-  ChangeDetail,
+import {
+  type ExtractedString,
+  type TransformOptions,
+  type UsedExistingKey,
+  type FileModificationRecord,
+  type ChangeDetail,
+  Framework,
 } from "./types";
 import { FileCacheUtils } from "./core/utils";
 import { createProcessorWithDefaultPlugins } from "./plugins";
@@ -105,6 +106,7 @@ function loadExistingTranslations(options: TransformOptions): {
  */
 // 导入I18nError类型
 import type { I18nError } from "./core/error-handler";
+import { fallbackTransform } from "./fallback-transform";
 
 export function transformCode(
   filePath: string,
@@ -117,15 +119,15 @@ export function transformCode(
   changes: ChangeDetail[];
   error?: I18nError; // 可选的错误信息
 } {
+  // 第一步：读取文件内容
+  // 文件内容缓存由FileCacheUtils处理，避免重复读取相同文件
+  const code = FileCacheUtils.readFileWithCache(filePath);
+
+  // 第二步：创建预配置的处理器
+  // 处理器包含所有已注册的框架插件（React、Vue等）
+  const processor = createProcessorWithDefaultPlugins();
+
   try {
-    // 第一步：读取文件内容
-    // 文件内容缓存由FileCacheUtils处理，避免重复读取相同文件
-    const code = FileCacheUtils.readFileWithCache(filePath);
-
-    // 第二步：创建预配置的处理器
-    // 处理器包含所有已注册的框架插件（React、Vue等）
-    const processor = createProcessorWithDefaultPlugins();
-
     // 第三步：执行代码处理并返回结果
     // filePath在processCode中用于AST解析配置和插件选择，不可移除
     return processor.processCode(code, filePath, options, existingValueToKey);
@@ -169,11 +171,19 @@ export function transformCode(
     });
 
     logError(i18nError);
+    const { framework } = processor.normalizeConfig(
+      options,
+      code,
+      filePath
+    ).normalizedI18nConfig;
+    const extractedStrings: ExtractedString[] = [];
 
     // 即使出错也返回一致的结构，避免调用方需要处理不同的返回类型
     return {
-      code: FileCacheUtils.readFileWithCache(filePath, { noCache: true }),
-      extractedStrings: [],
+      code: [Framework.React, Framework.React15].includes(framework)
+        ? fallbackTransform(code, extractedStrings, options)
+        : FileCacheUtils.readFileWithCache(filePath, { noCache: true }),
+      extractedStrings,
       usedExistingKeysList: [],
       changes: [],
       error: i18nError, // 添加错误信息到返回值

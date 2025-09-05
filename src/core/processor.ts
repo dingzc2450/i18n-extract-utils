@@ -57,7 +57,16 @@ export class CoreProcessor {
   registerPlugin(plugin: FrameworkPlugin): void {
     this.plugins.push(plugin);
   }
-
+  /***
+   * 格式化配置
+   */
+  normalizeConfig(
+    options: TransformOptions = {},
+    code: string,
+    filePath: string = ""
+  ): NormalizedTransformOptions {
+    return normalizeConfig(options, code, filePath);
+  }
   /**
    * 处理代码的主入口
    */
@@ -68,7 +77,7 @@ export class CoreProcessor {
     existingValueToKey?: Map<string, string | number>
   ): ProcessingResult {
     // 规范化配置，确保一致性
-    const normalizedOptions = normalizeConfig(options, code, filePath);
+    const normalizedOptions = this.normalizeConfig(options, code, filePath);
 
     // 1. 确定处理模式 - 默认使用上下文感知模式
     const mode = this.determineProcessingMode(normalizedOptions);
