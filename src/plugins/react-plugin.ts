@@ -9,7 +9,6 @@ import type {
   ImportRequirement,
   ProcessingContext,
 } from "../core/types";
-import type { TransformOptions } from "../types";
 import { Framework } from "../types";
 
 import type { NormalizedTransformOptions } from "../core";
@@ -46,14 +45,14 @@ export class ReactPlugin implements FrameworkPlugin {
    * 获取React所需的导入和Hook需求
    */
   getRequiredImportsAndHooks(
-    options: TransformOptions,
+    options: NormalizedTransformOptions,
     _context: ProcessingContext
   ): {
     imports: ImportRequirement[];
     hooks: HookRequirement[];
   } {
     // 检查是否有非React配置，如果有，则回退到上下文感知逻辑
-    if (options.i18nConfig?.nonReactConfig) {
+    if (options.normalizedI18nConfig?.nonReactConfig) {
       return { imports: [], hooks: [] }; // 让上下文感知逻辑处理
     }
 
@@ -97,32 +96,22 @@ export class ReactPlugin implements FrameworkPlugin {
   /**
    * 获取Hook名称
    */
-  private getHookName(options: TransformOptions): string {
-    return (
-      options.i18nConfig?.i18nImport?.importName ||
-      options.hookName ||
-      "useTranslation"
-    );
+  private getHookName(options: NormalizedTransformOptions): string {
+    return options.normalizedI18nConfig.i18nImport.importName;
   }
 
   /**
    * 获取Hook来源
    */
-  private getHookSource(options: TransformOptions): string {
-    return (
-      options.i18nConfig?.i18nImport?.source ||
-      options.hookImport ||
-      "react-i18next"
-    );
+  private getHookSource(options: NormalizedTransformOptions): string {
+    return options.normalizedI18nConfig.i18nImport.source;
   }
 
   /**
    * 获取翻译方法名称
    */
-  private getTranslationMethod(options: TransformOptions): string {
-    return (
-      options.i18nConfig?.i18nImport?.name || options.translationMethod || "t"
-    );
+  private getTranslationMethod(options: NormalizedTransformOptions): string {
+    return options.normalizedI18nConfig.i18nImport.name;
   }
 
   /**

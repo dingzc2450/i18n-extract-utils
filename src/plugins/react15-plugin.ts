@@ -8,7 +8,6 @@ import type {
   ImportRequirement,
   HookRequirement,
 } from "../core/types";
-import type { TransformOptions } from "../types";
 import type { NormalizedTransformOptions } from "../core/config-normalizer";
 import type { ParserOptions } from "@babel/parser";
 import { Framework } from "../types";
@@ -45,7 +44,7 @@ export class React15Plugin implements FrameworkPlugin {
    * 获取React15所需的导入和Hook需求
    * React15不需要hooks，只需要直接导入翻译函数
    */
-  getRequiredImportsAndHooks(options: TransformOptions): {
+  getRequiredImportsAndHooks(options: NormalizedTransformOptions): {
     imports: ImportRequirement[];
     hooks: HookRequirement[];
   } {
@@ -54,7 +53,7 @@ export class React15Plugin implements FrameworkPlugin {
     let importSource = "i18n";
 
     // 只有在明确指定了不同源时才覆盖默认的"i18n"
-    const explicitSource = options.i18nConfig?.i18nImport?.source;
+    const explicitSource = options.normalizedI18nConfig.i18nImport.source;
     if (explicitSource && explicitSource !== "react-i18next") {
       importSource = explicitSource;
     }
@@ -85,9 +84,7 @@ export class React15Plugin implements FrameworkPlugin {
   /**
    * 获取翻译函数名 (React15使用的函数名)
    */
-  private getFunctionName(options: TransformOptions): string {
-    return (
-      options.i18nConfig?.i18nImport?.name || options.translationMethod || "t"
-    );
+  private getFunctionName(options: NormalizedTransformOptions): string {
+    return options.normalizedI18nConfig.i18nImport.name;
   }
 }

@@ -431,9 +431,6 @@ export function normalizeConfig(
 
   // 创建规范化的转换选项
   const result: NormalizedTransformOptions = {
-    // 传递其他原始配置（向后兼容）
-    // TODO 待移除
-    ...userOptions,
     // 基础配置 - 使用用户配置或默认值
     pattern: userOptions.pattern || CONFIG_DEFAULTS.PATTERN,
     outputPath: userOptions.outputPath || CONFIG_DEFAULTS.OUTPUT_PATH,

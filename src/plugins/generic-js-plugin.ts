@@ -9,7 +9,6 @@ import type {
   ImportRequirement,
   HookRequirement,
 } from "../core/types";
-import type { TransformOptions } from "../types";
 import type { NormalizedTransformOptions } from "../core/config-normalizer";
 
 /**
@@ -46,7 +45,7 @@ export class GenericJSPlugin implements FrameworkPlugin {
    * 获取通用JS所需的导入需求
    */
   getRequiredImportsAndHooks(
-    options: TransformOptions,
+    options: NormalizedTransformOptions,
     _context: ProcessingContext
   ): {
     imports: ImportRequirement[];
@@ -56,21 +55,18 @@ export class GenericJSPlugin implements FrameworkPlugin {
     const imports: ImportRequirement[] = [];
     const hooks: HookRequirement[] = [];
 
-    // 如果配置了i18n导入，添加相应的导入
-    if (options.i18nConfig?.i18nImport) {
-      const { source, importName, name } = options.i18nConfig.i18nImport;
+    const { source, importName, name } =
+      options.normalizedI18nConfig.i18nImport;
 
-      if (source && importName) {
-        imports.push({
-          source,
-          specifiers: [
-            { name: importName, alias: name !== importName ? name : undefined },
-          ],
-          isDefault: false,
-        });
-      }
+    if (source && importName) {
+      imports.push({
+        source,
+        specifiers: [
+          { name: importName, alias: name !== importName ? name : undefined },
+        ],
+        isDefault: false,
+      });
     }
-
     return { imports, hooks };
   }
 

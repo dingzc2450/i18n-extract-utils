@@ -12,12 +12,7 @@ import type {
   ImportRequirement,
   HookRequirement,
 } from "../core/types";
-import type {
-  ExtractedString,
-  TransformOptions,
-  UsedExistingKey,
-  ChangeDetail,
-} from "../types";
+import type { ExtractedString, UsedExistingKey, ChangeDetail } from "../types";
 import type { NormalizedTransformOptions } from "../core/config-normalizer";
 import type { ParserOptions } from "@babel/parser";
 import { parse } from "@babel/parser";
@@ -62,7 +57,7 @@ export class VuePlugin implements FrameworkPlugin {
   /**
    * Vue插件完全接管处理，返回带匹配字符串的占位符确保postProcess被调用
    */
-  preProcess(_code: string, _options: TransformOptions): string {
+  preProcess(_code: string, _options: NormalizedTransformOptions): string {
     // 对于Vue文件，返回一个包含匹配字符串的占位符
     // 这确保CoreProcessor会检测到修改并调用postProcess
 
