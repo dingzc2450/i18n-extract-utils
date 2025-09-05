@@ -325,10 +325,10 @@ export function collectContextAwareReplacementInfo(
   }
 
   // 开始AST遍历阶段（优化版本）
-  // 温度优化：保持原有逻辑，但添加性能监控
+  // 监控：保持原有逻辑，但添加性能监控
   monitor.startTiming("ast-traversal");
 
-  // 温度优化：清理此部分的复杂逻辑，保持简单的单次遍历
+  // 清理此部分的复杂逻辑，保持简单的单次遍历
   traverse(ast, {
     StringLiteral(path) {
       monitor.incrementProcessedItems();

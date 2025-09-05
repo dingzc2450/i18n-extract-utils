@@ -4,6 +4,7 @@
  */
 
 import type { CallExpression } from "@babel/types";
+import type { ParserOptions } from "@babel/parser";
 import type { NonReactI18nConfig, TransformOptions } from "../types";
 import { Framework } from "../types";
 
@@ -78,6 +79,9 @@ export interface NormalizedTransformOptions {
 
   // i18n配置 - 已规范化
   normalizedI18nConfig: NormalizedI18nConfig;
+
+  // 解析器配置 - 已规范化
+  parserOptions: Required<Pick<ParserOptions, "plugins">>;
 
   // 可选配置（保持原样）
   generateKey?: (value: string, filePath: string) => string | number;
@@ -334,6 +338,26 @@ function normalizeFramework(
 }
 
 /**
+ * 规范化解析器选项
+ * 处理用户自定义的ParserOptions，目前仅支持plugins属性
+ */
+function normalizeParserOptions(
+  options: TransformOptions
+): Required<Pick<ParserOptions, "plugins">> {
+  // 如果用户有自定义的parserOptions配置
+  if (options.parserOptions?.plugins) {
+    return {
+      plugins: [...options.parserOptions.plugins], // 创建副本以保证不可变性
+    };
+  }
+
+  // 默认返回空插件数组，在实际使用时会与默认插件合并
+  return {
+    plugins: [],
+  };
+}
+
+/**
  * 规范化非React配置
  */
 function normalizeNonReactConfig(
@@ -402,8 +426,14 @@ export function normalizeConfig(
     i18nCall: userOptions.i18nConfig?.i18nCall, // 确保传递i18nCall配置
   };
 
+  // 规范化解析器选项
+  const normalizedParserOptions = normalizeParserOptions(userOptions);
+
   // 创建规范化的转换选项
-  return {
+  const result: NormalizedTransformOptions = {
+    // 传递其他原始配置（向后兼容）
+    // TODO 待移除
+    ...userOptions,
     // 基础配置 - 使用用户配置或默认值
     pattern: userOptions.pattern || CONFIG_DEFAULTS.PATTERN,
     outputPath: userOptions.outputPath || CONFIG_DEFAULTS.OUTPUT_PATH,
@@ -421,13 +451,15 @@ export function normalizeConfig(
     // i18n配置
     normalizedI18nConfig,
 
+    // 解析器配置
+    parserOptions: normalizedParserOptions,
+
     // 可选配置（直接传递，不处理）
     generateKey: userOptions.generateKey,
     existingTranslations: userOptions.existingTranslations,
-
-    // 传递其他原始配置（向后兼容）
-    ...userOptions,
   };
+
+  return result;
 }
 
 /**

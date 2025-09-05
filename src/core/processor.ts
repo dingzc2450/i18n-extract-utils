@@ -96,7 +96,11 @@ export class CoreProcessor {
       }
 
       // 4. 解析AST
-      const parserConfig = this.getParserConfig(plugin, filePath);
+      const parserConfig = this.getParserConfig(
+        plugin,
+        filePath,
+        normalizedOptions
+      );
       const ast = parse(processedCode, parserConfig);
 
       // 5. 初始化智能导入管理器
@@ -335,7 +339,22 @@ export class CoreProcessor {
   /**
    * 获取解析器配置
    */
-  private getParserConfig(plugin: FrameworkPlugin, filePath: string): object {
+  private getParserConfig(
+    plugin: FrameworkPlugin,
+    filePath: string,
+    options?: NormalizedTransformOptions
+  ): object {
+    // 如果有规范化的选项，使用支持用户自定义插件的方法
+    if (options) {
+      const pluginConfig = plugin.getParserConfig?.() || {};
+      return ASTParserUtils.getParserConfigFromOptions(
+        filePath,
+        options,
+        pluginConfig.plugins || []
+      );
+    }
+
+    // 向后兼容：使用原始方法
     const defaultConfig = ASTParserUtils.getParserConfig(filePath);
     const pluginConfig = plugin.getParserConfig?.() || {};
 
@@ -440,10 +459,7 @@ export class CoreProcessor {
     importRequirements: ImportRequirement[],
     hookRequirements: HookRequirement[],
     filePath: string = "",
-    options: Pick<
-      NormalizedTransformOptions,
-      "normalizedI18nConfig"
-    > = {} as NormalizedTransformOptions
+    options: NormalizedTransformOptions = {} as NormalizedTransformOptions
   ): string {
     if (importRequirements.length === 0 && hookRequirements.length === 0) {
       return code;
@@ -461,7 +477,8 @@ export class CoreProcessor {
           modifiedCode = this.addOrMergeImports(
             modifiedCode,
             importRequirements,
-            filePath
+            filePath,
+            options // 传递完整的规范化选项以支持用户自定义插件
           );
         } else {
           // 旧的、非合并的添加逻辑
@@ -516,9 +533,12 @@ export class CoreProcessor {
   private addOrMergeImports(
     code: string,
     importRequirements: ImportRequirement[],
-    filePath: string
+    filePath: string,
+    options?: NormalizedTransformOptions
   ): string {
-    const parserConfig = ASTParserUtils.getParserConfig(filePath);
+    const parserConfig = options
+      ? ASTParserUtils.getParserConfigFromOptions(filePath, options)
+      : ASTParserUtils.getParserConfig(filePath);
     const ast = parse(code, {
       ...parserConfig,
       sourceFilename: filePath,

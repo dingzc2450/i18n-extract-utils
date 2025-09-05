@@ -7,6 +7,7 @@ import type { ParserOptions } from "@babel/parser";
 import { parse } from "@babel/parser";
 import type * as t from "@babel/types";
 import type { ImportRequirement } from "./types";
+import type { NormalizedTransformOptions } from "./config-normalizer";
 import fs from "fs";
 /**
  * AST解析工具类
@@ -54,6 +55,32 @@ export class ASTParserUtils {
   }
 
   /**
+   * 从规范化配置获取解析器配置，支持用户自定义插件
+   */
+  static getParserConfigFromOptions(
+    filePath: string,
+    options: NormalizedTransformOptions,
+    additionalPlugins: ParserOptions["plugins"] = []
+  ): ParserOptions {
+    const defaultConfig: ParserOptions = this.getParserConfig(filePath);
+
+    // 合并用户自定义插件、默认插件和额外插件
+    const allPlugins = [
+      ...(defaultConfig.plugins || []),
+      ...(options.parserOptions.plugins || []),
+      ...additionalPlugins,
+    ];
+
+    // 去除重复的插件
+    const uniquePlugins = Array.from(new Set(allPlugins));
+
+    return {
+      ...defaultConfig,
+      plugins: uniquePlugins,
+    };
+  }
+
+  /**
    * 安全解析代码
    */
   static parseCode(
@@ -62,6 +89,23 @@ export class ASTParserUtils {
     additionalPlugins: ParserOptions["plugins"] = []
   ): t.File {
     const config = this.getParserConfig(filePath, additionalPlugins);
+    return parse(code, config);
+  }
+
+  /**
+   * 使用规范化配置安全解析代码，支持用户自定义插件
+   */
+  static parseCodeWithOptions(
+    code: string,
+    filePath: string,
+    options: NormalizedTransformOptions,
+    additionalPlugins: ParserOptions["plugins"] = []
+  ): t.File {
+    const config = this.getParserConfigFromOptions(
+      filePath,
+      options,
+      additionalPlugins
+    );
     return parse(code, config);
   }
 }

@@ -1,5 +1,5 @@
 import { processFiles, transformCode } from "./processFiles";
-import { TransformOptions } from "./types";
+import { TransformOptions, CustomParserOptions } from "./types";
 
 // 导出核心模块
 export { CoreProcessor, createProcessorWithDefaultPlugins } from "./core";
@@ -14,7 +14,7 @@ export {
 // 导出配置系统
 export { EnhancedProcessor, ConfigExamples } from "./config";
 
-export { TransformOptions };
+export { TransformOptions, CustomParserOptions };
 export { transformCode };
 
 /**

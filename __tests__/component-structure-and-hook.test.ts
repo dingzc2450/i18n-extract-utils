@@ -16,7 +16,7 @@ function createTempFile(content: string): string {
 
 const tempFiles: string[] = [];
 afterEach(() => {
-  tempFiles.forEach((file) => {
+  tempFiles.forEach(file => {
     if (fs.existsSync(file)) fs.unlinkSync(file);
   });
   tempFiles.length = 0;
@@ -45,11 +45,9 @@ export default SearchForm;
 
     const lines = result.code.split("\n");
     const importLineIndex = lines.findIndex(
-      (line) => line.trim() === 'import { useTranslations } from "next-intl";'
+      line => line.trim() === 'import { useTranslations } from "next-intl";'
     );
-    const useClientIndex = lines.findIndex((line) =>
-      line.includes("use client")
-    );
+    const useClientIndex = lines.findIndex(line => line.includes("use client"));
     expect(useClientIndex).not.toBe(-1);
     expect(importLineIndex).toBeGreaterThan(useClientIndex);
 
@@ -60,7 +58,7 @@ export default SearchForm;
     expect(importLineIndex).toBeGreaterThan(otherImportIndex);
 
     const hookLine = "const { t } = useTranslations();";
-    const hookLineIndex = lines.findIndex((line) => line.trim() === hookLine);
+    const hookLineIndex = lines.findIndex(line => line.trim() === hookLine);
     expect(hookLineIndex).toBeGreaterThan(-1);
     if (hookLineIndex > 0) {
       expect(lines[hookLineIndex - 1].trim()).toMatch(/{$/);

@@ -1,4 +1,24 @@
 import type { CallExpression } from "@babel/types";
+import type { ParserOptions } from "@babel/parser";
+
+/**
+ * 自定义解析器选项，支持用户传递自己的ParserOptions配置
+ * Custom parser options that allow users to pass their own ParserOptions configuration
+ */
+export interface CustomParserOptions {
+  /**
+   * Babel解析器插件列表，用于支持特定的语法特性
+   * List of Babel parser plugins for supporting specific syntax features
+   */
+  plugins?: ParserOptions["plugins"];
+  /**
+   * 预留扩展字段，未来可能支持ParserOptions的其他选项
+   * Reserved extension fields for potential future ParserOptions support
+   */
+  // 后续可以添加其他ParserOptions属性，如：
+  // sourceType?: ParserOptions["sourceType"];
+  // strictMode?: ParserOptions["strictMode"];
+}
 
 /**
  * Configuration options for the transformation process.
@@ -105,6 +125,13 @@ export interface TransformOptions {
    * @todo 暂未实现
    */
   useASTTransform?: boolean;
+
+  /**
+   * 自定义解析器选项，允许用户传递自己的ParserOptions配置
+   * Custom parser options that allow users to pass their own ParserOptions configuration
+   * 目前仅支持plugins属性，未来可扩展其他ParserOptions属性
+   */
+  parserOptions?: CustomParserOptions;
 }
 
 export interface ExtractedString {
