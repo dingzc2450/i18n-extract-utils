@@ -221,8 +221,10 @@ export async function processFiles(
   // 第二步：加载现有翻译和处理文件
   const { existingValueToKey, sourceJsonObject } =
     loadExistingTranslations(options);
+  // 额外处理windows路径分隔符问题
+  const normalizedPattern = pattern.replace(/\\/g, "/");
 
-  const filePaths = await glob(pattern);
+  const filePaths = await glob(normalizedPattern);
   console.log(`Found ${filePaths.length} files to process.`);
 
   const allExtractedStrings: ExtractedString[] = [];
