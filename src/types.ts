@@ -2,6 +2,19 @@ import type { CallExpression } from "@babel/types";
 import type { ParserOptions } from "@babel/parser";
 
 /**
+ * 包含代码位置周边信息的上下文对象
+ */
+export interface KeyContext {
+  /** 文件路径 */
+  filePath: string;
+  /** 行号 */
+  line: number;
+  /** 列号 */
+  column: number;
+  // 未来可以添加更多上下文信息
+}
+
+/**
  * 自定义解析器选项，支持用户传递自己的ParserOptions配置
  * Custom parser options that allow users to pass their own ParserOptions configuration
  */
@@ -78,6 +91,26 @@ export interface TransformOptions {
    * @returns - The generated key (string or number) to use in the translation file.
    */
   generateKey?: (value: string, filePath: string) => string | number;
+
+  /**
+   * 控制当提取的字符串在现有翻译中已存在对应键时的行为。
+   *
+   * - false（默认）：优先使用现有键，仅当没有找到匹配项时生成新键
+   * - true：始终生成新键，即使在现有翻译中找到了匹配的值
+   * - 函数：自定义决策逻辑，接收 (existingKey, value, context) 参数：
+   *   - 返回 existingKey：使用现有键
+   *   - 返回新键：生成并使用新键
+   *   - 返回 null：使用默认行为（重用现有键）
+   *
+   * @default false
+   */
+  keyConflictResolver?:
+    | boolean
+    | ((
+        existingKey: string | number,
+        value: string,
+        context: KeyContext
+      ) => string | number | null);
 
   /**
    * Existing translations, either as a path to a JSON file or a direct object.

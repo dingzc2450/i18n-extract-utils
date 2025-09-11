@@ -1,9 +1,6 @@
-import type {
-  ExtractedString,
-  TransformOptions,
-  UsedExistingKey,
-} from "./types";
-import { getDefaultPattern } from "./core/utils";
+import type { NormalizedTransformOptions } from "./core/config-normalizer";
+import { RegexCache } from "./performance";
+import type { ExtractedString, UsedExistingKey } from "./types";
 
 /**
  * Manages translation key lookup, generation, and recording.
@@ -25,12 +22,13 @@ export function getKeyAndRecord(
   generatedKeysMap: Map<string, string | number>,
   extractedStrings: ExtractedString[],
   usedExistingKeysList: UsedExistingKey[],
-  options: Pick<TransformOptions, "pattern" | "generateKey"> = {}
+  options: Pick<
+    NormalizedTransformOptions,
+    "pattern" | "generateKey" | "keyConflictResolver"
+  >
 ): string | number | undefined {
   // Use a non-global regex based on the options pattern to extract the content
-  const pattern = options?.pattern
-    ? new RegExp(options.pattern) // Non-global for single match test
-    : new RegExp(getDefaultPattern().source); // Use non-global default
+  const pattern = RegexCache.getSingleMatchRegex(options.pattern);
 
   const match = pattern.exec(originalMatchedValue);
   if (!match || match[1] === undefined) {
@@ -62,41 +60,81 @@ export function getKeyAndRecord(
   // Now canonicalValue holds the version like "Select {arg1}" or preserves "User: {userName}"
   // --- End FIX ---
 
-  // 1. Check existing translations using the canonical value
-  if (existingValueToKey.has(canonicalValue)) {
-    const key = existingValueToKey.get(canonicalValue)!;
-    if (
-      !usedExistingKeysList.some(
-        k =>
-          k.key === key &&
-          k.value === canonicalValue &&
-          k.filePath === location.filePath
-      )
-    ) {
-      usedExistingKeysList.push({ ...location, key, value: canonicalValue });
-    }
-    return key;
-  }
-
-  // 2. Check keys generated earlier in this file run using the canonical value
+  // 1. Check if we've already generated a key for this canonical value in the current file
   if (generatedKeysMap.has(canonicalValue)) {
     return generatedKeysMap.get(canonicalValue)!;
   }
 
-  // 3. Generate new key using the canonical value
-  const newKey = options.generateKey
-    ? options.generateKey(canonicalValue, location.filePath) // Pass the correct canonicalValue
-    : canonicalValue; // Default: use the canonical value itself as the key
+  // 2. Handle key conflict resolution logic
+  const existingKey = existingValueToKey.get(canonicalValue);
+  let resolvedKey: string | number | null | undefined = undefined;
 
-  // Store the generated key against the canonical value
+  // If we have an existing key, handle conflict resolution
+  if (existingKey !== undefined) {
+    // Handle different keyConflictResolver configurations
+    if (typeof options.keyConflictResolver === "function") {
+      // Custom resolver function
+      const context = {
+        filePath: location.filePath,
+        line: location.line,
+        column: location.column,
+      };
+
+      resolvedKey = options.keyConflictResolver(
+        existingKey,
+        canonicalValue,
+        context
+      );
+    } else if (options.keyConflictResolver === true) {
+      // Always generate new keys - do nothing, proceed to key generation
+    } else {
+      // Default behavior (keyConflictResolver is false/null/undefined)
+      // Reuse the existing key
+      resolvedKey = existingKey;
+    }
+
+    // If we resolved to use an existing key, record it and return
+    if (resolvedKey === existingKey || resolvedKey === null) {
+      // Check if we've already recorded this key usage to avoid duplicates
+      if (
+        !usedExistingKeysList.some(
+          k =>
+            k.key === existingKey &&
+            k.value === canonicalValue &&
+            k.filePath === location.filePath
+        )
+      ) {
+        usedExistingKeysList.push({
+          ...location,
+          key: existingKey,
+          value: canonicalValue,
+        });
+      }
+      return existingKey;
+    }
+  }
+
+  // 3. Generate or use the resolved key
+  const newKey =
+    resolvedKey !== undefined && resolvedKey !== null
+      ? resolvedKey // Use the key resolved by the custom function
+      : options.generateKey
+        ? options.generateKey(canonicalValue, location.filePath)
+        : canonicalValue; // Default: use the canonical value itself as the key
+
+  // 4. Record the key in our maps and lists
   generatedKeysMap.set(canonicalValue, newKey);
 
-  // 4. Record the newly extracted string using the canonical value
+  // Add to extracted strings if not already present
   if (
     !extractedStrings.some(s => s.key === newKey && s.value === canonicalValue)
   ) {
-    // Store the canonical value (e.g., "Select {arg1}") in extractedStrings
-    extractedStrings.push({ key: newKey, value: canonicalValue, ...location });
+    extractedStrings.push({
+      key: newKey,
+      value: canonicalValue,
+      ...location,
+    });
   }
+
   return newKey;
 }

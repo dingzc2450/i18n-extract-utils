@@ -42,7 +42,10 @@ export const CONFIG_DEFAULTS = {
   NON_REACT_FUNCTION_NAME: "t",
   NON_REACT_IMPORT_TYPE: "named",
   NON_REACT_NAMESPACE: "i18n",
-};
+
+  // keyConflictResolver 默认值在代码逻辑中处理，默认为 false
+  DEFAULT_KEY_CONFLICT_RESOLVER: false,
+} as const;
 
 /**
  * 规范化的i18n配置接口
@@ -76,6 +79,7 @@ export interface NormalizedTransformOptions {
   extractedCommentType: "block" | "line";
   preserveFormatting: boolean;
   useASTTransform: boolean;
+  keyConflictResolver: NonNullable<TransformOptions["keyConflictResolver"]>;
 
   // i18n配置 - 已规范化
   normalizedI18nConfig: NormalizedI18nConfig;
@@ -454,6 +458,9 @@ export function normalizeConfig(
     // 可选配置（直接传递，不处理）
     generateKey: userOptions.generateKey,
     existingTranslations: userOptions.existingTranslations,
+    keyConflictResolver:
+      userOptions.keyConflictResolver ||
+      CONFIG_DEFAULTS.DEFAULT_KEY_CONFLICT_RESOLVER,
   };
 
   return result;
