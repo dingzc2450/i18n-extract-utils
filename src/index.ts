@@ -21,7 +21,7 @@ export { transformCode };
  * 统一的 i18n 提取主函数
  */
 export async function extractI18n(
-  globPattern: string = "src/**/*.{jsx,tsx}",
+  globPattern: string | string[] = "src/**/*.{jsx,tsx}",
   options: TransformOptions = {}
 ) {
   return processFiles(globPattern, options);

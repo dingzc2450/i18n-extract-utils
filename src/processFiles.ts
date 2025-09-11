@@ -197,7 +197,7 @@ export function transformCode(
  * 使用新的CoreProcessor处理文件
  */
 export async function processFiles(
-  pattern: string,
+  pattern: string | string[],
   options: TransformOptions = {}
 ): Promise<{
   extractedStrings: ExtractedString[];
@@ -222,7 +222,9 @@ export async function processFiles(
   const { existingValueToKey, sourceJsonObject } =
     loadExistingTranslations(options);
   // 额外处理windows路径分隔符问题
-  const normalizedPattern = pattern.replace(/\\/g, "/");
+  const normalizedPattern = Array.isArray(pattern)
+    ? pattern.map(i => i.replace(/\\/g, "/"))
+    : pattern.replace(/\\/g, "/");
 
   const filePaths = await glob(normalizedPattern);
   console.log(`Found ${filePaths.length} files to process.`);
