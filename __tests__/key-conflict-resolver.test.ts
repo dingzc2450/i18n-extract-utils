@@ -103,7 +103,7 @@ describe("keyConflictResolver Configuration Tests", () => {
     });
   });
 
-  describe("Function keyConflictResolver", () => {
+  describe("Function type keyConflictResolver", () => {
     test("should use custom resolver function to determine key usage", () => {
       const code = `
         function MyComponent() {
@@ -199,6 +199,115 @@ describe("keyConflictResolver Configuration Tests", () => {
       expect(contextReceived.filePath).toBe(tempFile);
       expect(contextReceived.line).toBe(3); // 行号可能需要根据实际情况调整
       expect(contextReceived.column).toBeDefined();
+    });
+
+    test("should pass sameValueKeys in context when multiple keys map to same value", () => {
+      const code = `
+        function MyComponent() {
+          const message = "___Welcome Message___";
+          return <div>{message}</div>;
+        }
+      `;
+      const tempFile = createTempFile(code);
+      tempFiles.push(tempFile);
+
+      // 创建一个具有多个键对应相同值的映射
+      const existingValueToKey = new Map<
+        string,
+        { primaryKey: string | number; keys: Set<string | number> }
+      >();
+      existingValueToKey.set("Welcome Message", {
+        primaryKey: "greeting",
+        keys: new Set(["greeting", "welcome_msg", "intro_message"]),
+      });
+
+      let receivedSameValueKeys: (string | number)[] | undefined;
+      const keyConflictResolver = (
+        _existingKey: string | number,
+        _value: string,
+        context: any
+      ) => {
+        receivedSameValueKeys = context.sameValueKeys;
+        return null; // 使用默认行为
+      };
+
+      const result = transformCode(
+        tempFile,
+        {
+          i18nConfig: {
+            i18nImport: {
+              name: "t",
+              importName: "useTranslation",
+              source: "react-i18next",
+            },
+          },
+          keyConflictResolver,
+        },
+        existingValueToKey
+      );
+
+      // 验证代码正确生成
+      expect(result.code).toContain('t("greeting")');
+
+      // 验证sameValueKeys正确传递
+      expect(receivedSameValueKeys).toBeDefined();
+      expect(receivedSameValueKeys).toEqual(
+        expect.arrayContaining(["greeting", "welcome_msg", "intro_message"])
+      );
+      expect(receivedSameValueKeys!.length).toBe(3);
+    });
+
+    test("should use non-primary key from sameValueKeys when returned by keyConflictResolver", () => {
+      const code = `
+        function MyComponent() {
+          const message = "___Welcome Message___";
+          return <div>{message}</div>;
+        }
+      `;
+      const tempFile = createTempFile(code);
+      tempFiles.push(tempFile);
+
+      // 创建一个具有多个键对应相同值的映射
+      const existingValueToKey = new Map<
+        string,
+        { primaryKey: string | number; keys: Set<string | number> }
+      >();
+      existingValueToKey.set("Welcome Message", {
+        primaryKey: "greeting",
+        keys: new Set(["greeting", "welcome_msg", "intro_message"]),
+      });
+
+      const keyConflictResolver = (
+        _existingKey: string | number,
+        _value: string,
+        _context: any
+      ) => {
+        // 返回非主键的值
+        return "welcome_msg";
+      };
+
+      const result = transformCode(
+        tempFile,
+        {
+          i18nConfig: {
+            i18nImport: {
+              name: "t",
+              importName: "useTranslation",
+              source: "react-i18next",
+            },
+          },
+          keyConflictResolver,
+        },
+        existingValueToKey
+      );
+
+      // 验证代码使用了指定的非主键
+      expect(result.code).toContain('t("welcome_msg")');
+
+      // 验证正确记录了使用的键
+      expect(result.usedExistingKeysList.length).toBe(1);
+      expect(result.usedExistingKeysList[0].key).toBe("welcome_msg");
+      expect(result.usedExistingKeysList[0].value).toBe("Welcome Message");
     });
 
     test("should use returned existing key from resolver function", () => {

@@ -11,6 +11,8 @@ export interface KeyContext {
   line: number;
   /** 列号 */
   column: number;
+  /** 同值对应的keys */
+  sameValueKeys: (string | number)[];
   // 未来可以添加更多上下文信息
 }
 
@@ -98,7 +100,7 @@ export interface TransformOptions {
    * - false（默认）：优先使用现有键，仅当没有找到匹配项时生成新键
    * - true：始终生成新键，即使在现有翻译中找到了匹配的值
    * - 函数：自定义决策逻辑，接收 (existingKey, value, context) 参数：
-   *   - 返回 existingKey：使用现有键
+   *   - 返回 existingPrimaryKey：使用现有键
    *   - 返回新键：生成并使用新键
    *   - 返回 null：使用默认行为（重用现有键）
    *
@@ -107,7 +109,7 @@ export interface TransformOptions {
   keyConflictResolver?:
     | boolean
     | ((
-        existingKey: string | number,
+        existingPrimaryKey: string | number,
         value: string,
         context: KeyContext
       ) => string | number | null);

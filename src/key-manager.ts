@@ -79,7 +79,7 @@ export function getKeyAndRecord(
   if (existingKeyEntry !== undefined) {
     // Use the primaryKey from the entry
     const existingKey = existingKeyEntry.primaryKey;
-
+    const keySet = existingKeyEntry.keys;
     // Handle different keyConflictResolver configurations
     if (typeof options.keyConflictResolver === "function") {
       // Custom resolver function
@@ -87,6 +87,7 @@ export function getKeyAndRecord(
         filePath: location.filePath,
         line: location.line,
         column: location.column,
+        sameValueKeys: Array.from(existingKeyEntry.keys),
       };
 
       resolvedKey = options.keyConflictResolver(
@@ -101,25 +102,27 @@ export function getKeyAndRecord(
       // Reuse the existing key
       resolvedKey = existingKey;
     }
-
+    if (resolvedKey === null) {
+      resolvedKey = existingKey;
+    }
     // If we resolved to use an existing key, record it and return
-    if (resolvedKey === existingKey || resolvedKey === null) {
+    if (resolvedKey && keySet.has(resolvedKey!)) {
       // Check if we've already recorded this key usage to avoid duplicates
       if (
         !usedExistingKeysList.some(
           k =>
-            k.key === existingKey &&
+            k.key === resolvedKey &&
             k.value === canonicalValue &&
             k.filePath === location.filePath
         )
       ) {
         usedExistingKeysList.push({
           ...location,
-          key: existingKey,
+          key: resolvedKey,
           value: canonicalValue,
         });
       }
-      return existingKey;
+      return resolvedKey;
     }
   }
 
