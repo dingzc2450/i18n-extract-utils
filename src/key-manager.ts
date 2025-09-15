@@ -1,6 +1,6 @@
+import type { ExtractedString, UsedExistingKey } from "./types";
 import type { NormalizedTransformOptions } from "./core/config-normalizer";
 import { RegexCache } from "./performance";
-import type { ExtractedString, UsedExistingKey } from "./types";
 
 /**
  * Manages translation key lookup, generation, and recording.
@@ -8,7 +8,7 @@ import type { ExtractedString, UsedExistingKey } from "./types";
  *
  * @param originalMatchedValue The full string that matched the pattern (e.g., "___Hello___", "___Select ${label}___").
  * @param location Location info for the node.
- * @param existingValueToKey Map of canonical value -> key from pre-existing translations.
+ * @param existingValueToKeyMap Map of canonical value -> key from pre-existing translations.
  * @param generatedKeysMap Map to track keys generated during the current file processing (canonical value -> key).
  * @param extractedStrings Array to add newly generated key/value pairs to.
  * @param usedExistingKeysList Array to record when an existing key is used.
@@ -18,7 +18,13 @@ import type { ExtractedString, UsedExistingKey } from "./types";
 export function getKeyAndRecord(
   originalMatchedValue: string,
   location: { filePath: string; line: number; column: number },
-  existingValueToKey: Map<string, string | number>,
+  existingValueToKeyMap: Map<
+    string,
+    {
+      primaryKey: string | number;
+      keys: Set<string | number>;
+    }
+  >,
   generatedKeysMap: Map<string, string | number>,
   extractedStrings: ExtractedString[],
   usedExistingKeysList: UsedExistingKey[],
@@ -66,11 +72,14 @@ export function getKeyAndRecord(
   }
 
   // 2. Handle key conflict resolution logic
-  const existingKey = existingValueToKey.get(canonicalValue);
+  const existingKeyEntry = existingValueToKeyMap.get(canonicalValue);
   let resolvedKey: string | number | null | undefined = undefined;
 
   // If we have an existing key, handle conflict resolution
-  if (existingKey !== undefined) {
+  if (existingKeyEntry !== undefined) {
+    // Use the primaryKey from the entry
+    const existingKey = existingKeyEntry.primaryKey;
+
     // Handle different keyConflictResolver configurations
     if (typeof options.keyConflictResolver === "function") {
       // Custom resolver function

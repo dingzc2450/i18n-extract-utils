@@ -74,7 +74,13 @@ export class CoreProcessor {
     code: string,
     filePath: string,
     options: TransformOptions,
-    existingValueToKey?: Map<string, string | number>
+    existingValueToKeyMap?: Map<
+      string,
+      {
+        primaryKey: string | number;
+        keys: Set<string | number>;
+      }
+    >
   ): ProcessingResult {
     // 规范化配置，确保一致性
     const normalizedOptions = this.normalizeConfig(options, code, filePath);
@@ -121,7 +127,7 @@ export class CoreProcessor {
       processedCode,
       mode,
       normalizedOptions,
-      existingValueToKey || new Map(),
+      existingValueToKeyMap || new Map(),
       filePath
     );
 
@@ -348,7 +354,13 @@ export class CoreProcessor {
     code: string,
     mode: ProcessingMode,
     options: NormalizedTransformOptions,
-    existingValueToKey: Map<string, string | number>,
+    existingValueToKeyMap: Map<
+      string,
+      {
+        primaryKey: string | number;
+        keys: Set<string | number>;
+      }
+    >,
     filePath: string
   ): ExtractionResult {
     const extractedStrings: ExtractedString[] = [];
@@ -360,7 +372,7 @@ export class CoreProcessor {
       const result = collectContextAwareReplacementInfo(
         ast,
         code,
-        existingValueToKey,
+        existingValueToKeyMap,
         extractedStrings,
         usedExistingKeysList,
         this.importManager,

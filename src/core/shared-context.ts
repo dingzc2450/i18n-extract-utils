@@ -20,7 +20,13 @@ export interface SharedProcessingContext {
   filePath: string;
 
   // 数据存储
-  existingValueToKey: Map<string, string | number>;
+  existingValueToKeyMap: Map<
+    string,
+    {
+      primaryKey: string | number;
+      keys: Set<string | number>;
+    }
+  >;
   generatedKeysMap: Map<string, string | number>;
   extractedStrings: ExtractedString[];
   usedExistingKeysList: UsedExistingKey[];
@@ -57,7 +63,13 @@ export interface SharedProcessingContext {
  * 键生成上下文接口
  */
 export interface KeyGenerationContext {
-  existingValueToKey: Map<string, string | number>;
+  existingValueToKeyMap: Map<
+    string,
+    {
+      primaryKey: string | number;
+      keys: Set<string | number>;
+    }
+  >;
   generatedKeysMap: Map<string, string | number>;
   extractedStrings: ExtractedString[];
   usedExistingKeysList: UsedExistingKey[];

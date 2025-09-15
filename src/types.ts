@@ -291,7 +291,13 @@ export interface I18nTransformer {
     code: string,
     filePath: string,
     options: TransformOptions,
-    existingValueToKey?: Map<string, string | number>
+    existingValueToKeyMap?: Map<
+      string,
+      {
+        primaryKey: string | number;
+        keys: Set<string | number>;
+      }
+    >
   ): {
     code: string;
     extractedStrings: ExtractedString[];
@@ -315,14 +321,20 @@ export interface FrameworkCodeGenerator {
    * @param code 源代码
    * @param filePath 文件路径
    * @param options 转换选项
-   * @param existingValueToKey 已存在的键值映射
+   * @param existingValueToKeyMap 已存在的键值映射
    * @returns 转换结果
    */
   processCode(
     code: string,
     filePath: string,
     options: TransformOptions,
-    existingValueToKey?: Map<string, string | number>
+    existingValueToKeyMap?: Map<
+      string,
+      {
+        primaryKey: string | number;
+        keys: Set<string | number>;
+      }
+    >
   ): {
     code: string;
     extractedStrings: ExtractedString[];

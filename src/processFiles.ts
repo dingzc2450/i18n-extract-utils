@@ -22,7 +22,9 @@ import {
   logError,
   enhanceError as baseEnhanceError,
   formatErrorForUser,
+  type I18nError,
 } from "./core/error-handler";
+import { fallbackTransform } from "./fallback-transform";
 
 /**
  * 确保目录存在
@@ -48,10 +50,24 @@ function writeFileContent(filePath: string, content: string): void {
  * 加载现有翻译映射
  */
 function loadExistingTranslations(options: TransformOptions): {
-  existingValueToKey?: Map<string, string | number>;
+  existingValueToKeyMap?: Map<
+    string,
+    {
+      primaryKey: string | number;
+      keys: Set<string | number>;
+    }
+  >;
   sourceJsonObject?: Record<string, string | number>;
 } {
-  let existingValueToKey: Map<string, string | number> | undefined = undefined;
+  let existingValueToKeyMap:
+    | Map<
+        string,
+        {
+          primaryKey: string | number;
+          keys: Set<string | number>;
+        }
+      >
+    | undefined = undefined;
   let sourceJsonObject: Record<string, string | number> | undefined = undefined;
 
   if (options.existingTranslations) {
@@ -76,18 +92,59 @@ function loadExistingTranslations(options: TransformOptions): {
     }
 
     if (sourceJsonObject) {
-      existingValueToKey = new Map(
-        Object.entries(sourceJsonObject).map(([key, value]) => [
-          String(value),
-          key,
-        ])
-      );
+      existingValueToKeyMap = new Map();
+      Object.entries(sourceJsonObject).forEach(([key, value]) => {
+        const valueStr = String(value);
+        if (existingValueToKeyMap!.has(valueStr)) {
+          // 如果值已存在，添加键到集合中
+          const entry = existingValueToKeyMap!.get(valueStr)!;
+          entry.keys.add(key);
+        } else {
+          // 如果值不存在，创建新条目
+          existingValueToKeyMap!.set(valueStr, {
+            primaryKey: key,
+            keys: new Set([key]),
+          });
+        }
+      });
     }
   }
 
-  return { existingValueToKey, sourceJsonObject };
+  return { existingValueToKeyMap, sourceJsonObject };
 }
-
+function normalizeMap(
+  existingValueToKeyMap?: Map<
+    string,
+    | {
+        primaryKey: string | number;
+        keys: Set<string | number>;
+      }
+    | string
+    | number
+  >
+) {
+  if (!existingValueToKeyMap) {
+    return existingValueToKeyMap;
+  }
+  const normalizedMap = new Map<
+    string,
+    {
+      primaryKey: string | number;
+      keys: Set<string | number>;
+    }
+  >();
+  for (const [value, entry] of existingValueToKeyMap.entries()) {
+    if (typeof entry === "string" || typeof entry === "number") {
+      normalizedMap.set(value, {
+        primaryKey: entry,
+        keys: new Set([entry]),
+      });
+    } else {
+      normalizedMap.set(value, entry);
+    }
+  }
+  return normalizedMap;
+}
 /**
  * 使用 CoreProcessor 处理单个文件的代码转换
  *
@@ -101,17 +158,21 @@ function loadExistingTranslations(options: TransformOptions): {
  *
  * @param filePath 文件路径，用于读取文件、确定文件类型和选择正确的处理插件
  * @param options 转换配置选项，控制国际化提取和转换的行为
- * @param existingValueToKey 现有翻译的 value->key 映射，用于重用已有的键值
+ * @param existingValueToKeyMap 现有翻译的 value->key 映射，用于重用已有的键值，支持一个值对应多个键
  * @returns 包含转换后代码、提取的字符串、已使用的现有键和变更详情的结果对象
  */
-// 导入I18nError类型
-import type { I18nError } from "./core/error-handler";
-import { fallbackTransform } from "./fallback-transform";
-
 export function transformCode(
   filePath: string,
   options: TransformOptions = {},
-  existingValueToKey?: Map<string, string | number>
+  existingValueToKeyMap?: Map<
+    string,
+    | {
+        primaryKey: string | number;
+        keys: Set<string | number>;
+      }
+    | string
+    | number
+  >
 ): {
   code: string;
   extractedStrings: ExtractedString[];
@@ -126,11 +187,15 @@ export function transformCode(
   // 第二步：创建预配置的处理器
   // 处理器包含所有已注册的框架插件（React、Vue等）
   const processor = createProcessorWithDefaultPlugins();
-
   try {
     // 第三步：执行代码处理并返回结果
     // filePath在processCode中用于AST解析配置和插件选择，不可移除
-    return processor.processCode(code, filePath, options, existingValueToKey);
+    return processor.processCode(
+      code,
+      filePath,
+      options,
+      normalizeMap(existingValueToKeyMap)
+    );
   } catch (error) {
     // 使用统一的错误处理机制
     let errorCode = "GENERAL001";
@@ -219,7 +284,7 @@ export async function processFiles(
   }
 
   // 第二步：加载现有翻译和处理文件
-  const { existingValueToKey, sourceJsonObject } =
+  const { existingValueToKeyMap, sourceJsonObject } =
     loadExistingTranslations(options);
   // 额外处理windows路径分隔符问题
   const normalizedPattern = Array.isArray(pattern)
@@ -248,7 +313,7 @@ export async function processFiles(
         noCache: true,
       });
 
-      const result = transformCode(filePath, options, existingValueToKey);
+      const result = transformCode(filePath, options, existingValueToKeyMap);
 
       // 如果处理过程中出现错误，添加到错误列表
       if (result.error) {

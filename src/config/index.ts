@@ -22,14 +22,20 @@ export class EnhancedProcessor {
     code: string,
     filePath: string,
     userOptions: TransformOptions = {},
-    existingValueToKey?: Map<string, string | number>
+    existingValueToKeyMap?: Map<
+      string,
+      {
+        primaryKey: string | number;
+        keys: Set<string | number>;
+      }
+    >
   ) {
     // CoreProcessor 内部已经使用了normalizeConfig，直接传递即可
     return this.coreProcessor.processCode(
       code,
       filePath,
       userOptions,
-      existingValueToKey
+      existingValueToKeyMap
     );
   }
 

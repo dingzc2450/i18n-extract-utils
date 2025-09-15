@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { transformCode } from "./test-helpers";
-import { TransformOptions } from "../src/types";
+import type { TransformOptions } from "../src/types";
 import * as fs from "fs";
 import * as path from "path";
 import { tmpdir } from "os";
@@ -18,7 +18,7 @@ function createTempFile(content: string, extension: string = ".tsx"): string {
 // Clean up temp files
 const tempFiles: string[] = [];
 afterEach(() => {
-  tempFiles.forEach((file) => {
+  tempFiles.forEach(file => {
     if (fs.existsSync(file)) {
       try {
         fs.unlinkSync(file);
@@ -388,7 +388,15 @@ export function Welcome() {
       const result = transformCode(
         tempFile,
         optionsWithExisting,
-        new Map([["Welcome", "welcome"]])
+        new Map([
+          [
+            "Welcome",
+            {
+              primaryKey: "welcome",
+              keys: new Set(["welcome", "welcome_1"]),
+            },
+          ],
+        ])
       );
 
       expect(result.code).toContain('t("welcome")');
@@ -510,9 +518,12 @@ export function Welcome() {
       const tempFile = createTempFile(input, ".vue");
       tempFiles.push(tempFile);
 
-      const result = transformCode(tempFile, { ...baseOptions, extractedCommentType: "line" });
+      const result = transformCode(tempFile, {
+        ...baseOptions,
+        extractedCommentType: "line",
+      });
 
-      expect(result.code).toContain("{{ t(\"Hello Vue Template\") }}");
+      expect(result.code).toContain('{{ t("Hello Vue Template") }}');
       // Vue templates use HTML comments
       expect(result.code).toContain("<!-- Hello Vue Template -->");
       expect(result.extractedStrings).toHaveLength(1);
@@ -529,9 +540,14 @@ const message = ref('___Hello Vue Script___');
       const tempFile = createTempFile(input, ".vue");
       tempFiles.push(tempFile);
 
-      const result = transformCode(tempFile, { ...baseOptions, extractedCommentType: "line" });
+      const result = transformCode(tempFile, {
+        ...baseOptions,
+        extractedCommentType: "line",
+      });
 
-      expect(result.code).toContain("const message = ref(t(\"Hello Vue Script\")");
+      expect(result.code).toContain(
+        'const message = ref(t("Hello Vue Script")'
+      );
       expect(result.code).toContain("// Hello Vue Script");
       expect(result.extractedStrings).toHaveLength(1);
       expect(result.extractedStrings[0].value).toBe("Hello Vue Script");
@@ -547,9 +563,14 @@ const message = ref('___Hello Vue Script Block___');
       const tempFile = createTempFile(input, ".vue");
       tempFiles.push(tempFile);
 
-      const result = transformCode(tempFile, { ...baseOptions, extractedCommentType: "block" });
+      const result = transformCode(tempFile, {
+        ...baseOptions,
+        extractedCommentType: "block",
+      });
 
-      expect(result.code).toContain("const message = ref(t(\"Hello Vue Script Block\")");
+      expect(result.code).toContain(
+        'const message = ref(t("Hello Vue Script Block")'
+      );
       expect(result.code).toContain("/* Hello Vue Script Block */");
       expect(result.extractedStrings).toHaveLength(1);
       expect(result.extractedStrings[0].value).toBe("Hello Vue Script Block");
@@ -568,11 +589,16 @@ const dynamicText = ref('___Dynamic Vue Text___');
       const tempFile = createTempFile(input, ".vue");
       tempFiles.push(tempFile);
 
-      const result = transformCode(tempFile, { ...baseOptions, extractedCommentType: "line" });
+      const result = transformCode(tempFile, {
+        ...baseOptions,
+        extractedCommentType: "line",
+      });
 
-      expect(result.code).toContain("{{ t(\"Static Vue Text\") }}");
+      expect(result.code).toContain('{{ t("Static Vue Text") }}');
       expect(result.code).toContain("<!-- Static Vue Text -->");
-      expect(result.code).toContain("const dynamicText = ref(t(\"Dynamic Vue Text\"));");
+      expect(result.code).toContain(
+        'const dynamicText = ref(t("Dynamic Vue Text"));'
+      );
       expect(result.code).toContain("// Dynamic Vue Text");
       expect(result.extractedStrings).toHaveLength(2);
     });
@@ -589,10 +615,13 @@ const text = '___No Comment Script___';
       const tempFile = createTempFile(input, ".vue");
       tempFiles.push(tempFile);
 
-      const result = transformCode(tempFile, { ...baseOptions, appendExtractedComment: false });
+      const result = transformCode(tempFile, {
+        ...baseOptions,
+        appendExtractedComment: false,
+      });
 
-      expect(result.code).toContain("{{ t(\"No Comment Vue\") }}");
-      expect(result.code).toContain("const text = t(\"No Comment Script\");");
+      expect(result.code).toContain('{{ t("No Comment Vue") }}');
+      expect(result.code).toContain('const text = t("No Comment Script");');
       expect(result.code).not.toContain("<!--");
       expect(result.code).not.toContain("//");
       expect(result.code).not.toContain("/*");

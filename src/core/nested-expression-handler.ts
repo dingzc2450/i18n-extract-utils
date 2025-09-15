@@ -120,7 +120,7 @@ export function processNestedStringLiteral(
     const nestedKey = getKeyAndRecord(
       fullMatch,
       nestedLocation,
-      context.existingValueToKey,
+      context.existingValueToKeyMap,
       context.generatedKeysMap,
       context.extractedStrings,
       context.usedExistingKeysList,
@@ -171,7 +171,7 @@ export function processNestedTemplateLiteral(
       const nestedKey = getKeyAndRecord(
         nestedOriginalRawString,
         nestedLocation,
-        context.existingValueToKey,
+        context.existingValueToKeyMap,
         context.generatedKeysMap,
         context.extractedStrings,
         context.usedExistingKeysList,
@@ -275,7 +275,7 @@ export function processConditionalStringLiteral(
     const deepKey = getKeyAndRecord(
       fullMatch,
       deepLocation,
-      context.existingValueToKey,
+      context.existingValueToKeyMap,
       context.generatedKeysMap,
       context.extractedStrings,
       context.usedExistingKeysList,
@@ -389,7 +389,7 @@ export class NestedNodeCollector {
             const key = getKeyAndRecord(
               match[0],
               nodeInfo.location,
-              context.existingValueToKey,
+              context.existingValueToKeyMap,
               context.generatedKeysMap,
               context.extractedStrings,
               context.usedExistingKeysList,

@@ -136,7 +136,13 @@ export class VuePlugin implements FrameworkPlugin {
     code: string,
     filePath: string,
     options: NormalizedTransformOptions,
-    existingValueToKey?: Map<string, string | number>
+    existingValueToKeyMap?: Map<
+      string,
+      {
+        primaryKey: string | number;
+        keys: Set<string | number>;
+      }
+    >
   ) {
     // 检查是否为Vue单文件组件
     const isVueSFC =
@@ -146,14 +152,14 @@ export class VuePlugin implements FrameworkPlugin {
 
     if (isVueSFC) {
       // 处理Vue单文件组件
-      return this.processSFC(code, filePath, options, existingValueToKey);
+      return this.processSFC(code, filePath, options, existingValueToKeyMap);
     } else {
       // 处理纯JavaScript Vue组件
       return this.processJavaScriptVue(
         code,
         filePath,
         options,
-        existingValueToKey
+        existingValueToKeyMap
       );
     }
   }
@@ -165,7 +171,13 @@ export class VuePlugin implements FrameworkPlugin {
     code: string,
     filePath: string,
     options: NormalizedTransformOptions,
-    existingValueToKey?: Map<string, string | number>
+    existingValueToKeyMap?: Map<
+      string,
+      {
+        primaryKey: string | number;
+        keys: Set<string | number>;
+      }
+    >
   ) {
     const extractedStrings: ExtractedString[] = [];
     const usedExistingKeysList: UsedExistingKey[] = [];
@@ -188,7 +200,7 @@ export class VuePlugin implements FrameworkPlugin {
         extractedStrings,
         usedExistingKeysList,
         options,
-        existingValueToKey || new Map(),
+        existingValueToKeyMap || new Map(),
         filePath
       );
     }
@@ -201,7 +213,7 @@ export class VuePlugin implements FrameworkPlugin {
         options,
         extractedStrings,
         usedExistingKeysList,
-        existingValueToKey || new Map(),
+        existingValueToKeyMap || new Map(),
         filePath
       );
       vueFile.script = scriptResult.code;
@@ -225,7 +237,13 @@ export class VuePlugin implements FrameworkPlugin {
     code: string,
     filePath: string,
     options: NormalizedTransformOptions,
-    existingValueToKey?: Map<string, string | number>
+    existingValueToKeyMap?: Map<
+      string,
+      {
+        primaryKey: string | number;
+        keys: Set<string | number>;
+      }
+    >
   ) {
     const extractedStrings: ExtractedString[] = [];
     const usedExistingKeysList: UsedExistingKey[] = [];
@@ -253,7 +271,7 @@ export class VuePlugin implements FrameworkPlugin {
         extractedStrings,
         usedExistingKeysList,
         options,
-        existingValueToKey || new Map(),
+        existingValueToKeyMap || new Map(),
         filePath
       );
 
@@ -367,7 +385,13 @@ export class VuePlugin implements FrameworkPlugin {
     extractedStrings: ExtractedString[],
     usedExistingKeysList: UsedExistingKey[],
     options: NormalizedTransformOptions,
-    existingValueToKey: Map<string, string | number>,
+    existingValueToKeyMap: Map<
+      string,
+      {
+        primaryKey: string | number;
+        keys: Set<string | number>;
+      }
+    >,
     filePath: string
   ): string {
     // 直接使用字符串替换方法处理模板
@@ -378,7 +402,7 @@ export class VuePlugin implements FrameworkPlugin {
       extractedStrings,
       usedExistingKeysList,
       options,
-      existingValueToKey,
+      existingValueToKeyMap,
       filePath
     );
   }
@@ -392,7 +416,13 @@ export class VuePlugin implements FrameworkPlugin {
     extractedStrings: ExtractedString[],
     usedExistingKeysList: UsedExistingKey[],
     options: NormalizedTransformOptions,
-    existingValueToKey: Map<string, string | number>,
+    existingValueToKeyMap: Map<
+      string,
+      {
+        primaryKey: string | number;
+        keys: Set<string | number>;
+      }
+    >,
     filePath: string
   ): string {
     const patternRegex = new RegExp(options.pattern, "g");
@@ -410,7 +440,7 @@ export class VuePlugin implements FrameworkPlugin {
         const trueKey = getKeyAndRecord(
           `'${trueStr}'`,
           { filePath, line: 0, column: 0 },
-          existingValueToKey,
+          existingValueToKeyMap,
           new Map(),
           extractedStrings,
           usedExistingKeysList,
@@ -430,7 +460,7 @@ export class VuePlugin implements FrameworkPlugin {
         const falseKey = getKeyAndRecord(
           `'${falseStr}'`,
           { filePath, line: 0, column: 0 },
-          existingValueToKey,
+          existingValueToKeyMap,
           new Map(),
           extractedStrings,
           usedExistingKeysList,
@@ -488,7 +518,7 @@ export class VuePlugin implements FrameworkPlugin {
         const key = getKeyAndRecord(
           fullMatch,
           { filePath, line: 0, column: 0 },
-          existingValueToKey,
+          existingValueToKeyMap,
           new Map(),
           extractedStrings,
           usedExistingKeysList,
@@ -536,7 +566,13 @@ export class VuePlugin implements FrameworkPlugin {
     options: NormalizedTransformOptions,
     extractedStrings: ExtractedString[],
     usedExistingKeysList: UsedExistingKey[],
-    existingValueToKey: Map<string, string | number>,
+    existingValueToKeyMap: Map<
+      string,
+      {
+        primaryKey: string | number;
+        keys: Set<string | number>;
+      }
+    >,
     filePath: string
   ): { code: string } {
     if (!script) return { code: script };
@@ -588,7 +624,7 @@ export class VuePlugin implements FrameworkPlugin {
                   line: path.node.loc?.start.line || 0,
                   column: path.node.loc?.start.column || 0,
                 },
-                existingValueToKey,
+                existingValueToKeyMap,
                 new Map(),
                 extractedStrings,
                 usedExistingKeysList,
@@ -656,7 +692,7 @@ export class VuePlugin implements FrameworkPlugin {
           extractedStrings,
           usedExistingKeysList,
           options,
-          existingValueToKey,
+          existingValueToKeyMap,
           filePath
         );
       }
@@ -693,7 +729,13 @@ export class VuePlugin implements FrameworkPlugin {
     extractedStrings: ExtractedString[],
     usedExistingKeysList: UsedExistingKey[],
     options: NormalizedTransformOptions,
-    existingValueToKey: Map<string, string | number>,
+    existingValueToKeyMap: Map<
+      string,
+      {
+        primaryKey: string | number;
+        keys: Set<string | number>;
+      }
+    >,
     filePath: string
   ) {
     const patternRegex = new RegExp(options.pattern, "g");
@@ -724,7 +766,7 @@ export class VuePlugin implements FrameworkPlugin {
               line: path.node.loc?.start.line || 0,
               column: path.node.loc?.start.column || 0,
             },
-            existingValueToKey,
+            existingValueToKeyMap,
             new Map(),
             extractedStrings,
             usedExistingKeysList,
@@ -800,7 +842,7 @@ export class VuePlugin implements FrameworkPlugin {
                     line: path.node.loc?.start.line || 0,
                     column: path.node.loc?.start.column || 0,
                   },
-                  existingValueToKey,
+                  existingValueToKeyMap,
                   new Map(),
                   extractedStrings,
                   usedExistingKeysList,

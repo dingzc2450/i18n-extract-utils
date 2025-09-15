@@ -324,7 +324,7 @@ export class JSXTextProcessor implements NodeProcessor<t.JSXText> {
         const key = getKeyAndRecord(
           match[0],
           location,
-          context.existingValueToKey,
+          context.existingValueToKeyMap,
           context.generatedKeysMap,
           context.extractedStrings,
           context.usedExistingKeysList,

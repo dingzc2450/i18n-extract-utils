@@ -51,7 +51,13 @@ type PendingReplacementType = {
 export function collectContextAwareReplacementInfo(
   ast: t.File,
   originalCode: string,
-  existingValueToKey: Map<string, string | number>,
+  existingValueToKeyMap: Map<
+    string,
+    {
+      primaryKey: string | number;
+      keys: Set<string | number>;
+    }
+  >,
   extractedStrings: ExtractedString[],
   usedExistingKeysList: UsedExistingKey[],
   importManager: SmartImportManager,
@@ -161,7 +167,7 @@ export function collectContextAwareReplacementInfo(
     patternRegex,
     options,
     filePath,
-    existingValueToKey,
+    existingValueToKeyMap,
     generatedKeysMap,
     extractedStrings,
     usedExistingKeysList,
@@ -219,7 +225,7 @@ export function collectContextAwareReplacementInfo(
       const key = getKeyAndRecord(
         fullMatch,
         location,
-        sharedContext.existingValueToKey,
+        sharedContext.existingValueToKeyMap,
         sharedContext.generatedKeysMap,
         sharedContext.extractedStrings,
         sharedContext.usedExistingKeysList,
@@ -273,7 +279,7 @@ export function collectContextAwareReplacementInfo(
       const key = getKeyAndRecord(
         fullMatch,
         location,
-        sharedContext.existingValueToKey,
+        sharedContext.existingValueToKeyMap,
         sharedContext.generatedKeysMap,
         sharedContext.extractedStrings,
         sharedContext.usedExistingKeysList,
@@ -362,7 +368,7 @@ export function collectContextAwareReplacementInfo(
           const translationKey = getKeyAndRecord(
             originalRawStringForPatternCheck,
             location,
-            existingValueToKey,
+            existingValueToKeyMap,
             generatedKeysMap,
             extractedStrings,
             usedExistingKeysList,
