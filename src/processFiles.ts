@@ -113,10 +113,16 @@ function loadExistingTranslations(options: TransformOptions): {
             // 如果值已存在，添加键到集合中
             const entry = existingValueToKeyMap!.get(valueStr)!;
             entry.keys.add(key);
+            if (config.namespace) {
+              entry.experimental_sourceNamespaces!.push(config.namespace);
+            }
           } else {
             // 如果值不存在，创建新条目
             existingValueToKeyMap!.set(valueStr, {
               primaryKey: key,
+              experimental_sourceNamespaces: config.namespace
+                ? [config.namespace]
+                : [],
               keys: new Set([key]),
             });
           }

@@ -209,22 +209,6 @@ export interface ExistingTranslationsConfig {
    * Path to JSON file or direct object
    */
   source: string | Record<string, string | number>;
-
-  /**
-   * 映射方式，定义如何从源数据生成键值映射
-   * Mapping method, defines how to generate key-value mappings from source data
-   * @default 'default'
-   */
-  mappingType?: "default" | "invert" | "custom";
-
-  /**
-   * 自定义映射函数，当 mappingType 为 'custom' 时使用
-   * Custom mapping function, used when mappingType is 'custom'
-   */
-  customMapper?: (
-    sourceData: Record<string, string | number>
-  ) => Map<string, { primaryKey: string | number; keys: Set<string | number> }>;
-
   /**
    * 命名空间前缀，可用于区分不同来源的翻译
    * Namespace prefix, can be used to distinguish translations from different sources
@@ -458,7 +442,11 @@ export interface I18nConfig {
 }
 
 export type ExistingValueValueType = {
-  sourceNamespace?: string; // 来源命名空间
+  /**
+   * 来源命名空间
+   * @experimental 未来可能变更后
+   */
+  experimental_sourceNamespaces?: string[];
   primaryKey: string | number;
   keys: Set<string | number>;
 };
