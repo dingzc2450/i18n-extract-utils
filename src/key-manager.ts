@@ -1,4 +1,8 @@
-import type { ExtractedString, UsedExistingKey } from "./types";
+import type {
+  ExistingValueToKeyMapType,
+  ExtractedString,
+  UsedExistingKey,
+} from "./types";
 import type { NormalizedTransformOptions } from "./core/config-normalizer";
 import { RegexCache } from "./performance";
 
@@ -18,13 +22,7 @@ import { RegexCache } from "./performance";
 export function getKeyAndRecord(
   originalMatchedValue: string,
   location: { filePath: string; line: number; column: number },
-  existingValueToKeyMap: Map<
-    string,
-    {
-      primaryKey: string | number;
-      keys: Set<string | number>;
-    }
-  >,
+  existingValueToKeyMap: ExistingValueToKeyMapType,
   generatedKeysMap: Map<string, string | number>,
   extractedStrings: ExtractedString[],
   usedExistingKeysList: UsedExistingKey[],

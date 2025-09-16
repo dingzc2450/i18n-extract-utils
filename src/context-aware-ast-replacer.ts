@@ -3,7 +3,12 @@ import traverse from "@babel/traverse";
 import * as t from "@babel/types";
 import type { GeneratorOptions } from "@babel/generator";
 import generate from "@babel/generator";
-import type { ExtractedString, UsedExistingKey, ChangeDetail } from "./types";
+import type {
+  ExtractedString,
+  UsedExistingKey,
+  ChangeDetail,
+  ExistingValueToKeyMapType,
+} from "./types";
 import { getKeyAndRecord } from "./key-manager";
 import {
   createTranslationCall,
@@ -51,13 +56,7 @@ type PendingReplacementType = {
 export function collectContextAwareReplacementInfo(
   ast: t.File,
   originalCode: string,
-  existingValueToKeyMap: Map<
-    string,
-    {
-      primaryKey: string | number;
-      keys: Set<string | number>;
-    }
-  >,
+  existingValueToKeyMap: ExistingValueToKeyMapType,
   extractedStrings: ExtractedString[],
   usedExistingKeysList: UsedExistingKey[],
   importManager: SmartImportManager,

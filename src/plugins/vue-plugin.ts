@@ -12,7 +12,12 @@ import type {
   ImportRequirement,
   HookRequirement,
 } from "../core/types";
-import type { ExtractedString, UsedExistingKey, ChangeDetail } from "../types";
+import type {
+  ExtractedString,
+  UsedExistingKey,
+  ChangeDetail,
+  ExistingValueToKeyMapType,
+} from "../types";
 import type { NormalizedTransformOptions } from "../core/config-normalizer";
 import type { ParserOptions } from "@babel/parser";
 import { parse } from "@babel/parser";
@@ -136,13 +141,7 @@ export class VuePlugin implements FrameworkPlugin {
     code: string,
     filePath: string,
     options: NormalizedTransformOptions,
-    existingValueToKeyMap?: Map<
-      string,
-      {
-        primaryKey: string | number;
-        keys: Set<string | number>;
-      }
-    >
+    existingValueToKeyMap?: ExistingValueToKeyMapType
   ) {
     // 检查是否为Vue单文件组件
     const isVueSFC =
@@ -171,13 +170,7 @@ export class VuePlugin implements FrameworkPlugin {
     code: string,
     filePath: string,
     options: NormalizedTransformOptions,
-    existingValueToKeyMap?: Map<
-      string,
-      {
-        primaryKey: string | number;
-        keys: Set<string | number>;
-      }
-    >
+    existingValueToKeyMap?: ExistingValueToKeyMapType
   ) {
     const extractedStrings: ExtractedString[] = [];
     const usedExistingKeysList: UsedExistingKey[] = [];
@@ -237,13 +230,7 @@ export class VuePlugin implements FrameworkPlugin {
     code: string,
     filePath: string,
     options: NormalizedTransformOptions,
-    existingValueToKeyMap?: Map<
-      string,
-      {
-        primaryKey: string | number;
-        keys: Set<string | number>;
-      }
-    >
+    existingValueToKeyMap?: ExistingValueToKeyMapType
   ) {
     const extractedStrings: ExtractedString[] = [];
     const usedExistingKeysList: UsedExistingKey[] = [];
@@ -385,13 +372,7 @@ export class VuePlugin implements FrameworkPlugin {
     extractedStrings: ExtractedString[],
     usedExistingKeysList: UsedExistingKey[],
     options: NormalizedTransformOptions,
-    existingValueToKeyMap: Map<
-      string,
-      {
-        primaryKey: string | number;
-        keys: Set<string | number>;
-      }
-    >,
+    existingValueToKeyMap: ExistingValueToKeyMapType,
     filePath: string
   ): string {
     // 直接使用字符串替换方法处理模板
@@ -416,13 +397,7 @@ export class VuePlugin implements FrameworkPlugin {
     extractedStrings: ExtractedString[],
     usedExistingKeysList: UsedExistingKey[],
     options: NormalizedTransformOptions,
-    existingValueToKeyMap: Map<
-      string,
-      {
-        primaryKey: string | number;
-        keys: Set<string | number>;
-      }
-    >,
+    existingValueToKeyMap: ExistingValueToKeyMapType,
     filePath: string
   ): string {
     const patternRegex = new RegExp(options.pattern, "g");
@@ -566,13 +541,7 @@ export class VuePlugin implements FrameworkPlugin {
     options: NormalizedTransformOptions,
     extractedStrings: ExtractedString[],
     usedExistingKeysList: UsedExistingKey[],
-    existingValueToKeyMap: Map<
-      string,
-      {
-        primaryKey: string | number;
-        keys: Set<string | number>;
-      }
-    >,
+    existingValueToKeyMap: ExistingValueToKeyMapType,
     filePath: string
   ): { code: string } {
     if (!script) return { code: script };
@@ -729,13 +698,7 @@ export class VuePlugin implements FrameworkPlugin {
     extractedStrings: ExtractedString[],
     usedExistingKeysList: UsedExistingKey[],
     options: NormalizedTransformOptions,
-    existingValueToKeyMap: Map<
-      string,
-      {
-        primaryKey: string | number;
-        keys: Set<string | number>;
-      }
-    >,
+    existingValueToKeyMap: ExistingValueToKeyMapType,
     filePath: string
   ) {
     const patternRegex = new RegExp(options.pattern, "g");

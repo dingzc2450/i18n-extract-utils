@@ -30,6 +30,7 @@ import type {
 } from "./types";
 import { ProcessingMode } from "./types";
 import type {
+  ExistingValueToKeyMapType,
   ExtractedString,
   TransformOptions,
   UsedExistingKey,
@@ -74,13 +75,7 @@ export class CoreProcessor {
     code: string,
     filePath: string,
     options: TransformOptions,
-    existingValueToKeyMap?: Map<
-      string,
-      {
-        primaryKey: string | number;
-        keys: Set<string | number>;
-      }
-    >
+    existingValueToKeyMap?: ExistingValueToKeyMapType
   ): ProcessingResult {
     // 规范化配置，确保一致性
     const normalizedOptions = this.normalizeConfig(options, code, filePath);
@@ -354,13 +349,7 @@ export class CoreProcessor {
     code: string,
     mode: ProcessingMode,
     options: NormalizedTransformOptions,
-    existingValueToKeyMap: Map<
-      string,
-      {
-        primaryKey: string | number;
-        keys: Set<string | number>;
-      }
-    >,
+    existingValueToKeyMap: ExistingValueToKeyMapType,
     filePath: string
   ): ExtractionResult {
     const extractedStrings: ExtractedString[] = [];

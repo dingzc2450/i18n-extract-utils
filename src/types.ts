@@ -122,8 +122,17 @@ export interface TransformOptions {
    * 现有的翻译内容，可以是JSON文件的路径，也可以是直接的对象。
    * 用于检查现有翻译并复用键。
    * 预期的格式（文件和对象相同）为 { key: value }。
+   * @deprecated 请使用 existingTranslationsConfig 代替
    */
   existingTranslations?: string | Record<string, string | number>; // Renamed and updated type
+
+  /**
+   * 配置现有翻译的详细选项，可以指定多个翻译源以及不同的映射方式
+   * Configure detailed options for existing translations, allowing multiple translation sources and different mapping methods
+   */
+  existingTranslationsConfig?:
+    | ExistingTranslationsConfig
+    | ExistingTranslationsConfig[];
 
   /**
    * 是否在执行函数后添加待翻译文本注释，方便核对。
@@ -188,6 +197,39 @@ export interface UsedExistingKey {
   column: number;
   key: string | number;
   value: string;
+}
+
+/**
+ * 配置现有翻译的详细选项
+ * Detailed configuration for existing translations
+ */
+export interface ExistingTranslationsConfig {
+  /**
+   * JSON文件路径或直接的对象
+   * Path to JSON file or direct object
+   */
+  source: string | Record<string, string | number>;
+
+  /**
+   * 映射方式，定义如何从源数据生成键值映射
+   * Mapping method, defines how to generate key-value mappings from source data
+   * @default 'default'
+   */
+  mappingType?: "default" | "invert" | "custom";
+
+  /**
+   * 自定义映射函数，当 mappingType 为 'custom' 时使用
+   * Custom mapping function, used when mappingType is 'custom'
+   */
+  customMapper?: (
+    sourceData: Record<string, string | number>
+  ) => Map<string, { primaryKey: string | number; keys: Set<string | number> }>;
+
+  /**
+   * 命名空间前缀，可用于区分不同来源的翻译
+   * Namespace prefix, can be used to distinguish translations from different sources
+   */
+  namespace?: string;
 }
 
 /**
@@ -293,13 +335,7 @@ export interface I18nTransformer {
     code: string,
     filePath: string,
     options: TransformOptions,
-    existingValueToKeyMap?: Map<
-      string,
-      {
-        primaryKey: string | number;
-        keys: Set<string | number>;
-      }
-    >
+    existingValueToKeyMap?: ExistingValueToKeyMapType
   ): {
     code: string;
     extractedStrings: ExtractedString[];
@@ -330,13 +366,7 @@ export interface FrameworkCodeGenerator {
     code: string,
     filePath: string,
     options: TransformOptions,
-    existingValueToKeyMap?: Map<
-      string,
-      {
-        primaryKey: string | number;
-        keys: Set<string | number>;
-      }
-    >
+    existingValueToKeyMap?: ExistingValueToKeyMapType
   ): {
     code: string;
     extractedStrings: ExtractedString[];
@@ -426,3 +456,10 @@ export interface I18nConfig {
     rawText: string
   ) => CallExpression;
 }
+
+export type ExistingValueValueType = {
+  sourceNamespace?: string; // 来源命名空间
+  primaryKey: string | number;
+  keys: Set<string | number>;
+};
+export type ExistingValueToKeyMapType = Map<string, ExistingValueValueType>;

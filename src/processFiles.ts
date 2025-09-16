@@ -6,6 +6,10 @@
 import fs from "fs";
 import path from "path";
 import { glob } from "glob";
+import type {
+  ExistingValueToKeyMapType,
+  ExistingValueValueType,
+} from "./types";
 import {
   type ExtractedString,
   type TransformOptions,
@@ -50,89 +54,87 @@ function writeFileContent(filePath: string, content: string): void {
  * 加载现有翻译映射
  */
 function loadExistingTranslations(options: TransformOptions): {
-  existingValueToKeyMap?: Map<
-    string,
-    {
-      primaryKey: string | number;
-      keys: Set<string | number>;
-    }
-  >;
+  existingValueToKeyMap?: ExistingValueToKeyMapType;
   sourceJsonObject?: Record<string, string | number>;
 } {
-  let existingValueToKeyMap:
-    | Map<
-        string,
-        {
-          primaryKey: string | number;
-          keys: Set<string | number>;
-        }
-      >
-    | undefined = undefined;
+  let existingValueToKeyMap: ExistingValueToKeyMapType | undefined = undefined;
   let sourceJsonObject: Record<string, string | number> | undefined = undefined;
 
-  if (options.existingTranslations) {
-    if (typeof options.existingTranslations === "string") {
-      // It's a file path
-      const filePath = options.existingTranslations;
-      if (fs.existsSync(filePath)) {
-        try {
-          sourceJsonObject = JSON.parse(fs.readFileSync(filePath, "utf8"));
-        } catch (e) {
-          console.error(
-            `Error parsing existing translations file: ${filePath}`,
-            e
-          );
+  // 获取配置项，如果存在旧的existingTranslations，则转换为新的existingTranslationsConfig格式
+  const configs = options.existingTranslationsConfig
+    ? Array.isArray(options.existingTranslationsConfig)
+      ? options.existingTranslationsConfig
+      : [options.existingTranslationsConfig]
+    : options.existingTranslations
+      ? [{ source: options.existingTranslations }]
+      : [];
+
+  // 如果有配置项，则处理每个配置项
+  if (configs.length > 0) {
+    existingValueToKeyMap = new Map();
+
+    // 处理每个配置项
+    for (const config of configs) {
+      let jsonObject: Record<string, string | number> | undefined = undefined;
+
+      if (typeof config.source === "string") {
+        // It's a file path
+        const filePath = config.source;
+        if (fs.existsSync(filePath)) {
+          try {
+            jsonObject = JSON.parse(fs.readFileSync(filePath, "utf8"));
+          } catch (e) {
+            console.error(
+              `Error parsing existing translations file: ${filePath}`,
+              e
+            );
+          }
+        } else {
+          console.warn(`Existing translations file not found: ${filePath}`);
         }
       } else {
-        console.warn(`Existing translations file not found: ${filePath}`);
+        // It's a direct object
+        jsonObject = config.source;
       }
-    } else {
-      // It's a direct object
-      sourceJsonObject = options.existingTranslations;
-    }
 
-    if (sourceJsonObject) {
-      existingValueToKeyMap = new Map();
-      Object.entries(sourceJsonObject).forEach(([key, value]) => {
-        const valueStr = String(value);
-        if (existingValueToKeyMap!.has(valueStr)) {
-          // 如果值已存在，添加键到集合中
-          const entry = existingValueToKeyMap!.get(valueStr)!;
-          entry.keys.add(key);
-        } else {
-          // 如果值不存在，创建新条目
-          existingValueToKeyMap!.set(valueStr, {
-            primaryKey: key,
-            keys: new Set([key]),
-          });
+      // 合并到源对象中
+      if (jsonObject) {
+        if (!sourceJsonObject) {
+          sourceJsonObject = {};
         }
-      });
+        Object.assign(sourceJsonObject, jsonObject);
+      }
+
+      // 处理映射方式
+      if (jsonObject) {
+        Object.entries(jsonObject).forEach(([key, value]) => {
+          const valueStr = String(value);
+          if (existingValueToKeyMap!.has(valueStr)) {
+            // 如果值已存在，添加键到集合中
+            const entry = existingValueToKeyMap!.get(valueStr)!;
+            entry.keys.add(key);
+          } else {
+            // 如果值不存在，创建新条目
+            existingValueToKeyMap!.set(valueStr, {
+              primaryKey: key,
+              keys: new Set([key]),
+            });
+          }
+        });
+      }
     }
   }
 
   return { existingValueToKeyMap, sourceJsonObject };
 }
+
 function normalizeMap(
-  existingValueToKeyMap?: Map<
-    string,
-    | {
-        primaryKey: string | number;
-        keys: Set<string | number>;
-      }
-    | string
-    | number
-  >
+  existingValueToKeyMap?: Map<string, ExistingValueValueType | string | number>
 ) {
   if (!existingValueToKeyMap) {
     return existingValueToKeyMap;
   }
-  const normalizedMap = new Map<
-    string,
-    {
-      primaryKey: string | number;
-      keys: Set<string | number>;
-    }
-  >();
+  const normalizedMap = new Map<string, ExistingValueValueType>();
   for (const [value, entry] of existingValueToKeyMap.entries()) {
     if (typeof entry === "string" || typeof entry === "number") {
       normalizedMap.set(value, {
@@ -145,6 +147,7 @@ function normalizeMap(
   }
   return normalizedMap;
 }
+
 /**
  * 使用 CoreProcessor 处理单个文件的代码转换
  *
@@ -164,15 +167,7 @@ function normalizeMap(
 export function transformCode(
   filePath: string,
   options: TransformOptions = {},
-  existingValueToKeyMap?: Map<
-    string,
-    | {
-        primaryKey: string | number;
-        keys: Set<string | number>;
-      }
-    | string
-    | number
-  >
+  existingValueToKeyMap?: Map<string, ExistingValueValueType | string | number>
 ): {
   code: string;
   extractedStrings: ExtractedString[];

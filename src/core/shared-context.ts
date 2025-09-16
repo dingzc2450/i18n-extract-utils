@@ -5,7 +5,11 @@
 
 import type { NodePath } from "@babel/traverse";
 import type * as t from "@babel/types";
-import type { ExtractedString, UsedExistingKey } from "../types";
+import type {
+  ExistingValueToKeyMapType,
+  ExtractedString,
+  UsedExistingKey,
+} from "../types";
 import type { NormalizedTransformOptions } from "./config-normalizer";
 import type { ContextInfo } from "../context-detector";
 import type { ImportInfo } from "../smart-import-manager";
@@ -20,13 +24,7 @@ export interface SharedProcessingContext {
   filePath: string;
 
   // 数据存储
-  existingValueToKeyMap: Map<
-    string,
-    {
-      primaryKey: string | number;
-      keys: Set<string | number>;
-    }
-  >;
+  existingValueToKeyMap: ExistingValueToKeyMapType;
   generatedKeysMap: Map<string, string | number>;
   extractedStrings: ExtractedString[];
   usedExistingKeysList: UsedExistingKey[];
@@ -63,13 +61,7 @@ export interface SharedProcessingContext {
  * 键生成上下文接口
  */
 export interface KeyGenerationContext {
-  existingValueToKeyMap: Map<
-    string,
-    {
-      primaryKey: string | number;
-      keys: Set<string | number>;
-    }
-  >;
+  existingValueToKeyMap: ExistingValueToKeyMapType;
   generatedKeysMap: Map<string, string | number>;
   extractedStrings: ExtractedString[];
   usedExistingKeysList: UsedExistingKey[];
