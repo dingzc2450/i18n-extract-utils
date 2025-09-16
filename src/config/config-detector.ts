@@ -131,11 +131,16 @@ export class ConfigDetector {
     }
 
     // 检查 existingTranslations 与 existingTranslationsConfig 的冲突
-    if (userOptions.existingTranslations && userOptions.existingTranslationsConfig) {
+    if (
+      userOptions.existingTranslations &&
+      userOptions.existingTranslationsConfig
+    ) {
       issues.push(
         "同时使用了旧配置 existingTranslations 和新配置 existingTranslationsConfig"
       );
-      suggestions.push("建议使用新配置 existingTranslationsConfig 并移除旧配置 existingTranslations");
+      suggestions.push(
+        "建议使用新配置 existingTranslationsConfig 并移除旧配置 existingTranslations"
+      );
     }
 
     // 检查框架配置的一致性
