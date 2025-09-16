@@ -68,6 +68,13 @@ export class ConfigDetector {
           "hookImport 已废弃，请使用 i18nConfig.i18nImport.source 代替"
         );
       }
+
+      // 添加对 existingTranslations 配置的废弃警告
+      if (userOptions.existingTranslations) {
+        warnings.push(
+          "existingTranslations 已废弃，请使用 existingTranslationsConfig 代替"
+        );
+      }
     } catch (error) {
       errors.push(
         `配置验证错误: ${
@@ -121,6 +128,14 @@ export class ConfigDetector {
         "同时使用了旧配置 hookImport 和新配置 i18nConfig.i18nImport.source"
       );
       suggestions.push("建议使用新配置并移除旧配置");
+    }
+
+    // 检查 existingTranslations 与 existingTranslationsConfig 的冲突
+    if (userOptions.existingTranslations && userOptions.existingTranslationsConfig) {
+      issues.push(
+        "同时使用了旧配置 existingTranslations 和新配置 existingTranslationsConfig"
+      );
+      suggestions.push("建议使用新配置 existingTranslationsConfig 并移除旧配置 existingTranslations");
     }
 
     // 检查框架配置的一致性
