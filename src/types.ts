@@ -12,7 +12,7 @@ export interface KeyContext {
   /** 列号 */
   column: number;
   /** 同值对应的keys */
-  sameValueKeys: (string | number)[];
+  sameValueKeys: ExistingKeyDetailItemType[];
   // 未来可以添加更多上下文信息
 }
 
@@ -440,14 +440,25 @@ export interface I18nConfig {
     rawText: string
   ) => CallExpression;
 }
-
+type ExistingKeyType = string | number;
+export type ExistingKeyDetailItemType = {
+  /**
+   * 命名空间
+   */
+  namespace?: string;
+  /**
+   * 对应的key
+   */
+  key: string | number;
+};
 export type ExistingValueValueType = {
   /**
    * 来源命名空间
    * @experimental 未来可能变更后
    */
   experimental_sourceNamespaces?: string[];
-  primaryKey: string | number;
-  keys: Set<string | number>;
+  primaryKey: ExistingKeyType;
+  keyDetailList: ExistingKeyDetailItemType[];
+  keys: Set<ExistingKeyType>;
 };
 export type ExistingValueToKeyMapType = Map<string, ExistingValueValueType>;

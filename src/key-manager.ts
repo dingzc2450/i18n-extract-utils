@@ -85,7 +85,7 @@ export function getKeyAndRecord(
         filePath: location.filePath,
         line: location.line,
         column: location.column,
-        sameValueKeys: Array.from(existingKeyEntry.keys),
+        sameValueKeys: existingKeyEntry.keyDetailList,
       };
 
       resolvedKey = options.keyConflictResolver(

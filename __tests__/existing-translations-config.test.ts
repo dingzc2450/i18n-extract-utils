@@ -348,4 +348,112 @@ describe("existingTranslationsConfig Tests", () => {
       expect(result.usedExistingKeys[0].value).toBe("Hello World");
     });
   });
+
+  describe("keyDetailList support", () => {
+    test("should populate keyDetailList with namespace information", async () => {
+      const translations = {
+        greeting: "Hello World",
+        title: "Welcome Message",
+      };
+
+      const tempJsonFile = createTempJsonFile(translations);
+      tempFiles.push(tempJsonFile);
+
+      const code = `
+        function MyComponent() {
+          const greeting = "___Hello World___";
+          const title = "___Welcome Message___";
+          return <div>{greeting} - {title}</div>;
+        }
+      `;
+      const tempFile = createTempFile(code);
+      tempFiles.push(tempFile);
+
+      // We cannot directly test keyDetailList since it's internal to the process
+      // But we can verify that the functionality works correctly with namespaces
+      const result = await processFiles(tempFile, {
+        i18nConfig: {
+          i18nImport: {
+            name: "t",
+            importName: "useTranslation",
+            source: "react-i18next",
+          },
+        },
+        existingTranslationsConfig: [
+          {
+            source: tempJsonFile,
+            namespace: "common",
+          },
+          {
+            source: {
+              page_title: "Hello World",
+            },
+            namespace: "page",
+          },
+        ],
+      });
+
+      expect(result.modifiedFiles.length).toBe(1);
+      // Should use one of the keys with the correct value
+      expect(result.modifiedFiles[0].newContent).toMatch(/t\(".*"\)/);
+      expect(result.usedExistingKeys.length).toBe(2);
+
+      // Both values should be found and used
+      const usedValues = result.usedExistingKeys.map(item => item.value);
+      expect(usedValues).toContain("Hello World");
+      expect(usedValues).toContain("Welcome Message");
+    });
+
+    test("should handle keyDetailList with multiple namespaces for same value", async () => {
+      const code = `
+        function MyComponent() {
+          const message = "___Hello World___";
+          return <div>{message}</div>;
+        }
+      `;
+      const tempFile = createTempFile(code);
+      tempFiles.push(tempFile);
+      let isHasTargetNamespaceCount = 0;
+      const result = await processFiles(tempFile, {
+        i18nConfig: {
+          i18nImport: {
+            name: "t",
+            importName: "useTranslation",
+            source: "react-i18next",
+          },
+        },
+        keyConflictResolver(_existingPrimaryKey, value, context) {
+          if (
+            value === "Hello World" &&
+            context.sameValueKeys.some(
+              item => item.key === "greeting" && item.namespace === "common"
+            )
+          ) {
+            isHasTargetNamespaceCount = context.sameValueKeys.length;
+          }
+          return null;
+        },
+        existingTranslationsConfig: [
+          {
+            source: {
+              greeting: "Hello World",
+            },
+            namespace: "common",
+          },
+          {
+            source: {
+              welcome_msg: "Hello World",
+            },
+            namespace: "page",
+          },
+        ],
+      });
+
+      expect(result.modifiedFiles.length).toBe(1);
+      expect(result.modifiedFiles[0].newContent).toMatch(/t\(".*"\)/);
+      expect(result.usedExistingKeys.length).toBe(1);
+      expect(result.usedExistingKeys[0].value).toBe("Hello World");
+      expect(isHasTargetNamespaceCount).toBe(2);
+    });
+  });
 });

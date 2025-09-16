@@ -4,6 +4,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { tmpdir } from "os";
 import crypto from "crypto";
+import type { ExistingKeyDetailItemType } from "../src/types";
 
 // Helper to create temporary test files
 function createTempFile(content: string): string {
@@ -214,10 +215,25 @@ describe("keyConflictResolver Configuration Tests", () => {
       // 创建一个具有多个键对应相同值的映射
       const existingValueToKey = new Map<
         string,
-        { primaryKey: string | number; keys: Set<string | number> }
+        {
+          primaryKey: string | number;
+          keys: Set<string | number>;
+          keyDetailList: ExistingKeyDetailItemType[];
+        }
       >();
       existingValueToKey.set("Welcome Message", {
         primaryKey: "greeting",
+        keyDetailList: [
+          {
+            key: "greeting",
+          },
+          {
+            key: "welcome_msg",
+          },
+          {
+            key: "intro_message",
+          },
+        ],
         keys: new Set(["greeting", "welcome_msg", "intro_message"]),
       });
 
@@ -227,7 +243,7 @@ describe("keyConflictResolver Configuration Tests", () => {
         _value: string,
         context: any
       ) => {
-        receivedSameValueKeys = context.sameValueKeys;
+        receivedSameValueKeys = context.sameValueKeys.map(i => i.key);
         return null; // 使用默认行为
       };
 

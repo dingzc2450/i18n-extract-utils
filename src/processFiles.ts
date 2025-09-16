@@ -116,6 +116,7 @@ function loadExistingTranslations(options: TransformOptions): {
             if (config.namespace) {
               entry.experimental_sourceNamespaces!.push(config.namespace);
             }
+            entry.keyDetailList.push({ key, namespace: config.namespace });
           } else {
             // 如果值不存在，创建新条目
             existingValueToKeyMap!.set(valueStr, {
@@ -123,6 +124,12 @@ function loadExistingTranslations(options: TransformOptions): {
               experimental_sourceNamespaces: config.namespace
                 ? [config.namespace]
                 : [],
+              keyDetailList: [
+                {
+                  key,
+                  namespace: config.namespace,
+                },
+              ],
               keys: new Set([key]),
             });
           }
@@ -145,6 +152,7 @@ function normalizeMap(
     if (typeof entry === "string" || typeof entry === "number") {
       normalizedMap.set(value, {
         primaryKey: entry,
+        keyDetailList: [{ key: entry }],
         keys: new Set([entry]),
       });
     } else {
