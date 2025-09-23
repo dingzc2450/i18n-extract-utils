@@ -26,6 +26,7 @@ import * as t from "@babel/types";
 import generate from "@babel/generator";
 import { getKeyAndRecord } from "../key-manager";
 import { attachExtractedCommentToNode } from "../core/ast-utils";
+import { getVueCompilerManager } from "./vue/compiler-manager";
 
 /**
  * Vue 插件实现
@@ -119,18 +120,23 @@ export class VuePlugin implements FrameworkPlugin {
   ): string {
     const { extractedStrings } = context.result;
     // 使用集成后的Vue处理方法处理整个文件
-    const result = this.processCode(
-      context.originalCode,
-      context.filePath, // 保留文件路径参数，用于AST解析和框架检测
-      options,
-      new Map() // 暂时不处理existingValueToKey，这可以在后续优化
-    );
+    try {
+      const result = this.processCode(
+        context.originalCode,
+        context.filePath, // 保留文件路径参数，用于AST解析和框架检测
+        options,
+        new Map() // 暂时不处理existingValueToKey，这可以在后续优化
+      );
 
-    // 清空原有的extractedStrings，使用处理结果
-    extractedStrings.length = 0;
-    extractedStrings.push(...result.extractedStrings);
+      // 清空原有的extractedStrings，使用处理结果
+      extractedStrings.length = 0;
+      extractedStrings.push(...result.extractedStrings);
 
-    return result.code;
+      return result.code;
+    } finally {
+      // 确保批次处理结束
+      getVueCompilerManager().endBatch();
+    }
   }
 
   /**
@@ -143,6 +149,11 @@ export class VuePlugin implements FrameworkPlugin {
     options: NormalizedTransformOptions,
     existingValueToKeyMap?: ExistingValueToKeyMapType
   ) {
+    // 初始化Vue编译器管理器
+    const manager = getVueCompilerManager();
+    // 为整个处理过程创建一个新的批次
+    const batchId = `vue-plugin-${Date.now()}`;
+    manager.startBatch(batchId);
     // 检查是否为Vue单文件组件
     const isVueSFC =
       filePath.endsWith(".vue") ||
@@ -364,7 +375,8 @@ export class VuePlugin implements FrameworkPlugin {
   }
 
   /**
-   * 处理模板部分 - 使用直接的字符串处理方法
+   * 处理模板部分
+   * 根据配置使用AST或正则表达式处理Vue模板
    */
   private processTemplate(
     template: string,
@@ -375,17 +387,42 @@ export class VuePlugin implements FrameworkPlugin {
     existingValueToKeyMap: ExistingValueToKeyMapType,
     filePath: string
   ): string {
-    // 直接使用字符串替换方法处理模板
-    // 这比使用Vue AST更可靠，因为我们只需要替换特定的字符串
-    return this.processTemplateWithRegex(
-      template,
-      translationMethod,
-      extractedStrings,
-      usedExistingKeysList,
-      options,
-      existingValueToKeyMap,
-      filePath
-    );
+    const mode = options.vueTemplateMode;
+
+    // 如果指定使用正则表达式处理或者没有预加载编译器，使用正则表达式
+    if (
+      mode === "regex" ||
+      !getVueCompilerManager().hasLoadedCompiler("vue3")
+    ) {
+      return this.processTemplateWithRegex(
+        template,
+        translationMethod,
+        extractedStrings,
+        usedExistingKeysList,
+        options,
+        existingValueToKeyMap,
+        filePath
+      );
+    }
+
+    try {
+      // 获取预加载的编译器实例
+      const compiler = getVueCompilerManager().getLoadedCompiler("vue3");
+
+      // 使用编译器解析模板
+      const { ast, errors } = compiler.parse(template);
+
+      if (errors && errors.length > 0) {
+        // 在ast模式下，解析错误时直接抛出
+        throw new Error(`Vue template parsing failed: ${errors.join(", ")}`);
+      }
+
+      // TODO: 使用AST遍历和转换
+      // 目前暂时返回原始模板，等待AST处理逻辑的实现
+      return template;
+    } catch (error) {
+      throw new Error(`Vue compiler error: ${error}`);
+    }
   }
 
   /**

@@ -2,6 +2,7 @@
  * 新版本的Transformer适配器
  * 使用重构后的CoreProcessor进行处理
  */
+import { getVueCompilerManager } from "./plugins/vue/compiler-manager";
 
 import fs from "fs";
 import path from "path";
@@ -292,92 +293,139 @@ export async function processFiles(
     configCheck.warnings.forEach(warning => console.warn(`  ⚠️ ${warning}`));
   }
 
-  // 第二步：加载现有翻译和处理文件
-  const { existingValueToKeyMap, sourceJsonObject } =
-    loadExistingTranslations(options);
-  // 额外处理windows路径分隔符问题
-  const normalizedPattern = Array.isArray(pattern)
-    ? pattern.map(i => i.replace(/\\/g, "/"))
-    : pattern.replace(/\\/g, "/");
+  // 第二步：创建处理器并检查是否需要Vue编译器
+  const processor = createProcessorWithDefaultPlugins();
+  const { normalizedI18nConfig } = processor.normalizeConfig(options, "", "");
+  const framework = normalizedI18nConfig.framework;
+  const isVueProject = [Framework.Vue, Framework.Vue2, Framework.Vue3].includes(
+    framework
+  );
 
-  const filePaths = await glob(normalizedPattern);
-  console.log(`Found ${filePaths.length} files to process.`);
+  let vueManager: ReturnType<typeof getVueCompilerManager> | undefined;
+  if (isVueProject) {
+    // 设置Vue编译器
+    vueManager = getVueCompilerManager();
 
-  const allExtractedStrings: ExtractedString[] = [];
-  const allUsedExistingKeys: UsedExistingKey[] = [];
-  const fileModifications: FileModificationRecord[] = [];
-  const errors: I18nError[] = []; // 收集处理过程中的所有错误
+    // 如果指定了自定义编译器路径，设置它们
+    if (options.vueCompilerPaths) {
+      vueManager.setCustomPaths(options.vueCompilerPaths);
+    }
 
-  for (const filePath of filePaths) {
+    const batchId = `batch-${Date.now()}`;
+    vueManager.startBatch(batchId, "vue3");
+
+    // 预加载Vue编译器
     try {
-      // Check if file exists before reading to avoid race conditions
-      if (!fs.existsSync(filePath)) {
-        const fileError = createI18nError("FILE001", [filePath], { filePath });
-        logError(fileError);
-        errors.push(fileError);
-        continue;
-      }
-
-      const originalContent = FileCacheUtils.readFileWithCache(filePath, {
-        noCache: true,
-      });
-
-      const result = transformCode(filePath, options, existingValueToKeyMap);
-
-      // 如果处理过程中出现错误，添加到错误列表
-      if (result.error) {
-        errors.push(result.error);
-        // 仍然继续处理，因为transformCode即使出错也会返回有效的结构
-      }
-
-      allExtractedStrings.push(...result.extractedStrings);
-      allUsedExistingKeys.push(...result.usedExistingKeysList);
-
-      if (result.code !== originalContent) {
-        fileModifications.push({
-          filePath,
-          newContent: result.code,
-          changes: result.changes,
-        });
-
-        // 写入修改后的文件
-        writeFileContent(filePath, result.code);
-      }
+      await vueManager.getCompiler("vue3");
     } catch (error) {
-      // 使用增强的错误处理
-      const enhancedError = baseEnhanceError(
-        error instanceof Error ? error : new Error(String(error)),
-        filePath
+      const compilerError = createI18nError(
+        "VUE001",
+        ["Failed to preload Vue compiler"],
+        {
+          originalError: error instanceof Error ? error : undefined,
+        }
       );
-      logError(enhancedError);
-      errors.push(enhancedError);
+      logError(compilerError);
+      // 不抛出错误，让后续处理决定是否使用正则表达式回退
     }
   }
 
-  // 输出提取的字符串到JSON文件
-  if (options.outputPath && allExtractedStrings.length > 0) {
-    const translationJson = allExtractedStrings.reduce(
-      (acc, item) => {
-        acc[item.key] = item.value;
-        return acc;
-      },
-      {} as Record<string, string>
-    );
+  try {
+    // 第三步：加载现有翻译和处理文件
+    const { existingValueToKeyMap, sourceJsonObject } =
+      loadExistingTranslations(options);
+    // 额外处理windows路径分隔符问题
+    const normalizedPattern = Array.isArray(pattern)
+      ? pattern.map(i => i.replace(/\\/g, "/"))
+      : pattern.replace(/\\/g, "/");
 
-    writeFileContent(
-      options.outputPath,
-      JSON.stringify(translationJson, null, 2)
-    );
-    console.log(`Extracted translations saved to: ${options.outputPath}`);
+    const filePaths = await glob(normalizedPattern);
+    console.log(`Found ${filePaths.length} files to process.`);
+
+    const allExtractedStrings: ExtractedString[] = [];
+    const allUsedExistingKeys: UsedExistingKey[] = [];
+    const fileModifications: FileModificationRecord[] = [];
+    const errors: I18nError[] = []; // 收集处理过程中的所有错误
+
+    for (const filePath of filePaths) {
+      try {
+        // Check if file exists before reading to avoid race conditions
+        if (!fs.existsSync(filePath)) {
+          const fileError = createI18nError("FILE001", [filePath], {
+            filePath,
+          });
+          logError(fileError);
+          errors.push(fileError);
+          continue;
+        }
+
+        const originalContent = FileCacheUtils.readFileWithCache(filePath, {
+          noCache: true,
+        });
+
+        const result = transformCode(filePath, options, existingValueToKeyMap);
+
+        // 如果处理过程中出现错误，添加到错误列表
+        if (result.error) {
+          errors.push(result.error);
+          // 仍然继续处理，因为transformCode即使出错也会返回有效的结构
+        }
+
+        allExtractedStrings.push(...result.extractedStrings);
+        allUsedExistingKeys.push(...result.usedExistingKeysList);
+
+        if (result.code !== originalContent) {
+          fileModifications.push({
+            filePath,
+            newContent: result.code,
+            changes: result.changes,
+          });
+
+          // 写入修改后的文件
+          writeFileContent(filePath, result.code);
+        }
+      } catch (error) {
+        // 使用增强的错误处理
+        const enhancedError = baseEnhanceError(
+          error instanceof Error ? error : new Error(String(error)),
+          filePath
+        );
+        logError(enhancedError);
+        errors.push(enhancedError);
+      }
+    }
+
+    // 输出提取的字符串到JSON文件
+    if (options.outputPath && allExtractedStrings.length > 0) {
+      const translationJson = allExtractedStrings.reduce(
+        (acc, item) => {
+          acc[item.key] = item.value;
+          return acc;
+        },
+        {} as Record<string, string>
+      );
+
+      writeFileContent(
+        options.outputPath,
+        JSON.stringify(translationJson, null, 2)
+      );
+      console.log(`Extracted translations saved to: ${options.outputPath}`);
+    }
+
+    // 返回结果
+    return {
+      extractedStrings: allExtractedStrings,
+      usedExistingKeys: allUsedExistingKeys,
+      modifiedFiles: fileModifications,
+      sourceJsonObject,
+      errors, // 返回处理过程中收集的所有错误
+    };
+  } finally {
+    // 结束Vue编译器批次
+    if (isVueProject && vueManager) {
+      vueManager.endBatch();
+    }
   }
-
-  return {
-    extractedStrings: allExtractedStrings,
-    usedExistingKeys: allUsedExistingKeys,
-    modifiedFiles: fileModifications,
-    sourceJsonObject,
-    errors, // 返回处理过程中收集的所有错误
-  };
 }
 
 /**

@@ -38,10 +38,15 @@ export interface FrameworkPlugin {
   getRequiredImportsAndHooks?(
     options: NormalizedTransformOptions,
     context: ProcessingContext
-  ): {
-    imports: ImportRequirement[];
-    hooks: HookRequirement[];
-  };
+  ):
+    | Promise<{
+        imports: ImportRequirement[];
+        hooks: HookRequirement[];
+      }>
+    | {
+        imports: ImportRequirement[];
+        hooks: HookRequirement[];
+      };
 
   /**
    * 后处理代码 - 轻量级的最终处理（主要的导入和hook插入已由CoreProcessor完成）

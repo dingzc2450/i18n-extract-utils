@@ -80,6 +80,7 @@ export interface NormalizedTransformOptions {
   preserveFormatting: boolean;
   useASTTransform: boolean;
   keyConflictResolver: NonNullable<TransformOptions["keyConflictResolver"]>;
+  vueTemplateMode: "ast" | "regex";
 
   // i18n配置 - 已规范化
   normalizedI18nConfig: NormalizedI18nConfig;
@@ -446,6 +447,7 @@ export function normalizeConfig(
       (CONFIG_DEFAULTS.EXTRACTED_COMMENT_TYPE as "block"),
     preserveFormatting:
       userOptions.preserveFormatting ?? CONFIG_DEFAULTS.PRESERVE_FORMATTING,
+    vueTemplateMode: (userOptions.vueTemplateMode as "ast" | "regex") ?? "ast",
     useASTTransform:
       userOptions.useASTTransform ?? CONFIG_DEFAULTS.USE_AST_TRANSFORM,
 

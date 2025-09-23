@@ -95,6 +95,34 @@ export interface TransformOptions {
   generateKey?: (value: string, filePath: string) => string | number;
 
   /**
+   * Vue模板处理模式
+   * - 'ast': 使用AST解析处理（默认）
+   * - 'regex': 使用正则表达式处理
+   * - 'auto': 自动选择，失败时回退到正则表达式处理
+   */
+  vueTemplateMode?: "ast" | "regex";
+
+  /**
+   * 自定义Vue编译器加载路径。
+   * 用于指定从哪些路径查找和加载Vue编译器。
+   * 此配置对于以下场景特别有用：
+   * 1. 项目使用了自定义的Vue编译器版本
+   * 2. Vue编译器安装在非标准位置
+   * 3. 需要使用特定版本的Vue编译器
+   *
+   * 示例:
+   * ```typescript
+   * {
+   *   vueCompilerPaths: [
+   *     '/path/to/custom/vue/compiler',
+   *     '/another/compiler/location'
+   *   ]
+   * }
+   * ```
+   */
+  vueCompilerPaths?: string[];
+
+  /**
    * 控制当提取的字符串在现有翻译中已存在对应键时的行为。
    *
    * - false（默认）：优先使用现有键，仅当没有找到匹配项时生成新键
