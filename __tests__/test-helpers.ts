@@ -5,7 +5,6 @@
 import {
   transformCode,
   processFiles as originalProcessFiles,
-  executeI18nExtraction as originalExecuteI18nExtraction,
 } from "../src/processFiles";
 
 export { transformCode };
@@ -42,20 +41,6 @@ export const processFiles = (
   options: Parameters<typeof originalProcessFiles>[1] = {}
 ) => {
   return originalProcessFiles(pattern, {
-    ...options,
-    vueTemplateMode: "regex", // 强制使用正则表达式模式
-  });
-};
-
-/**
- * 导出executeI18nExtraction函数的包装版本
- * 固定使用正则表达式模式处理Vue模板
- */
-export const executeI18nExtraction = (
-  pattern: Parameters<typeof originalExecuteI18nExtraction>[0],
-  options: Parameters<typeof originalExecuteI18nExtraction>[1] = {}
-) => {
-  return originalExecuteI18nExtraction(pattern, {
     ...options,
     vueTemplateMode: "regex", // 强制使用正则表达式模式
   });

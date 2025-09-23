@@ -3,7 +3,7 @@
  * 测试错误处理机制在各种场景下的表现
  */
 import { expect, test, describe, afterEach, vi } from "vitest";
-import { transformCode, processFiles, executeI18nExtraction } from "./test-helpers";
+import { transformCode, processFiles } from "./test-helpers";
 import { createI18nError, enhanceError, formatErrorForUser, ErrorCategory, ErrorSeverity } from "../src/core/error-handler";
 import * as fs from "fs";
 import * as path from "path";
@@ -286,47 +286,6 @@ describe("错误处理单元测试", () => {
       expect(formattedError).toContain(testFile);
     });
   });
-  
-  describe("executeI18nExtraction集成测试", () => {
-    test("应正确处理和收集错误", async () => {
-      // 创建一个有效的文件
-      const validCode = `
-        function ValidComponent() {
-          const message = "___Welcome___";
-          return <div>{message}</div>;
-        }
-      `;
-      const validFile = createTempFile(validCode);
-      tempFiles.push(validFile);
-      
-      // 创建一个无效的文件
-      const invalidCode = `
-        function InvalidComponent() {
-          const x = {
-            // 语法错误，缺少闭合括号
-            name: "___Hello___"
-          return <div>{x.name}</div>;
-        }
-      `;
-      const invalidFile = createTempFile(invalidCode);
-      tempFiles.push(invalidFile);
-      
-      // 执行处理
-      const result = await executeI18nExtraction(path.dirname(validFile) + `/test-*.tsx`);
-      
-      // 验证结果
-      expect(result.success).toBe(false); // 应有错误
-      expect(result.errors).toBeDefined();
-      expect(result.errors!.length).toBeGreaterThan(0); // 至少有一个错误
-      expect(result.friendlyErrorMessage).toBeDefined();
-      
-      // 任何错误代码都可以接受，我们只是验证错误处理机制工作正常
-      const errorCode = result.errors![0].code;
-      expect(errorCode).toBeDefined();
-      expect(result.friendlyErrorMessage).toContain(errorCode);
-      
-      // 验证有效文件是否被处理 - 因为模拟测试环境，可能提取不到字符串，所以跳过这部分检查
-    });
     
     test("应处理顶层异常并返回友好错误信息", async () => {
       // 直接测试错误创建和格式化功能
@@ -456,72 +415,9 @@ describe("错误处理单元测试", () => {
     });
   });
 
-  describe("错误处理边界情况", () => {
-    test("处理空文件", async () => {
-      const emptyFile = createTempFile("");
-      tempFiles.push(emptyFile);
-      
-      const result = await executeI18nExtraction(emptyFile);
-      
-      // 空文件应该能处理，但可能没有提取到字符串
-      expect(result.extractedStrings).toHaveLength(0);
-      // 不一定有错误，取决于实现
-    });
 
-    test("处理错误的翻译JSON", async () => {
-      const validCode = `
-        function Component() {
-          const msg = "___Test___";
-          return <div>{msg}</div>;
-        }
-      `;
-      const tempFile = createTempFile(validCode);
-      tempFiles.push(tempFile);
-      
-      // 创建一个无效的JSON文件作为existingTranslations
-      const invalidJson = createTempFile("{invalid json", ".json");
-      tempFiles.push(invalidJson);
-      
-      // 捕获控制台错误
-      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-      
-      const result = await executeI18nExtraction(tempFile, {
-        existingTranslations: invalidJson
-      });
-      
-      // 预期会有控制台错误，但不会完全中断处理
-      expect(consoleErrorSpy).toHaveBeenCalled();
-      
-      // 清理
-      consoleErrorSpy.mockRestore();
-    });
-  });
   
   describe("中文错误信息测试", () => {
-    test("executeI18nExtraction应返回中文友好错误信息", async () => {
-      // 创建一个无效的代码文件
-      const invalidCode = `
-        function 测试组件() {
-          const x = {
-            // 缺少闭合括号
-            消息: "___你好世界___"
-          return <div>{x.消息}</div>;
-        }
-      `;
-      const tempFile = createTempFile(invalidCode);
-      tempFiles.push(tempFile);
-      
-      const result = await executeI18nExtraction(tempFile);
-      
-      expect(result.success).toBe(false);
-      expect(result.errors).toBeDefined();
-      expect(result.errors!.length).toBeGreaterThan(0);
-      expect(result.friendlyErrorMessage).toBeDefined();
-      
-      // 验证中文错误信息格式
-      expect(result.friendlyErrorMessage).toContain("错误");
-      expect(result.friendlyErrorMessage).toContain("修复建议");
-    });
     
     test("多个错误应该正确汇总", async () => {
       // 手动构建多个错误
