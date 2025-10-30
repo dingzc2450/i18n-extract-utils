@@ -410,7 +410,7 @@ export class VuePlugin implements FrameworkPlugin {
       const compiler = getVueCompilerManager().getLoadedCompiler("vue3");
 
       // 使用编译器解析模板
-      const { ast, errors } = compiler.parse(template);
+      const { errors } = compiler.parse(template);
 
       if (errors && errors.length > 0) {
         // 在ast模式下，解析错误时直接抛出
