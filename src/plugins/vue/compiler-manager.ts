@@ -3,11 +3,7 @@
  * 负责Vue编译器的生命周期管理和资源共享
  */
 
-import type {
-  VueCompiler,
-  CompilerLoadResult,
-  CompilerVersion,
-} from "./compiler-types";
+import type { VueCompiler, CompilerVersion } from "./compiler-types";
 import {
   BatchError,
   CompilerLoadError,
