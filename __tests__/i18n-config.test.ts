@@ -17,7 +17,7 @@ function createTempFile(content: string): string {
 
 const tempFiles: string[] = [];
 afterEach(() => {
-  tempFiles.forEach((file) => {
+  tempFiles.forEach(file => {
     if (fs.existsSync(file)) {
       try {
         fs.unlinkSync(file);
@@ -130,7 +130,9 @@ describe("i18nConfig Tests", () => {
           },
         },
       });
-
+      expect(result.code).toContain(
+        'import { useCustomHook as useTranslation } from "custom-i18n"'
+      );
       expect(result.code).toContain('t("Hello World")');
       // Note: custom import handling might need implementation in the actual code
     });
@@ -356,7 +358,7 @@ describe("i18nConfig Tests", () => {
         ]);
       };
 
-      const generateNumericKey = (value: string, filePath: string): number => {
+      const generateNumericKey = (value: string): number => {
         return value.length * 100; // Simple numeric key generation
       };
 
@@ -437,11 +439,7 @@ describe("i18nConfig Tests", () => {
       const tempFile = createTempFile(code);
       tempFiles.push(tempFile);
 
-      const customI18nCall = (
-        callName: string,
-        key: string | number,
-        rawText: string
-      ) => {
+      const customI18nCall = (callName: string, key: string | number) => {
         return t.callExpression(
           t.memberExpression(t.identifier(callName), t.identifier("jsx")),
           [

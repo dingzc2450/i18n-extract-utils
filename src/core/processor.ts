@@ -397,6 +397,19 @@ export class CoreProcessor {
     plugin: FrameworkPlugin
   ): string {
     let modifiedCode = code;
+
+    // 检查是否有自定义导入
+    const customImport = options.normalizedI18nConfig.i18nImport.custom;
+    if (customImport && context.result.changes.length > 0) {
+      // 插入自定义导入并添加hook调用
+      modifiedCode = this.addCustomImportWithHook(
+        modifiedCode,
+        customImport,
+        options
+      );
+      return modifiedCode;
+    }
+
     // 先统一处理 判断是否有导入需求
     // 优先处理插件定义的导入和hook需求（统一格式）
     if (plugin.getRequiredImportsAndHooks) {
@@ -518,6 +531,9 @@ export class CoreProcessor {
       ranges: true,
     });
 
+    // 获取导入冲突配置
+    const conflictConfig = options?.importConflict;
+
     const changes: ImportChange[] = [];
     const existingImports = new Map<
       string,
@@ -525,7 +541,16 @@ export class CoreProcessor {
     >();
     let lastImportEndPos = 0;
 
-    // 1. 分析现有导入
+    // 1. 分析现有导入，同时收集按名称索引的导入
+    const importsByName = new Map<
+      string,
+      Array<{
+        source: string;
+        node: t.ImportDeclaration;
+        specifier: t.ImportSpecifier | t.ImportDefaultSpecifier;
+      }>
+    >();
+
     traverse(ast, {
       ImportDeclaration: path => {
         const node = path.node;
@@ -543,8 +568,28 @@ export class CoreProcessor {
                 ? spec.imported.name
                 : spec.imported.value;
             existing.specifiers.add(importedName);
+
+            // 按名称收集导入
+            if (!importsByName.has(importedName)) {
+              importsByName.set(importedName, []);
+            }
+            importsByName.get(importedName)!.push({
+              source,
+              node,
+              specifier: spec,
+            });
           } else if (t.isImportDefaultSpecifier(spec)) {
             existing.specifiers.add("default");
+            // 记录默认导入
+            const name = spec.local.name;
+            if (!importsByName.has(name)) {
+              importsByName.set(name, []);
+            }
+            importsByName.get(name)!.push({
+              source,
+              node,
+              specifier: spec,
+            });
           } else if (t.isImportNamespaceSpecifier(spec)) {
             existing.specifiers.add("*");
           }
@@ -558,8 +603,70 @@ export class CoreProcessor {
 
     // 2. 计算变更集
     for (const req of importRequirements) {
-      const existing = existingImports.get(req.source);
+      // 检查每个需要导入的标识符是否已存在
+      const conflictStrategy = conflictConfig?.conflictStrategy || "skip";
+      const enableWarnings = conflictConfig?.enableWarnings ?? true;
 
+      if (!req.isDefault) {
+        // 处理命名导入
+        for (const spec of req.specifiers) {
+          const existingImports = importsByName.get(spec.name) || [];
+          const hasConflict = existingImports.some(
+            imp => imp.source !== req.source
+          );
+
+          if (hasConflict) {
+            if (enableWarnings) {
+              console.warn(
+                `Warning: Found conflicting import for '${spec.name}'.\n` +
+                  `Current import sources: ${existingImports.map(i => i.source).join(", ")}\n` +
+                  `Attempting to import from: ${req.source}`
+              );
+            }
+
+            if (conflictStrategy === "override") {
+              // 移除所有已存在的同名导入
+              for (const imp of existingImports) {
+                const node = imp.node;
+                const updatedSpecifiers = node.specifiers.filter(s => {
+                  if (t.isImportSpecifier(s)) {
+                    return s.imported.type === "Identifier"
+                      ? s.imported.name !== spec.name
+                      : s.imported.value !== spec.name;
+                  }
+                  return true;
+                });
+
+                if (updatedSpecifiers.length !== node.specifiers.length) {
+                  if (updatedSpecifiers.length === 0) {
+                    changes.push({
+                      type: "replace",
+                      start: node.start!,
+                      end: node.end!,
+                      text: "",
+                    });
+                  } else {
+                    const updatedNode = t.importDeclaration(
+                      updatedSpecifiers,
+                      node.source
+                    );
+                    const { code: newImportCode } = generate(updatedNode);
+                    changes.push({
+                      type: "replace",
+                      start: node.start!,
+                      end: node.end!,
+                      text: newImportCode,
+                    });
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // 处理导入
+      const existing = existingImports.get(req.source);
       if (existing) {
         // 已存在相同源，尝试合并
         const { node, specifiers } = existing;
@@ -605,8 +712,9 @@ export class CoreProcessor {
         }
       } else {
         // 不存在相同源，添加新导入
-        const newSpecifiers: (t.ImportSpecifier | t.ImportDefaultSpecifier)[] =
-          [];
+        const newSpecifiers: Array<
+          t.ImportSpecifier | t.ImportDefaultSpecifier
+        > = [];
         if (req.isDefault) {
           newSpecifiers.push(
             t.importDefaultSpecifier(t.identifier(req.specifiers[0].name))
@@ -1038,6 +1146,179 @@ export class CoreProcessor {
     }
 
     return code;
+  }
+
+  /**
+   * 添加自定义导入并处理hook调用
+   */
+  private addCustomImportWithHook(
+    code: string,
+    customImport: string,
+    options: NormalizedTransformOptions
+  ): string {
+    // 首先插入自定义导入（处理冲突）
+    let modifiedCode = this.addCustomImport(code, customImport);
+
+    // 分析自定义导入中的hook名称和翻译方法名称
+    const hookName = this.extractHookNameFromCustomImport(customImport);
+    const translationMethod = options.normalizedI18nConfig.i18nImport.name;
+
+    // 添加hook调用
+    const hookRequirement: HookRequirement = {
+      hookName,
+      variableName: translationMethod,
+      isDestructured: true, // 自定义导入通常使用解构
+      callExpression: `const { ${translationMethod} } = ${hookName}();`,
+    };
+
+    modifiedCode = this.addHookCallToCode(modifiedCode, hookRequirement);
+    return modifiedCode;
+  }
+
+  /**
+   * 从自定义导入中提取hook名称
+   */
+  private extractHookNameFromCustomImport(customImport: string): string {
+    // 匹配 import { something as hookName } from "source" 或 import { hookName } from "source"
+    const importMatch = customImport.match(
+      /import\s*\{[^}]*\}\s*from\s+['"][^'"]+['"]/
+    );
+    if (importMatch) {
+      const specifiersMatch = customImport.match(/import\s*\{([^}]*)\}/);
+      if (specifiersMatch) {
+        const specifiers = specifiersMatch[1];
+
+        // 查找别名为 useTranslation 的导入
+        const aliasMatch = specifiers.match(/\w+\s+as\s+(\w+)/);
+        if (aliasMatch) {
+          return aliasMatch[1]; // 返回别名
+        }
+
+        // 如果没有别名，返回第一个标识符
+        const nameMatch = specifiers.match(/(\w+)/);
+        if (nameMatch) {
+          return nameMatch[1];
+        }
+      }
+    }
+
+    // 回退到默认的hook名称
+    return "useTranslation";
+  }
+
+  /**
+   * 添加自定义导入
+   */
+  private addCustomImport(code: string, customImport: string): string {
+    // 获取自定义导入中的导入名称，用于冲突检测
+    const importMatch = customImport.match(
+      /import\s*\{[^}]*\}\s*from\s+['"]([^'"]+)['"]/
+    );
+    if (importMatch) {
+      const importSource = importMatch[1];
+
+      // 解析现有导入，检查是否有来自不同源的同名导入
+      const parserConfig = ASTParserUtils.getParserConfig("test.tsx");
+      const ast = parse(code, {
+        ...parserConfig,
+        sourceFilename: "test.tsx",
+        ranges: true,
+      });
+
+      const existingImportsByName = new Map<
+        string,
+        Array<{ source: string; node: t.ImportDeclaration }>
+      >();
+      let lastImportEndPos = 0;
+
+      // 分析现有导入
+      traverse(ast, {
+        ImportDeclaration: path => {
+          const node = path.node;
+          const source = node.source.value;
+
+          node.specifiers.forEach(spec => {
+            if (t.isImportSpecifier(spec)) {
+              const importedName =
+                spec.imported.type === "Identifier"
+                  ? spec.imported.name
+                  : spec.imported.value;
+
+              if (!existingImportsByName.has(importedName)) {
+                existingImportsByName.set(importedName, []);
+              }
+              existingImportsByName.get(importedName)!.push({
+                source,
+                node,
+              });
+            } else if (t.isImportDefaultSpecifier(spec)) {
+              const name = spec.local.name;
+              if (!existingImportsByName.has(name)) {
+                existingImportsByName.set(name, []);
+              }
+              existingImportsByName.get(name)!.push({
+                source,
+                node,
+              });
+            }
+          });
+
+          if (node.end) {
+            lastImportEndPos = Math.max(lastImportEndPos, node.end);
+          }
+        },
+      });
+
+      // 解析自定义导入中的标识符
+      const specifierMatches = customImport.match(/import\s*\{([^}]*)\}/);
+      if (specifierMatches) {
+        const specifiersText = specifierMatches[1];
+        const specifierNames = specifiersText
+          .split(",")
+          .map(s => s.trim())
+          .map(s => {
+            const asMatch = s.match(/(\w+)\s+as\s+(\w+)/);
+            return asMatch ? asMatch[2] : s; // 返回别名或原名
+          })
+          .filter(name => name.length > 0);
+
+        // 检查冲突并处理
+        const changes: ImportChange[] = [];
+
+        // 对于自定义导入，我们应该只移除本地变量名冲突的导入
+        for (const name of specifierNames) {
+          const existingImports = existingImportsByName.get(name) || [];
+          const hasConflict = existingImports.some(
+            imp => imp.source !== importSource
+          );
+
+          if (hasConflict) {
+            // 移除所有来自不同源的导入
+            for (const imp of existingImports) {
+              if (imp.source !== importSource) {
+                const node = imp.node;
+
+                // 移除整个导入语句
+                changes.push({
+                  type: "replace",
+                  start: node.start!,
+                  end: node.end!,
+                  text: "",
+                });
+              }
+            }
+          }
+        }
+
+        // 应用变更
+        if (changes.length > 0) {
+          code = StringReplacer.applyImportChanges(code, changes);
+        }
+      }
+    }
+
+    // 插入自定义导入
+    return this.addImportToCode(code, customImport);
   }
 
   /**

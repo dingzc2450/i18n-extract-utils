@@ -45,6 +45,12 @@ export const CONFIG_DEFAULTS = {
 
   // keyConflictResolver 默认值在代码逻辑中处理，默认为 false
   DEFAULT_KEY_CONFLICT_RESOLVER: false,
+
+  // 导入冲突配置默认值
+  IMPORT_CONFLICT: {
+    conflictStrategy: "skip" as const,
+    enableWarnings: true,
+  },
 } as const;
 
 /**
@@ -81,6 +87,12 @@ export interface NormalizedTransformOptions {
   useASTTransform: boolean;
   keyConflictResolver: NonNullable<TransformOptions["keyConflictResolver"]>;
   vueTemplateMode: "ast" | "regex";
+
+  // 导入冲突处理配置
+  importConflict: {
+    conflictStrategy: "skip" | "override";
+    enableWarnings: boolean;
+  };
 
   // i18n配置 - 已规范化
   normalizedI18nConfig: NormalizedI18nConfig;
@@ -456,6 +468,19 @@ export function normalizeConfig(
 
     // 解析器配置
     parserOptions: normalizedParserOptions,
+
+    // 导入冲突配置规范化
+    // 优先使用顶层配置，然后是 i18nImport 下的配置，最后是默认值
+    importConflict: {
+      conflictStrategy:
+        userOptions.importConflict?.conflictStrategy ||
+        userOptions.i18nConfig?.i18nImport?.importConflict?.strategy ||
+        CONFIG_DEFAULTS.IMPORT_CONFLICT.conflictStrategy,
+      enableWarnings:
+        userOptions.importConflict?.enableWarnings ??
+        userOptions.i18nConfig?.i18nImport?.importConflict?.enableWarnings ??
+        CONFIG_DEFAULTS.IMPORT_CONFLICT.enableWarnings,
+    },
 
     // 可选配置（直接传递，不处理）
     generateKey: userOptions.generateKey,

@@ -66,6 +66,25 @@ export class SmartImportManager {
       source: "react-i18next",
     };
 
+    // 如果有自定义导入，直接使用自定义导入
+    if (config.custom) {
+      // 对于自定义导入，我们使用配置中的name作为翻译方法名
+      // 但需要hook来获取这个方法
+      const hookName = this.extractHookNameFromCustomImport(config.custom);
+      const translationMethod = config.name || "t";
+
+      return {
+        importStatement: config.custom,
+        callName: translationMethod,
+        needsHook: true, // 需要hook调用来获取翻译方法
+        hookImport: {
+          importName: hookName,
+          source: this.extractSourceFromCustomImport(config.custom),
+          hookCall: `const { ${translationMethod} } = ${hookName}();`,
+        },
+      };
+    }
+
     const hookName = config.importName || "useTranslation";
     const source = config.source || "react-i18next";
     const translationMethod = config.name || "t";
@@ -158,6 +177,40 @@ export class SmartImportManager {
       callName: functionName,
       needsHook: false,
     };
+  }
+
+  /**
+   * 从自定义导入语句中提取hook名称
+   */
+  private extractHookNameFromCustomImport(customImport: string): string {
+    // 匹配 import { something as hookName } from "source" 或 import { hookName } from "source"
+    const specifiersMatch = customImport.match(/import\s*\{([^}]*)\}/);
+    if (specifiersMatch) {
+      const specifiers = specifiersMatch[1];
+
+      // 查找别名的导入
+      const aliasMatch = specifiers.match(/\w+\s+as\s+(\w+)/);
+      if (aliasMatch) {
+        return aliasMatch[1]; // 返回别名
+      }
+
+      // 如果没有别名，返回第一个标识符
+      const nameMatch = specifiers.match(/(\w+)/);
+      if (nameMatch) {
+        return nameMatch[1];
+      }
+    }
+
+    // 回退到默认的hook名称
+    return "useTranslation";
+  }
+
+  /**
+   * 从自定义导入语句中提取源
+   */
+  private extractSourceFromCustomImport(customImport: string): string {
+    const sourceMatch = customImport.match(/from\s+['"]([^'"]+)['"]/);
+    return sourceMatch ? sourceMatch[1] : "custom-i18n";
   }
 
   /**

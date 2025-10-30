@@ -205,6 +205,24 @@ export interface TransformOptions {
    */
   parserOptions?: CustomParserOptions;
   /**
+   * 导入冲突处理配置
+   * 当检测到同名导入时的处理策略和相关配置
+   */
+  importConflict?: {
+    /**
+     * 处理冲突的策略:
+     * - 'skip': 继续使用原有的导入逻辑，但输出警告信息（默认）
+     * - 'override': 移除现有的同名导入，使用新的导入配置
+     */
+    conflictStrategy?: "skip" | "override";
+    /**
+     * 是否输出警告日志
+     * @default true
+     */
+    enableWarnings?: boolean;
+  };
+
+  /**
    * 禁用兜底处理流程 react,react15框架将在失败时候直接调用兜底处理流程提取多语言
    * Disable fallback processing
    */
@@ -327,13 +345,32 @@ export interface I18nImportConfig {
   importName?: string;
   /** 导入源，如 'i18n-lib'，兼容 hookImport */
   source: string;
-  /** 可选：完全自定义导入语句（如 import t from ...），若设置则覆盖自动生成 */
+  /** 可选：完全自定义导入语句（如 import t from ...），若设置则覆盖自动生成 ，则不会source, importName 使用自动生成，但是会依旧有选择的使用importName 作为执行语句中的关键内容，\
+   * 例如react hook 会使用importName当成自定义hook执行 得到 name */
   custom?: string;
   /**
    * 是否合并来自同一源的导入语句。
    * @default true
    */
   mergeImports?: boolean;
+
+  /**
+   * 导入冲突处理配置
+   * 当检测到同名导入时的处理策略和相关配置
+   */
+  importConflict?: {
+    /**
+     * 处理冲突的策略:
+     * - 'skip': 继续使用原有的导入逻辑，但输出警告信息（默认）
+     * - 'override': 移除现有的同名导入，使用新的导入配置
+     */
+    strategy?: "skip" | "override";
+    /**
+     * 是否输出警告日志
+     * @default true
+     */
+    enableWarnings?: boolean;
+  };
 }
 
 /**
