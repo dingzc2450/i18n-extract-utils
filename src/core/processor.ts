@@ -86,22 +86,21 @@ export class CoreProcessor {
     // 2. 选择合适的插件
     const plugin = this.selectPlugin(code, filePath, normalizedOptions);
 
-    // 3. 预处理
-    const processedCode = plugin.preProcess
-      ? plugin.preProcess(code, normalizedOptions)
-      : code;
-
     // 快速检查代码中是否包含疑似待翻译的内容
-    if (!this.hasTranslatableContent(processedCode, normalizedOptions)) {
+    if (!this.hasTranslatableContent(code, normalizedOptions)) {
       // 如果没有疑似待翻译内容，直接返回原代码
       return {
-        code: processedCode,
+        code: code,
         extractedStrings: [],
         usedExistingKeysList: [],
         changes: [],
         framework: normalizedOptions.normalizedI18nConfig.framework,
       };
     }
+    // 3. 预处理
+    const processedCode = plugin.preProcess
+      ? plugin.preProcess(code, normalizedOptions)
+      : code;
 
     // 4. 解析AST
     const parserConfig = this.getParserConfig(
