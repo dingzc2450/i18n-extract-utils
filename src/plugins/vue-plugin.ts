@@ -151,9 +151,6 @@ export class VuePlugin implements FrameworkPlugin {
   ) {
     // 初始化Vue编译器管理器
     const manager = getVueCompilerManager();
-    // 为整个处理过程创建一个新的批次
-    const batchId = `vue-plugin-${Date.now()}`;
-    manager.startBatch(batchId);
     // 检查是否为Vue单文件组件
     const isVueSFC =
       filePath.endsWith(".vue") ||

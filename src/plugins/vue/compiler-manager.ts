@@ -29,7 +29,7 @@ interface BatchContext {
 export class VueCompilerManager {
   private static instance: VueCompilerManager;
   private compilerInstances: Map<string, CompilerInstance> = new Map();
-  private currentBatch: BatchContext | null = null;
+  private batchStack: BatchContext[] = [];
   private customPaths: string[] = [];
 
   private constructor() {
@@ -55,33 +55,41 @@ export class VueCompilerManager {
 
   /**
    * 开始新的批次处理
+   * 支持批次的嵌套，新的批次会被推入批次栈中
    */
   public startBatch(
     batchId: string,
     compilerVersion: CompilerVersion = "vue3"
   ): void {
-    if (this.currentBatch) {
-      throw new Error("Another batch is already in progress");
+    // 如果栈不为空，检查版本兼容性
+    if (this.batchStack.length > 0) {
+      const currentBatch = this.batchStack[this.batchStack.length - 1];
+      if (currentBatch.compilerVersion !== compilerVersion) {
+        throw new Error("Nested batch must use the same compiler version");
+      }
     }
 
-    this.currentBatch = {
+    this.batchStack.push({
       id: batchId,
       compilerVersion,
       startTime: Date.now(),
-    };
+    });
   }
 
   /**
    * 结束当前批次处理
    */
   public endBatch(): void {
-    if (!this.currentBatch) {
+    if (this.batchStack.length === 0) {
       return;
     }
 
-    // 清理未使用的编译器实例
-    this.cleanup();
-    this.currentBatch = null;
+    this.batchStack.pop();
+
+    // 当所有批次都结束时，清理未使用的编译器实例
+    if (this.batchStack.length === 0) {
+      this.cleanup();
+    }
   }
 
   /**
@@ -113,17 +121,16 @@ export class VueCompilerManager {
   public async getCompiler(
     version: CompilerVersion = "vue3"
   ): Promise<VueCompiler> {
-    // 检查当前批次
-    if (!this.currentBatch) {
+    // 检查是否有活动的批次
+    if (this.batchStack.length === 0) {
       throw new CompilerLoadError("No active batch");
     }
 
+    const currentBatch = this.batchStack[this.batchStack.length - 1];
+
     // 确保版本匹配当前批次
-    if (version !== this.currentBatch.compilerVersion) {
-      throw new VersionMismatchError(
-        this.currentBatch.compilerVersion,
-        version
-      );
+    if (version !== currentBatch.compilerVersion) {
+      throw new VersionMismatchError(currentBatch.compilerVersion, version);
     }
 
     // 检查缓存
