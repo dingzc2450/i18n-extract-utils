@@ -51,6 +51,10 @@ export class ReactPlugin implements FrameworkPlugin {
     imports: ImportRequirement[];
     hooks: HookRequirement[];
   } {
+    // 如果用户不希望自动插入导入，直接返回空
+    if (options.normalizedI18nConfig.i18nImport.noImport) {
+      return { imports: [], hooks: [] };
+    }
     // 检查是否有非React配置，如果有，则回退到上下文感知逻辑
     if (options.normalizedI18nConfig?.nonReactConfig) {
       return { imports: [], hooks: [] }; // 让上下文感知逻辑处理

@@ -63,6 +63,14 @@ export interface NormalizedI18nConfig {
     importName: string;
     source: string;
     mergeImports: boolean;
+    // 新增规范化字段
+    noImport?: boolean;
+    globalFunction?: string;
+    vueOverrides?: {
+      templateFunction?: string;
+      scriptFunction?: string;
+      useThisInScript?: boolean;
+    };
     custom?: string;
   };
   nonReactConfig?: NonReactI18nConfig | null;
@@ -132,7 +140,15 @@ function normalizeI18nImport(
 
   // 优先使用新配置
   if (options.i18nConfig?.i18nImport) {
-    const { name, importName, source, custom } = options.i18nConfig.i18nImport;
+    const {
+      name,
+      importName,
+      source,
+      custom,
+      noImport,
+      globalFunction,
+      vueOverrides,
+    } = options.i18nConfig.i18nImport;
 
     // React15特殊处理：如果是React15框架但没有明确指定source，使用"i18n"
     if (isReact15 && !source) {
@@ -158,6 +174,9 @@ function normalizeI18nImport(
         source ||
         (isVue ? CONFIG_DEFAULTS.VUE_HOOK_SOURCE : CONFIG_DEFAULTS.HOOK_SOURCE),
       mergeImports: options.i18nConfig.i18nImport.mergeImports ?? true,
+      noImport: noImport ?? false,
+      globalFunction: globalFunction,
+      vueOverrides: vueOverrides,
       custom,
     };
   }
@@ -187,6 +206,9 @@ function normalizeI18nImport(
       options.hookImport ||
       (isVue ? CONFIG_DEFAULTS.VUE_HOOK_SOURCE : CONFIG_DEFAULTS.HOOK_SOURCE),
     mergeImports: true,
+    noImport: false,
+    globalFunction: undefined,
+    vueOverrides: undefined,
   };
 }
 

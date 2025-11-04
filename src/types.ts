@@ -345,6 +345,25 @@ export interface I18nImportConfig {
   importName?: string;
   /** 导入源，如 'i18n-lib'，兼容 hookImport */
   source: string;
+  /**
+   * 当设置为 true 时，工具将不会自动在文件中插入或修改 import 语句，
+   * 适用于运行时通过全局注入提供翻译函数的场景（例如 window.t、Vue 全局注入等）。
+   */
+  noImport?: boolean;
+  /**
+   * 当启用 noImport 时，指定应当调用的全局函数名（例如 "t"、"$t"、"i18nT"）。
+   * 该字段仅在 noImport 为 true 时使用；若未设置，将回退到 name 或默认值。
+   */
+  globalFunction?: string;
+  /**
+   * 针对 Vue 单文件组件的覆盖配置，允许针对 template 与 script 部分分别指定函数名
+   * 以及是否在 script 中使用 this.<fn> 调用（适配 options API）。
+   */
+  vueOverrides?: {
+    templateFunction?: string;
+    scriptFunction?: string;
+    useThisInScript?: boolean;
+  };
   /** 可选：完全自定义导入语句（如 import t from ...），若设置则覆盖自动生成 ，则不会source, importName 使用自动生成，但是会依旧有选择的使用importName 作为执行语句中的关键内容，\
    * 例如react hook 会使用importName当成自定义hook执行 得到 name */
   custom?: string;

@@ -17,6 +17,10 @@ export interface ImportInfo {
     source: string;
     hookCall: string;
   };
+  /**
+   * 是否禁用自动注入 import（即全局注入/无需导入模式）
+   */
+  noImport?: boolean;
 }
 
 /**
@@ -65,6 +69,17 @@ export class SmartImportManager {
       importName: "useTranslation",
       source: "react-i18next",
     };
+
+    // 当用户指定 noImport 时，返回标识以指示上层不进行 import 注入
+    if (config.noImport) {
+      const callName = config.globalFunction || config.name || "t";
+      return {
+        importStatement: "",
+        callName,
+        needsHook: false,
+        noImport: true,
+      };
+    }
 
     // 如果有自定义导入，直接使用自定义导入
     if (config.custom) {
@@ -117,6 +132,16 @@ export class SmartImportManager {
       name: "t",
       source: "react-i18next",
     };
+
+    if (config.noImport) {
+      const callName = config.globalFunction || config.name || "t";
+      return {
+        importStatement: "",
+        callName,
+        needsHook: false,
+        noImport: true,
+      };
+    }
 
     // 对于非组件场景，我们尝试直接导入翻译函数而不是 Hook
     const translationMethod = config.name || "t";

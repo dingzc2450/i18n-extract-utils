@@ -48,6 +48,10 @@ export class React15Plugin implements FrameworkPlugin {
     imports: ImportRequirement[];
     hooks: HookRequirement[];
   } {
+    // 如果用户不希望自动插入导入，直接返回空
+    if (options.normalizedI18nConfig.i18nImport.noImport) {
+      return { imports: [], hooks: [] };
+    }
     // React15始终使用"i18n"作为默认导入源，除非测试中明确指定了其他源
     // 这里不使用options.i18nConfig?.i18nImport?.source以避免从规范化配置中获取错误的默认值
     let importSource = "i18n";

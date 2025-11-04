@@ -399,29 +399,47 @@ export class CoreProcessor {
 
     // 检查是否有自定义导入
     const customImport = options.normalizedI18nConfig.i18nImport.custom;
+    const noImportFlag = options.normalizedI18nConfig.i18nImport.noImport;
     if (customImport && context.result.changes.length > 0) {
-      // 插入自定义导入并添加hook调用
-      modifiedCode = this.addCustomImportWithHook(
-        modifiedCode,
-        customImport,
-        options
-      );
-      return modifiedCode;
+      if (noImportFlag) {
+        // 用户明确要求不自动注入 import，跳过自定义导入注入并输出警告
+        if (process && process.env && process.env.NODE_ENV !== "test") {
+          console.warn(
+            "i18nImport.noImport is true: skipping automatic insertion of custom import."
+          );
+        }
+      } else {
+        // 插入自定义导入并添加hook调用
+        modifiedCode = this.addCustomImportWithHook(
+          modifiedCode,
+          customImport,
+          options
+        );
+        return modifiedCode;
+      }
     }
 
     // 先统一处理 判断是否有导入需求
     // 优先处理插件定义的导入和hook需求（统一格式）
     if (plugin.getRequiredImportsAndHooks) {
-      const requirements = plugin.getRequiredImportsAndHooks(options, context);
-      if (requirements.imports.length > 0 || requirements.hooks.length > 0) {
-        modifiedCode = this.addImportsAndHooks(
-          modifiedCode,
-          requirements.imports,
-          requirements.hooks,
-          context.filePath,
-          options // Pass options down
+      // 如果用户配置了 noImport，跳过所有自动导入/Hook插入
+      if (noImportFlag) {
+        // 直接跳过插件层的导入插入
+      } else {
+        const requirements = plugin.getRequiredImportsAndHooks(
+          options,
+          context
         );
-        return modifiedCode; // 使用新的统一格式，跳过老的逻辑
+        if (requirements.imports.length > 0 || requirements.hooks.length > 0) {
+          modifiedCode = this.addImportsAndHooks(
+            modifiedCode,
+            requirements.imports,
+            requirements.hooks,
+            context.filePath,
+            options // Pass options down
+          );
+          return modifiedCode; // 使用新的统一格式，跳过老的逻辑
+        }
       }
     }
 
@@ -783,6 +801,12 @@ export class CoreProcessor {
 
       for (const importInfoStr of requiredImports) {
         const parsedImport = this.importManager.parseImport(importInfoStr);
+
+        // 如果该导入信息标记为 noImport（用户希望不自动注入 import），则跳过
+        if (parsedImport.noImport) {
+          // 标记为已处理以避免重复检查
+          continue;
+        }
 
         // 根据导入类型创建唯一标识符
         const importKey =

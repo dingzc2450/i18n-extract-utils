@@ -78,7 +78,13 @@ export class VuePlugin implements FrameworkPlugin {
     imports: ImportRequirement[];
     hooks: HookRequirement[];
   } {
+    // 如果没有提取到字符串，直接返回空
     if (context.result.extractedStrings.length === 0) {
+      return { imports: [], hooks: [] };
+    }
+
+    // 如果用户设置了 noImport，则不要自动生成 imports/hooks
+    if (options.normalizedI18nConfig.i18nImport.noImport) {
       return { imports: [], hooks: [] };
     }
 
@@ -185,7 +191,19 @@ export class VuePlugin implements FrameworkPlugin {
     const i18nConfig = options.normalizedI18nConfig || {};
     const i18nImportConfig = i18nConfig.i18nImport;
 
-    const translationMethod = i18nImportConfig.name;
+    const noImport = i18nImportConfig?.noImport === true;
+    const vueOverrides = i18nImportConfig?.vueOverrides || {};
+    const translationMethodForTemplate =
+      vueOverrides.templateFunction ||
+      (noImport
+        ? i18nImportConfig?.globalFunction || "$t"
+        : i18nImportConfig?.name);
+    const translationMethodForScript =
+      vueOverrides.scriptFunction ||
+      (noImport
+        ? i18nImportConfig?.globalFunction || i18nImportConfig?.name
+        : i18nImportConfig?.name);
+    const useThisInScript = vueOverrides.useThisInScript === true;
 
     // 解析Vue单文件组件
     const vueFile = this.parseVueFile(code);
@@ -194,7 +212,7 @@ export class VuePlugin implements FrameworkPlugin {
     if (vueFile.template) {
       vueFile.template = this.processTemplate(
         vueFile.template,
-        translationMethod,
+        translationMethodForTemplate,
         extractedStrings,
         usedExistingKeysList,
         options,
@@ -212,7 +230,12 @@ export class VuePlugin implements FrameworkPlugin {
         extractedStrings,
         usedExistingKeysList,
         existingValueToKeyMap || new Map(),
-        filePath
+        filePath,
+        {
+          noImport,
+          translationMethod: translationMethodForScript,
+          useThisInScript,
+        }
       );
       vueFile.script = scriptResult.code;
     } else if (extractedStrings.length > 0 || usedExistingKeysList.length > 0) {
@@ -220,8 +243,13 @@ export class VuePlugin implements FrameworkPlugin {
       const hookName = i18nImportConfig.importName;
       const hookImport = i18nImportConfig.source;
 
-      vueFile.script = `import { ${hookName} } from "${hookImport}";\nconst { ${translationMethod} } = ${hookName}();`;
-      vueFile.isSetupScript = true;
+      if (!noImport) {
+        vueFile.script = `import { ${hookName} } from "${hookImport}";\nconst { ${i18nImportConfig.name} } = ${hookName}();`;
+        vueFile.isSetupScript = true;
+      } else {
+        // noImport 模式下不自动插入script setup
+        vueFile.isSetupScript = false;
+      }
     }
 
     // 重新组装Vue文件
@@ -271,7 +299,8 @@ export class VuePlugin implements FrameworkPlugin {
         usedExistingKeysList,
         options,
         existingValueToKeyMap || new Map(),
-        filePath
+        filePath,
+        false
       );
 
       // 添加必要的导入和setup
@@ -1094,7 +1123,15 @@ export class VuePlugin implements FrameworkPlugin {
 
       // 处理插值表达式内的内容
       const [fullMatch, expr] = match;
-      const processedExpr = processExpressions(expr, true);
+      let processedExpr = processExpressions(expr, true);
+      processedExpr = processedExpr.trim();
+      // 如果替换后仍被外层引号包裹（例如 '{{ '\$t("欢迎")' }}' 的情况），去除外层引号
+      if (
+        (processedExpr.startsWith("'") && processedExpr.endsWith("'")) ||
+        (processedExpr.startsWith('"') && processedExpr.endsWith('"'))
+      ) {
+        processedExpr = processedExpr.substring(1, processedExpr.length - 1);
+      }
       result += `{{ ${processedExpr} }}`;
 
       lastIndex = match.index + fullMatch.length;
@@ -1119,7 +1156,12 @@ export class VuePlugin implements FrameworkPlugin {
     extractedStrings: ExtractedString[],
     usedExistingKeysList: UsedExistingKey[],
     existingValueToKeyMap: ExistingValueToKeyMapType,
-    filePath: string
+    filePath: string,
+    scriptOptions?: {
+      noImport?: boolean;
+      translationMethod?: string;
+      useThisInScript?: boolean;
+    }
   ): { code: string } {
     if (!script) return { code: script };
 
@@ -1131,7 +1173,10 @@ export class VuePlugin implements FrameworkPlugin {
       });
 
       // 获取i18n配置
-      const translationMethod = options.normalizedI18nConfig.i18nImport?.name;
+      const translationMethod =
+        scriptOptions?.translationMethod ||
+        options.normalizedI18nConfig.i18nImport?.name;
+      const useThisInScript = scriptOptions?.useThisInScript === true;
       const hookName = options.normalizedI18nConfig.i18nImport.importName;
       const hookSource = options.normalizedI18nConfig.i18nImport?.source;
 
@@ -1178,10 +1223,15 @@ export class VuePlugin implements FrameworkPlugin {
               );
 
               // 创建函数调用
-              const callExpr = t.callExpression(
-                t.identifier(translationMethod),
-                [t.stringLiteral(String(key))]
-              );
+              const callee = useThisInScript
+                ? t.memberExpression(
+                    t.thisExpression(),
+                    t.identifier(translationMethod)
+                  )
+                : t.identifier(translationMethod);
+              const callExpr = t.callExpression(callee, [
+                t.stringLiteral(String(key)),
+              ]);
 
               // 存储映射关系
               callExpressionMap.set(callExpr, extractedValue);
@@ -1239,18 +1289,21 @@ export class VuePlugin implements FrameworkPlugin {
           usedExistingKeysList,
           options,
           existingValueToKeyMap,
-          filePath
+          filePath,
+          useThisInScript
         );
       }
 
-      // 添加i18n需要的导入
+      // 添加i18n需要的导入，除非scriptOptions明确要求不自动注入
+      const needsImport =
+        !scriptOptions?.noImport && extractedStrings.length > 0;
       this.addI18nSetupToScript(
         ast,
         translationMethod,
         hookName,
         hookSource,
         isSetup,
-        extractedStrings.length > 0
+        needsImport
       );
 
       // 生成代码
@@ -1277,9 +1330,20 @@ export class VuePlugin implements FrameworkPlugin {
     usedExistingKeysList: UsedExistingKey[],
     options: NormalizedTransformOptions,
     existingValueToKeyMap: ExistingValueToKeyMapType,
-    filePath: string
+    filePath: string,
+    useThisInScript: boolean = false
   ) {
     const patternRegex = new RegExp(options.pattern, "g");
+
+    const createCallExpression = (key: string) => {
+      const callee = useThisInScript
+        ? t.memberExpression(
+            t.thisExpression(),
+            t.identifier(translationMethod)
+          )
+        : t.identifier(translationMethod);
+      return t.callExpression(callee, [t.stringLiteral(String(key))]);
+    };
 
     // 使用self捕获外部的this上下文，用于在traverse内部调用类方法
 
@@ -1315,10 +1379,7 @@ export class VuePlugin implements FrameworkPlugin {
           );
 
           // 替换字符串为函数调用
-          const callExpr = t.callExpression(t.identifier(translationMethod), [
-            t.stringLiteral(String(key)),
-          ]);
-
+          const callExpr = createCallExpression(String(key));
           // 添加提取的注释
           if (options.appendExtractedComment) {
             const commentType = options.extractedCommentType || "line";
@@ -1391,11 +1452,7 @@ export class VuePlugin implements FrameworkPlugin {
                 );
 
                 // 添加i18n函数调用
-                const callExpr = t.callExpression(
-                  t.identifier(translationMethod),
-                  [t.stringLiteral(String(key))]
-                );
-
+                const callExpr = createCallExpression(String(key));
                 // 添加提取的注释
                 if (options.appendExtractedComment) {
                   attachExtractedCommentToNode(
