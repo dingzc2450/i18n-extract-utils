@@ -15,6 +15,7 @@ import type {
   ChangeDetail,
   ExistingValueToKeyMapType,
 } from "../types";
+import { StringReplacer } from "../string-replacer";
 import type { NormalizedTransformOptions } from "../core/config-normalizer";
 import type { ParserOptions } from "@babel/parser";
 import { parse } from "@babel/parser";
@@ -24,6 +25,86 @@ import generate from "@babel/generator";
 import { getKeyAndRecord } from "../key-manager";
 import { attachExtractedCommentToNode } from "../core/ast-utils";
 import { getVueCompilerManager } from "./vue/compiler-manager";
+
+// -------------------------
+// Lightweight Vue AST types
+// -------------------------
+// 说明：避免直接硬依赖 @vue/compiler-dom 的完整类型定义，仅声明本插件所需的最小结构。
+// 注意：loc 在部分 content 变体上可能不存在，因此均定义为可选，使用前做守卫。
+interface VueASTLocation {
+  start: {
+    line: number;
+    column: number;
+    offset: number;
+  };
+  end: {
+    line: number;
+    column: number;
+    offset: number;
+  };
+}
+
+interface VueASTProps {
+  type: number; // 6: Attribute, 7: Directive
+  name: string;
+  value?: { content: string };
+  arg?: { content: string; type: number };
+  exp?: {
+    content: string;
+    type: number;
+    loc?: VueASTLocation;
+  };
+  loc: VueASTLocation;
+}
+
+interface VueASTNode {
+  type: number; // 1: Element, 2: Text, 5: Interpolation 等
+  content?:
+    | string
+    | {
+        content: string;
+        type: number;
+        loc?: VueASTLocation;
+        // Vue 编译器在某些场景会附带 ast（表达式 AST）
+        // 在本地类型里作为可选属性声明
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore - 动态属性
+        ast?: VueNestedASTNode;
+      };
+  children?: VueASTNode[];
+  props?: Array<VueASTProps>;
+  loc: VueASTLocation;
+}
+
+interface VueNestedASTNode {
+  type: string;
+  value?: string;
+  test?: VueNestedASTNode;
+  consequent?: VueNestedASTNode;
+  alternate?: VueNestedASTNode;
+  quasis?: Array<{ value: { raw: string } }>;
+  expressions?: VueNestedASTNode[];
+  name?: string;
+  object?: VueNestedASTNode;
+  property?: VueNestedASTNode;
+  start?: number;
+  end?: number;
+  extra?: {
+    parenStart?: number;
+    [key: string]: unknown;
+  };
+  callee?: VueNestedASTNode;
+  arguments?: VueNestedASTNode[];
+  operator?: string;
+  left?: VueNestedASTNode;
+  right?: VueNestedASTNode;
+}
+
+interface Replacement {
+  start: number;
+  end: number;
+  newText: string;
+}
 
 /**
  * Vue 插件实现
@@ -153,7 +234,7 @@ export class VuePlugin implements FrameworkPlugin {
     existingValueToKeyMap?: ExistingValueToKeyMapType
   ) {
     // 初始化Vue编译器管理器
-    const manager = getVueCompilerManager();
+    getVueCompilerManager();
     // 检查是否为Vue单文件组件
     const isVueSFC =
       filePath.endsWith(".vue") ||
@@ -316,6 +397,7 @@ export class VuePlugin implements FrameworkPlugin {
       const { code: processedCode } = generate(ast, {
         retainLines: true,
         compact: false,
+        jsescOption: { minimal: true },
       });
 
       return {
@@ -459,495 +541,18 @@ export class VuePlugin implements FrameworkPlugin {
         throw new Error("Failed to generate AST from template");
       }
 
-      interface VueASTLocation {
-        start: {
-          line: number;
-          column: number;
-          offset: number;
-        };
-        end: {
-          line: number;
-          column: number;
-          offset: number;
-        };
-      }
+      // 收集模板中的替换位置
+      const replacements = this.collectTemplateReplacements(ast as VueASTNode, {
+        translationMethod,
+        options,
+        existingValueToKeyMap,
+        extractedStrings,
+        usedExistingKeysList,
+        filePath,
+      });
 
-      interface VueASTNode {
-        type: number;
-        content?:
-          | string
-          | {
-              content: string;
-              type: number;
-              loc: VueASTLocation;
-            };
-        children?: VueASTNode[];
-        props?: Array<VueASTProps>;
-        loc: VueASTLocation;
-      }
-
-      interface VueASTProps {
-        type: number;
-        name: string;
-        value?: { content: string };
-        arg?: { content: string; type: number };
-        exp?: {
-          content: string;
-          type: number;
-          loc: VueASTLocation;
-        };
-        loc: VueASTLocation;
-      }
-
-      // 遍历和转换AST节点
-      const processNode = (node: VueASTNode): VueASTNode => {
-        // 处理文本节点 (type = 2)
-        if (node.type === 2 && typeof node.content === "string") {
-          const matches = node.content.match(options.pattern);
-          if (matches) {
-            const key = getKeyAndRecord(
-              node.content,
-              {
-                filePath,
-                line: node.loc.start.line,
-                column: node.loc.start.column,
-              },
-              existingValueToKeyMap,
-              new Map(),
-              extractedStrings,
-              usedExistingKeysList,
-              options
-            );
-
-            // 转换为插值表达式 (type = 5)
-            return {
-              type: 5,
-              content: {
-                type: 4,
-                content: `${translationMethod}('${key}')`,
-                loc: node.loc,
-              },
-              loc: node.loc,
-            };
-          }
-        }
-
-        // 处理插值表达式节点 (type = 5)
-        if (
-          node.type === 5 &&
-          node.content &&
-          typeof node.content === "object"
-        ) {
-          const expressionContent = node.content.content;
-          if (
-            typeof expressionContent === "string" &&
-            expressionContent.match(options.pattern)
-          ) {
-            const key = getKeyAndRecord(
-              expressionContent,
-              {
-                filePath,
-                line: node.loc.start.line,
-                column: node.loc.start.column,
-              },
-              existingValueToKeyMap,
-              new Map(),
-              extractedStrings,
-              usedExistingKeysList,
-              options
-            );
-
-            node.content = {
-              type: 4,
-              content: `${translationMethod}('${key}')`,
-              loc: node.content.loc,
-            };
-          }
-        }
-
-        // 处理元素的属性
-        if (node.props) {
-          node.props = node.props.map(prop => {
-            // 处理静态属性 (type = 6)
-            if (
-              prop.type === 6 &&
-              prop.value?.content &&
-              prop.value.content.match(options.pattern)
-            ) {
-              const key = getKeyAndRecord(
-                prop.value.content,
-                {
-                  filePath,
-                  line: prop.loc.start.line,
-                  column: prop.loc.start.column,
-                },
-                existingValueToKeyMap,
-                new Map(),
-                extractedStrings,
-                usedExistingKeysList,
-                options
-              );
-
-              // 转换为指令 (type = 7)
-              const directiveProp: VueASTProps = {
-                type: 7,
-                name: "bind",
-                exp: {
-                  type: 4,
-                  content: `${translationMethod}('${key}')`,
-                },
-                arg: {
-                  type: 4,
-                  content: prop.name,
-                },
-                loc: prop.loc,
-              };
-
-              return directiveProp;
-            }
-            return prop;
-          });
-        }
-
-        // 递归处理子节点
-        if (node.children) {
-          node.children = node.children.map(child =>
-            processNode(child as VueASTNode)
-          );
-        }
-
-        return node;
-      };
-
-      // 收集需要替换的位置和内容
-      interface Replacement {
-        start: number;
-        end: number;
-        newText: string;
-      }
-      const replacements: Replacement[] = [];
-
-      // 递归处理AST并收集替换信息
-      const processNodeAndCollectReplacements = (node: VueASTNode): void => {
-        // 处理文本节点
-        if (node.type === 2 && typeof node.content === "string") {
-          const matches = node.content.match(options.pattern);
-          if (matches) {
-            const key = getKeyAndRecord(
-              node.content,
-              {
-                filePath,
-                line: node.loc.start.line,
-                column: node.loc.start.column,
-              },
-              existingValueToKeyMap,
-              new Map(),
-              extractedStrings,
-              usedExistingKeysList,
-              options
-            );
-
-            replacements.push({
-              start: node.loc.start.offset,
-              end: node.loc.end.offset,
-              newText: `{{ ${translationMethod}('${key}') }}`,
-            });
-          }
-        }
-
-        // 处理插值表达式节点
-        if (
-          node.type === 5 &&
-          node.content &&
-          typeof node.content === "object"
-        ) {
-          const content = node.content;
-
-          interface VueASTContent {
-            type: number;
-            loc: VueASTLocation;
-            content: string;
-            ast?: VueNestedASTNode;
-          }
-
-          interface VueNestedASTNode {
-            type: string;
-            value?: string;
-            test?: VueNestedASTNode;
-            consequent?: VueNestedASTNode;
-            alternate?: VueNestedASTNode;
-            quasis?: Array<{ value: { raw: string } }>;
-            expressions?: VueNestedASTNode[];
-            name?: string;
-            object?: VueNestedASTNode;
-            property?: VueNestedASTNode;
-            start?: number;
-            end?: number;
-            extra?: {
-              parenStart?: number;
-              [key: string]: unknown;
-            };
-          }
-
-          // 处理嵌套AST的情况
-          if (
-            content.type === 4 &&
-            "ast" in content &&
-            (content as VueASTContent).ast
-          ) {
-            const typedContent = content as VueASTContent;
-            if (!typedContent.ast) {
-              return;
-            }
-
-            // 如果存在ast属性，需要递归处理嵌套的AST结构
-            // 确定索引偏移量：如果AST包含parenthesized标记，说明索引从括号开始
-            const indexOffset =
-              typedContent.ast.extra?.parenStart !== undefined ? 1 : 0;
-
-            const processNestedAst = (
-              astNode: VueNestedASTNode,
-              offset: number = indexOffset
-            ): string => {
-              if (!astNode) return "";
-
-              if (astNode.type === "StringLiteral") {
-                // 处理字符串字面量
-                const str = astNode.value;
-                if (str && str.match(options.pattern)) {
-                  const key = getKeyAndRecord(
-                    str,
-                    {
-                      filePath,
-                      line: node.loc.start.line,
-                      column: node.loc.start.column,
-                    },
-                    existingValueToKeyMap,
-                    new Map(),
-                    extractedStrings,
-                    usedExistingKeysList,
-                    options
-                  );
-                  return `${translationMethod}('${key}')`;
-                }
-                return str ? `'${str}'` : "";
-              } else if (astNode.type === "ConditionalExpression") {
-                // 处理条件表达式（三元运算符）
-                if (astNode.test && astNode.consequent && astNode.alternate) {
-                  // 对于test部分，需要保留原始表达式结构
-                  // 从原始内容中提取test部分文本
-                  const testStart = (astNode.test.start ?? 0) - offset;
-                  const testEnd = (astNode.test.end ?? 0) - offset;
-                  const test =
-                    testStart >= 0 &&
-                    testEnd <= typedContent.content.length &&
-                    astNode.test.start !== undefined &&
-                    astNode.test.end !== undefined
-                      ? typedContent.content.substring(testStart, testEnd)
-                      : this.reconstructExpression(
-                          astNode.test,
-                          typedContent.content
-                        );
-
-                  const consequent = processNestedAst(
-                    astNode.consequent,
-                    offset
-                  );
-                  const alternate = processNestedAst(astNode.alternate, offset);
-                  return test && consequent && alternate
-                    ? `${test} ? ${consequent} : ${alternate}`
-                    : typedContent.content;
-                }
-              } else if (astNode.type === "TemplateLiteral") {
-                // 处理模板字面量
-                const quasis = astNode.quasis || [];
-                const expressions = astNode.expressions || [];
-
-                // 重建完整的模板字面量
-                let rawString = "";
-                const expressionNames: string[] = [];
-
-                // 收集所有表达式名称
-                expressions.forEach(expr => {
-                  if (expr.type === "Identifier") {
-                    expressionNames.push(expr.name || "type");
-                  } else if (expr.type === "MemberExpression") {
-                    const obj = expr.object?.name || "";
-                    const prop = expr.property?.name || "";
-                    expressionNames.push(
-                      obj && prop ? `${obj}.${prop}` : "type"
-                    );
-                  } else {
-                    expressionNames.push("type");
-                  }
-                });
-
-                // 构建完整字符串，保持原始变量引用
-                for (let i = 0; i < quasis.length; i++) {
-                  rawString += quasis[i].value.raw;
-                  if (i < expressions.length) {
-                    rawString += "${" + expressionNames[i] + "}";
-                  }
-                }
-
-                // 检查是否需要翻译
-                if (rawString.match(options.pattern)) {
-                  // 保持完整的原始字符串作为键
-                  const translationKey = getKeyAndRecord(
-                    rawString,
-                    {
-                      filePath,
-                      line: node.loc.start.line,
-                      column: node.loc.start.column,
-                    },
-                    existingValueToKeyMap,
-                    new Map(),
-                    extractedStrings,
-                    usedExistingKeysList,
-                    options
-                  );
-
-                  // 对于模板字面量，返回翻译函数调用
-                  return `${translationMethod}('${translationKey}')`;
-                }
-
-                // 不需要翻译时直接返回原始模板字面量
-                return rawString ? `\`${rawString}\`` : "";
-              } else if (
-                astNode.type === "Identifier" ||
-                astNode.type === "MemberExpression"
-              ) {
-                // 处理标识符和成员表达式
-                return astNode.name || typedContent.content;
-              }
-
-              return typedContent.content;
-            };
-
-            const processedContent = processNestedAst(typedContent.ast);
-            replacements.push({
-              start: content.loc.start.offset,
-              end: content.loc.end.offset,
-              newText: processedContent,
-            });
-          } else {
-            // 处理普通插值表达式
-            const expressionContent = content.content;
-            if (
-              typeof expressionContent === "string" &&
-              expressionContent.match(options.pattern)
-            ) {
-              const key = getKeyAndRecord(
-                expressionContent,
-                {
-                  filePath,
-                  line: node.loc.start.line,
-                  column: node.loc.start.column,
-                },
-                existingValueToKeyMap,
-                new Map(),
-                extractedStrings,
-                usedExistingKeysList,
-                options
-              );
-
-              replacements.push({
-                start: content.loc.start.offset,
-                end: content.loc.end.offset,
-                newText: `${translationMethod}('${key}')`,
-              });
-            }
-          }
-        }
-
-        // 处理元素的属性
-        if (node.props) {
-          node.props.forEach(prop => {
-            // 处理静态属性 (type = 6)
-            if (
-              prop.type === 6 &&
-              prop.value?.content &&
-              prop.value.content.match(options.pattern)
-            ) {
-              const key = getKeyAndRecord(
-                prop.value.content,
-                {
-                  filePath,
-                  line: prop.loc.start.line,
-                  column: prop.loc.start.column,
-                },
-                existingValueToKeyMap,
-                new Map(),
-                extractedStrings,
-                usedExistingKeysList,
-                options
-              );
-
-              // 将静态属性转换为动态绑定
-              replacements.push({
-                start: prop.loc.start.offset,
-                end: prop.loc.end.offset,
-                newText: `:${prop.name}="${translationMethod}('${key}')"`,
-              });
-            }
-
-            // 处理指令/动态绑定 (type = 7)
-            if (
-              prop.type === 7 &&
-              prop.exp &&
-              typeof prop.exp.content === "string" &&
-              prop.exp.content.match(options.pattern)
-            ) {
-              const key = getKeyAndRecord(
-                prop.exp.content,
-                {
-                  filePath,
-                  line: prop.loc.start.line,
-                  column: prop.loc.start.column,
-                },
-                existingValueToKeyMap,
-                new Map(),
-                extractedStrings,
-                usedExistingKeysList,
-                options
-              );
-
-              // 替换表达式内容
-              replacements.push({
-                start: prop.exp.loc.start.offset,
-                end: prop.exp.loc.end.offset,
-                newText: `${translationMethod}('${key}')`,
-              });
-            }
-          });
-        }
-
-        // 递归处理子节点
-        if (node.children) {
-          node.children.forEach(child => {
-            processNodeAndCollectReplacements(child as VueASTNode);
-          });
-        }
-      };
-
-      // 处理AST并收集所有需要替换的位置
-      processNodeAndCollectReplacements(ast as VueASTNode);
-
-      // 按照位置从后向前排序，以确保替换不会影响其他替换的位置
-      replacements.sort((a, b) => b.start - a.start);
-
-      // 执行替换
-      let result = template;
-      const templateTagLength = "<template>".length;
-
-      for (const { start, end, newText } of replacements) {
-        result =
-          result.slice(0, start - templateTagLength) +
-          newText +
-          result.slice(end - templateTagLength);
-      }
-
-      return result;
+      // 应用替换并返回
+      return this.applyTemplateReplacements(template, replacements);
     } catch (error) {
       throw new Error(`Vue compiler error: ${error}`);
     }
@@ -1146,6 +751,332 @@ export class VuePlugin implements FrameworkPlugin {
     return result;
   }
 
+  // -------------------------
+  // Template AST helpers
+  // -------------------------
+  private applyTemplateReplacements(
+    template: string,
+    replacements: Replacement[]
+  ): string {
+    if (replacements.length === 0) return template;
+    // 按位置从后往前，避免偏移污染
+    const sorted = [...replacements].sort((a, b) => b.start - a.start);
+    let result = template;
+    const templateTagLength = "<template>".length;
+    for (const { start, end, newText } of sorted) {
+      result =
+        result.slice(0, start - templateTagLength) +
+        newText +
+        result.slice(end - templateTagLength);
+    }
+    return result;
+  }
+
+  private collectTemplateReplacements(
+    node: VueASTNode,
+    ctx: {
+      translationMethod: string;
+      options: NormalizedTransformOptions;
+      existingValueToKeyMap: ExistingValueToKeyMapType;
+      extractedStrings: ExtractedString[];
+      usedExistingKeysList: UsedExistingKey[];
+      filePath: string;
+    }
+  ): Replacement[] {
+    const {
+      translationMethod,
+      options,
+      existingValueToKeyMap,
+      extractedStrings,
+      usedExistingKeysList,
+      filePath,
+    } = ctx;
+
+    const replacements: Replacement[] = [];
+
+    const visit = (n: VueASTNode): void => {
+      // 文本节点 (type=2)
+      if (n.type === 2 && typeof n.content === "string") {
+        const matches = n.content.match(options.pattern);
+        if (matches) {
+          const key = getKeyAndRecord(
+            n.content,
+            {
+              filePath,
+              line: n.loc.start.line,
+              column: n.loc.start.column,
+            },
+            existingValueToKeyMap,
+            new Map(),
+            extractedStrings,
+            usedExistingKeysList,
+            options
+          );
+
+          replacements.push({
+            start: n.loc.start.offset,
+            end: n.loc.end.offset,
+            newText: `{{ ${translationMethod}('${key}') }}`,
+          });
+        }
+      }
+
+      // 插值 (type=5)
+      if (n.type === 5 && n.content && typeof n.content === "object") {
+        const contentObj = n.content as {
+          content: string;
+          type: number;
+          loc?: VueASTLocation;
+          ast?: VueNestedASTNode;
+        };
+
+        if (contentObj.type === 4 && contentObj.ast) {
+          const newText = this.processNestedExpression(contentObj, n.loc, ctx);
+          if (contentObj.loc) {
+            replacements.push({
+              start: contentObj.loc.start.offset,
+              end: contentObj.loc.end.offset,
+              newText,
+            });
+          }
+        } else {
+          const expressionContent = contentObj.content;
+          if (
+            typeof expressionContent === "string" &&
+            expressionContent.match(options.pattern) &&
+            contentObj.loc
+          ) {
+            const key = getKeyAndRecord(
+              expressionContent,
+              {
+                filePath,
+                line: n.loc.start.line,
+                column: n.loc.start.column,
+              },
+              existingValueToKeyMap,
+              new Map(),
+              extractedStrings,
+              usedExistingKeysList,
+              options
+            );
+
+            replacements.push({
+              start: contentObj.loc.start.offset,
+              end: contentObj.loc.end.offset,
+              newText: `${translationMethod}('${key}')`,
+            });
+          }
+        }
+      }
+
+      // 元素属性
+      if (n.props) {
+        n.props.forEach(prop => {
+          // 静态属性 (type=6)
+          if (
+            prop.type === 6 &&
+            prop.value?.content &&
+            prop.value.content.match(options.pattern)
+          ) {
+            const key = getKeyAndRecord(
+              prop.value.content,
+              {
+                filePath,
+                line: prop.loc.start.line,
+                column: prop.loc.start.column,
+              },
+              existingValueToKeyMap,
+              new Map(),
+              extractedStrings,
+              usedExistingKeysList,
+              options
+            );
+
+            replacements.push({
+              start: prop.loc.start.offset,
+              end: prop.loc.end.offset,
+              newText: `:${prop.name}="${translationMethod}('${key}')"`,
+            });
+          }
+
+          // 指令/动态绑定 (type=7)
+          if (
+            prop.type === 7 &&
+            prop.exp &&
+            typeof prop.exp.content === "string" &&
+            prop.exp.content.match(options.pattern) &&
+            prop.exp.loc
+          ) {
+            const key = getKeyAndRecord(
+              prop.exp.content,
+              {
+                filePath,
+                line: prop.loc.start.line,
+                column: prop.loc.start.column,
+              },
+              existingValueToKeyMap,
+              new Map(),
+              extractedStrings,
+              usedExistingKeysList,
+              options
+            );
+
+            replacements.push({
+              start: prop.exp.loc.start.offset,
+              end: prop.exp.loc.end.offset,
+              newText: `${translationMethod}('${key}')`,
+            });
+          }
+        });
+      }
+
+      // 子节点
+      if (n.children) {
+        n.children.forEach(c => visit(c));
+      }
+    };
+
+    visit(node);
+    return replacements;
+  }
+
+  private processNestedExpression(
+    typedContent: {
+      content: string;
+      type: number;
+      loc?: VueASTLocation;
+      ast?: VueNestedASTNode;
+    },
+    nodeLoc: VueASTLocation,
+    ctx: {
+      translationMethod: string;
+      options: NormalizedTransformOptions;
+      existingValueToKeyMap: ExistingValueToKeyMapType;
+      extractedStrings: ExtractedString[];
+      usedExistingKeysList: UsedExistingKey[];
+      filePath: string;
+    }
+  ): string {
+    const {
+      translationMethod,
+      options,
+      existingValueToKeyMap,
+      extractedStrings,
+      usedExistingKeysList,
+      filePath,
+    } = ctx;
+    if (!typedContent.ast) return typedContent.content;
+
+    const indexOffset =
+      typedContent.ast.extra?.parenStart !== undefined ? 1 : 0;
+
+    const recur = (
+      astNode?: VueNestedASTNode,
+      offset = indexOffset
+    ): string => {
+      if (!astNode) return "";
+
+      if (astNode.type === "StringLiteral") {
+        const str = astNode.value;
+        if (str && str.match(options.pattern)) {
+          const key = getKeyAndRecord(
+            str,
+            {
+              filePath,
+              line: nodeLoc.start.line,
+              column: nodeLoc.start.column,
+            },
+            existingValueToKeyMap,
+            new Map(),
+            extractedStrings,
+            usedExistingKeysList,
+            options
+          );
+          return `${translationMethod}('${key}')`;
+        }
+        return str ? `'${str}'` : "";
+      }
+
+      if (
+        astNode.type === "ConditionalExpression" &&
+        astNode.test &&
+        astNode.consequent &&
+        astNode.alternate
+      ) {
+        const testStart = (astNode.test.start ?? 0) - offset;
+        const testEnd = (astNode.test.end ?? 0) - offset;
+        const test =
+          testStart >= 0 &&
+          testEnd <= typedContent.content.length &&
+          astNode.test.start !== undefined &&
+          astNode.test.end !== undefined
+            ? typedContent.content.substring(testStart, testEnd)
+            : this.reconstructExpression(astNode.test, typedContent.content);
+        const consequent = recur(astNode.consequent, offset);
+        const alternate = recur(astNode.alternate, offset);
+        return test && consequent && alternate
+          ? `${test} ? ${consequent} : ${alternate}`
+          : typedContent.content;
+      }
+
+      if (astNode.type === "TemplateLiteral") {
+        const quasis = astNode.quasis || [];
+        const expressions = astNode.expressions || [];
+        let rawString = "";
+        const expressionNames: string[] = [];
+        expressions.forEach(expr => {
+          if (expr.type === "Identifier") {
+            expressionNames.push(expr.name || "type");
+          } else if (expr.type === "MemberExpression") {
+            const obj = expr.object?.name || "";
+            const prop = expr.property?.name || "";
+            expressionNames.push(obj && prop ? `${obj}.${prop}` : "type");
+          } else {
+            expressionNames.push("type");
+          }
+        });
+        for (let i = 0; i < quasis.length; i++) {
+          rawString += quasis[i].value.raw;
+          if (i < expressions.length) {
+            rawString += "${" + expressionNames[i] + "}";
+          }
+        }
+        if (rawString.match(options.pattern)) {
+          const translationKey = getKeyAndRecord(
+            rawString,
+            {
+              filePath,
+              line: nodeLoc.start.line,
+              column: nodeLoc.start.column,
+            },
+            existingValueToKeyMap,
+            new Map(),
+            extractedStrings,
+            usedExistingKeysList,
+            options
+          );
+          return `${translationMethod}('${translationKey}')`;
+        }
+        return rawString ? `\`${rawString}\`` : "";
+      }
+
+      if (astNode.type === "Identifier") {
+        return astNode.name || typedContent.content;
+      }
+      if (astNode.type === "MemberExpression") {
+        // 尽力还原 a.b 形式
+        const obj = recur(astNode.object, offset);
+        const prop = recur(astNode.property, offset);
+        return obj && prop ? `${obj}.${prop}` : typedContent.content;
+      }
+
+      // 其他类型回退
+      return typedContent.content;
+    };
+
+    return recur(typedContent.ast);
+  }
+
   /**
    * 处理Vue脚本部分
    */
@@ -1183,6 +1114,31 @@ export class VuePlugin implements FrameworkPlugin {
       // 专门为Vue <script setup>中的注释处理添加的逻辑
       const extractedCommentType = options.extractedCommentType;
       const appendExtractedComment = options.appendExtractedComment;
+
+      const useStringReplacement = scriptOptions?.noImport === true;
+
+      if (useStringReplacement) {
+        const scriptChanges = this.collectScriptChanges(
+          ast,
+          script,
+          translationMethod,
+          extractedStrings,
+          usedExistingKeysList,
+          options,
+          existingValueToKeyMap,
+          filePath,
+          useThisInScript,
+          appendExtractedComment,
+          extractedCommentType
+        );
+
+        const updatedScript =
+          scriptChanges.length > 0
+            ? StringReplacer.applyChanges(script, scriptChanges)
+            : script;
+
+        return { code: updatedScript };
+      }
 
       // 处理脚本中的字符串
       // 为<script setup>格式特别处理，将注释放到语句级别而不是函数调用
@@ -1310,6 +1266,7 @@ export class VuePlugin implements FrameworkPlugin {
       const { code } = generate(ast, {
         retainLines: true,
         compact: false,
+        jsescOption: { minimal: true },
       });
 
       return { code };
@@ -1318,6 +1275,189 @@ export class VuePlugin implements FrameworkPlugin {
       console.error("Error processing Vue script:", error);
       throw error;
     }
+  }
+
+  private collectScriptChanges(
+    ast: t.File,
+    originalScript: string,
+    translationMethod: string,
+    extractedStrings: ExtractedString[],
+    usedExistingKeysList: UsedExistingKey[],
+    options: NormalizedTransformOptions,
+    existingValueToKeyMap: ExistingValueToKeyMapType,
+    filePath: string,
+    useThisInScript: boolean,
+    appendExtractedComment?: boolean,
+    extractedCommentType?: "block" | "line"
+  ): ChangeDetail[] {
+    const patternRegex = new RegExp(options.pattern, "g");
+    const changes: ChangeDetail[] = [];
+    const generatedKeysMap = new Map<string, string | number>();
+
+    const createCallExpression = (key: string, originalText: string) => {
+      const callee = useThisInScript
+        ? t.memberExpression(
+            t.thisExpression(),
+            t.identifier(translationMethod)
+          )
+        : t.identifier(translationMethod);
+      const callExpr = t.callExpression(callee, [t.stringLiteral(String(key))]);
+
+      if (appendExtractedComment) {
+        attachExtractedCommentToNode(
+          callExpr,
+          originalText,
+          extractedCommentType || "block"
+        );
+      }
+
+      return callExpr;
+    };
+
+    const recordChange = (node: t.Node, replacementNode: t.Node) => {
+      if (!node.loc) return;
+
+      const start = node.start ?? 0;
+      const end = node.end ?? start;
+      const originalSegment = originalScript.slice(start, end);
+
+      const replacement = generate(replacementNode, {
+        jsescOption: { minimal: true },
+        compact: false,
+      }).code;
+
+      changes.push({
+        filePath,
+        original: originalSegment,
+        replacement,
+        line: node.loc.start.line,
+        column: node.loc.start.column,
+        endLine: node.loc.end.line,
+        endColumn: node.loc.end.column,
+        start,
+        end,
+      });
+    };
+
+    traverse(ast, {
+      StringLiteral(path) {
+        const { value } = path.node;
+        if (!value) return;
+
+        const matches = [...value.matchAll(patternRegex)];
+        if (matches.length === 0) return;
+
+        const match = matches[0];
+        const fullMatch = match[0];
+        const extractedValue = match[1];
+        if (!extractedValue) return;
+
+        const key = getKeyAndRecord(
+          fullMatch,
+          {
+            filePath,
+            line: path.node.loc?.start.line || 0,
+            column: path.node.loc?.start.column || 0,
+          },
+          existingValueToKeyMap,
+          generatedKeysMap,
+          extractedStrings,
+          usedExistingKeysList,
+          options
+        );
+
+        if (key === undefined) return;
+
+        const callExpr = createCallExpression(String(key), extractedValue);
+        recordChange(path.node, callExpr);
+        path.skip();
+      },
+      TemplateLiteral(path) {
+        const { quasis, expressions } = path.node;
+        if (quasis.length === 0) return;
+
+        let hasReplacement = false;
+        const parts: t.Expression[] = [];
+
+        for (let i = 0; i < quasis.length; i++) {
+          const quasi = quasis[i];
+          const rawValue = quasi.value.raw;
+
+          if (rawValue) {
+            const matches = [...rawValue.matchAll(patternRegex)];
+            if (matches.length > 0) {
+              hasReplacement = true;
+              let lastIndex = 0;
+
+              for (const match of matches) {
+                const fullMatch = match[0];
+                const extractedValue = match[1];
+                const matchIndex = match.index ?? 0;
+
+                if (matchIndex > lastIndex) {
+                  const beforeText = rawValue.slice(lastIndex, matchIndex);
+                  if (beforeText) {
+                    parts.push(t.stringLiteral(beforeText));
+                  }
+                }
+
+                const key = getKeyAndRecord(
+                  fullMatch,
+                  {
+                    filePath,
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                  },
+                  existingValueToKeyMap,
+                  generatedKeysMap,
+                  extractedStrings,
+                  usedExistingKeysList,
+                  options
+                );
+
+                if (key !== undefined) {
+                  const callExpr = createCallExpression(
+                    String(key),
+                    extractedValue
+                  );
+                  parts.push(callExpr);
+                }
+
+                lastIndex = matchIndex + fullMatch.length;
+              }
+
+              if (lastIndex < rawValue.length) {
+                const afterText = rawValue.slice(lastIndex);
+                if (afterText) {
+                  parts.push(t.stringLiteral(afterText));
+                }
+              }
+            } else {
+              parts.push(t.stringLiteral(rawValue));
+            }
+          }
+
+          if (i < expressions.length) {
+            const expr = expressions[i];
+            if (expr) {
+              parts.push(t.cloneNode(expr, true) as t.Expression);
+            }
+          }
+        }
+
+        if (!hasReplacement) return;
+
+        let replacementExpr = parts[0];
+        for (let i = 1; i < parts.length; i++) {
+          replacementExpr = t.binaryExpression("+", replacementExpr, parts[i]);
+        }
+
+        recordChange(path.node, replacementExpr);
+        path.skip();
+      },
+    });
+
+    return changes;
   }
 
   /**
@@ -1886,47 +2026,61 @@ export class VuePlugin implements FrameworkPlugin {
    * 重构AST表达式为源代码字符串
    * 用于保留非字符串部分的原始表达式
    */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private reconstructExpression(astNode: any, originalContent: string): string {
+  private reconstructExpression(
+    astNode: unknown,
+    originalContent: string
+  ): string {
     if (!astNode) return "";
 
     // 对于有start和end的节点，直接从原始内容中提取
-    if (
-      typeof astNode.start === "number" &&
-      typeof astNode.end === "number" &&
-      originalContent
-    ) {
-      // 直接使用start和end提取，这些索引是相对于插值表达式内容的
-      return originalContent.substring(astNode.start, astNode.end);
+    if (typeof astNode === "object" && astNode !== null) {
+      const obj = astNode as Record<string, unknown>;
+      if (
+        typeof obj.start === "number" &&
+        typeof obj.end === "number" &&
+        originalContent
+      ) {
+        // 直接使用start和end提取，这些索引是相对于插值表达式内容的
+        return originalContent.substring(
+          obj.start as number,
+          obj.end as number
+        );
+      }
     }
 
     // 回退：根据节点类型手动重构
-    switch (astNode.type) {
-      case "BinaryExpression":
-        return `${this.reconstructExpression(astNode.left, originalContent)} ${astNode.operator} ${this.reconstructExpression(astNode.right, originalContent)}`;
-      case "Identifier":
-        return astNode.name || "";
-      case "StringLiteral":
-        return `'${astNode.value}'`;
-      case "MemberExpression":
-        return `${this.reconstructExpression(astNode.object, originalContent)}.${this.reconstructExpression(astNode.property, originalContent)}`;
-      case "CallExpression": {
-        const callee = this.reconstructExpression(
-          astNode.callee,
-          originalContent
-        );
-        const args = astNode.arguments
-          ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            astNode.arguments
-              .map((arg: any) =>
-                this.reconstructExpression(arg, originalContent)
-              )
-              .join(", ")
-          : "";
+    if (typeof astNode === "object" && astNode !== null) {
+      const obj = astNode as Record<string, unknown>;
+      const type = obj.type;
+      if (type === "BinaryExpression") {
+        const left = this.reconstructExpression(obj.left, originalContent);
+        const right = this.reconstructExpression(obj.right, originalContent);
+        const op =
+          typeof obj.operator === "string" ? (obj.operator as string) : "+";
+        return `${left} ${op} ${right}`;
+      }
+      if (type === "Identifier") {
+        return typeof obj.name === "string" ? (obj.name as string) : "";
+      }
+      if (type === "StringLiteral") {
+        return `'${typeof obj.value === "string" ? (obj.value as string) : ""}'`;
+      }
+      if (type === "MemberExpression") {
+        const o = this.reconstructExpression(obj.object, originalContent);
+        const p = this.reconstructExpression(obj.property, originalContent);
+        return `${o}.${p}`;
+      }
+      if (type === "CallExpression") {
+        const callee = this.reconstructExpression(obj.callee, originalContent);
+        const argsArr = Array.isArray(obj.arguments)
+          ? (obj.arguments as unknown[])
+          : [];
+        const args = argsArr
+          .map(a => this.reconstructExpression(a, originalContent))
+          .join(", ");
         return `${callee}(${args})`;
       }
-      default:
-        return "";
     }
+    return "";
   }
 }
