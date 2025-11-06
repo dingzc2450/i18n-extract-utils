@@ -327,6 +327,8 @@ export class VuePlugin implements FrameworkPlugin {
       if (!noImport) {
         vueFile.script = `import { ${hookName} } from "${hookImport}";\nconst { ${i18nImportConfig.name} } = ${hookName}();`;
         vueFile.isSetupScript = true;
+        // 新增脚本时，默认使用 <script setup>
+        (vueFile as { scriptAttrs?: string }).scriptAttrs = " setup";
       } else {
         // noImport 模式下不自动插入script setup
         vueFile.isSetupScript = false;
@@ -422,21 +424,27 @@ export class VuePlugin implements FrameworkPlugin {
    */
   private parseVueFile(code: string): {
     template?: string;
+    templateAttrs?: string;
     script?: string;
+    scriptAttrs?: string;
     style?: string;
+    styleAttrs?: string;
     isSetupScript: boolean;
   } {
-    // 提取各个部分
-    const template = this.extractSection(code, "template");
-    const script = this.extractSection(code, "script");
-    const style = this.extractSection(code, "style");
+    // 提取各个部分（包含开始标签的属性字符串）
+    const tplBlock = this.extractBlock(code, "template");
+    const scriptBlock = this.extractBlock(code, "script");
+    const styleBlock = this.extractBlock(code, "style");
 
-    const isSetupScript = code.includes("<script setup");
+    const isSetupScript = (scriptBlock?.attrs || "").includes("setup");
 
     return {
-      template,
-      script,
-      style,
+      template: tplBlock?.inner,
+      templateAttrs: tplBlock?.attrs,
+      script: scriptBlock?.inner,
+      scriptAttrs: scriptBlock?.attrs,
+      style: styleBlock?.inner,
+      styleAttrs: styleBlock?.attrs,
       isSetupScript,
     };
   }
@@ -444,15 +452,16 @@ export class VuePlugin implements FrameworkPlugin {
   /**
    * 提取Vue文件中的特定section（template、script、style）
    */
-  private extractSection(
+  private extractBlock(
     code: string,
     sectionName: string
-  ): string | undefined {
-    const startTag = new RegExp(`<${sectionName}[^>]*>`, "i");
+  ): { inner: string; attrs: string } | undefined {
+    const startTag = new RegExp(`<${sectionName}([^>]*)>`, "i");
 
     const startMatch = code.match(startTag);
     if (!startMatch) return undefined;
 
+    const attrs = startMatch[1] || ""; // 包含前导空格
     const startIndex = startMatch.index! + startMatch[0].length;
     let depth = 1;
     let currentIndex = startIndex;
@@ -476,14 +485,14 @@ export class VuePlugin implements FrameworkPlugin {
         depth--;
         if (depth === 0) {
           // 找到最外层结束标签
-          return code.substring(startIndex, nextEnd);
+          return { inner: code.substring(startIndex, nextEnd), attrs };
         }
         currentIndex = nextEnd + 1;
       }
     }
 
     // 如果没有匹配到完整标签，返回到文件结束
-    return code.substring(startIndex);
+    return { inner: code.substring(startIndex), attrs };
   }
 
   /**
@@ -2000,26 +2009,33 @@ export class VuePlugin implements FrameworkPlugin {
    */
   private assembleVueFile(vueFile: {
     template?: string;
+    templateAttrs?: string;
     script?: string;
+    scriptAttrs?: string;
     style?: string;
+    styleAttrs?: string;
     isSetupScript: boolean;
   }): string {
     let result = "";
 
     if (vueFile.template) {
       const inner = this.stripOuterNewlines(vueFile.template);
-      result += `<template>\n${inner}\n</template>\n\n`;
+      const attrs = vueFile.templateAttrs || "";
+      result += `<template${attrs}>\n${inner}\n</template>\n\n`;
     }
 
     if (vueFile.script) {
-      const scriptTag = vueFile.isSetupScript ? "<script setup>" : "<script>";
+      const attrs =
+        vueFile.scriptAttrs || (vueFile.isSetupScript ? " setup" : "");
+      const scriptTag = `<script${attrs}>`;
       const inner = this.stripOuterNewlines(vueFile.script);
       result += `${scriptTag}\n${inner}\n</script>\n\n`;
     }
 
     if (vueFile.style) {
       const inner = this.stripOuterNewlines(vueFile.style);
-      result += `<style>\n${inner}\n</style>\n`;
+      const attrs = vueFile.styleAttrs || "";
+      result += `<style${attrs}>\n${inner}\n</style>\n`;
     }
 
     return result.trim();
