@@ -20,7 +20,8 @@ import {
   Framework,
 } from "./types";
 import { FileCacheUtils } from "./core/utils";
-import { createProcessorWithDefaultPlugins } from "./plugins";
+import { runUnifiedTransform } from "./core/unified-entry";
+import { normalizeConfig } from "./core/config-normalizer";
 import { ConfigDetector } from "./config/config-detector";
 import {
   createI18nError,
@@ -193,13 +194,10 @@ export function transformCode(
   // 文件内容缓存由FileCacheUtils处理，避免重复读取相同文件
   const code = FileCacheUtils.readFileWithCache(filePath);
 
-  // 第二步：创建预配置的处理器
-  // 处理器包含所有已注册的框架插件（React、Vue等）
-  const processor = createProcessorWithDefaultPlugins();
   try {
     // 第三步：执行代码处理并返回结果
     // filePath在processCode中用于AST解析配置和插件选择，不可移除
-    return processor.processCode(
+    return runUnifiedTransform(
       code,
       filePath,
       options,
@@ -245,7 +243,7 @@ export function transformCode(
     });
 
     logError(i18nError);
-    const { framework } = processor.normalizeConfig(
+    const { framework } = normalizeConfig(
       options,
       code,
       filePath
@@ -292,9 +290,8 @@ export async function processFiles(
     configCheck.warnings.forEach(warning => console.warn(`  ⚠️ ${warning}`));
   }
 
-  // 第二步：创建处理器并检查是否需要Vue编译器
-  const processor = createProcessorWithDefaultPlugins();
-  const { normalizedI18nConfig } = processor.normalizeConfig(options, "", "");
+  // 第二步：检查是否需要Vue编译器
+  const { normalizedI18nConfig } = normalizeConfig(options, "", "");
   const framework = normalizedI18nConfig.framework;
   const isVueProject = [Framework.Vue, Framework.Vue2, Framework.Vue3].includes(
     framework

@@ -32,3 +32,6 @@ export {
 
 // 导出处理器工厂函数
 export { createProcessorWithDefaultPlugins } from "../plugins";
+
+// 统一入口
+export { runUnifiedTransform } from "./unified-entry";

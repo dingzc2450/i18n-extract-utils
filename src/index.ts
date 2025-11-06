@@ -2,7 +2,11 @@ import { processFiles, transformCode } from "./processFiles";
 import { TransformOptions, CustomParserOptions } from "./types";
 
 // 导出核心模块
-export { CoreProcessor, createProcessorWithDefaultPlugins } from "./core";
+export {
+  CoreProcessor,
+  createProcessorWithDefaultPlugins,
+  runUnifiedTransform,
+} from "./core";
 export { ReactPlugin, VuePlugin, GenericJSPlugin } from "./plugins";
 export {
   normalizeConfig,

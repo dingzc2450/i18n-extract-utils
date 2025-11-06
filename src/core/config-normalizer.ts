@@ -111,6 +111,8 @@ export interface NormalizedTransformOptions {
   // 可选配置（保持原样）
   generateKey?: (value: string, filePath: string) => string | number;
   existingTranslations?: string | Record<string, string | number>;
+  // 兜底开关（从 TransformOptions 透传）
+  disabledFallback?: boolean;
 }
 
 /**
@@ -421,14 +423,12 @@ function normalizeNonReactConfig(
     };
   }
 
-  // 如果是Vue框架但没有nonReactConfig，返回Vue默认配置
+  // 如果是Vue框架但没有nonReactConfig：
+  // 为了与统一架构保持一致（由上层根据 i18nImport 注入 hook/导入，且调用名沿用 i18nImport.name），
+  // 这里返回 null，避免在非 React 场景下回退到一个固定的非 React 配置（例如固定的 t from vue-i18n），
+  // 这会导致调用名与用户自定义的 i18nImport.name（如 translate）不一致。
   if (isVueFramework(options)) {
-    return {
-      functionName: CONFIG_DEFAULTS.VUE_TRANSLATION_METHOD,
-      importType: CONFIG_DEFAULTS.NON_REACT_IMPORT_TYPE as unknown as "named",
-      source: CONFIG_DEFAULTS.VUE_HOOK_SOURCE,
-      namespace: CONFIG_DEFAULTS.NON_REACT_NAMESPACE,
-    };
+    return null;
   }
 
   // 默认返回null，表示不需要非React配置
@@ -510,6 +510,8 @@ export function normalizeConfig(
     keyConflictResolver:
       userOptions.keyConflictResolver ||
       CONFIG_DEFAULTS.DEFAULT_KEY_CONFLICT_RESOLVER,
+    // 透传 disabledFallback（默认 false）
+    disabledFallback: userOptions.disabledFallback ?? false,
   };
 
   return result;

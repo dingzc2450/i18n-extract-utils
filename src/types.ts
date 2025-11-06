@@ -227,6 +227,11 @@ export interface TransformOptions {
    * Disable fallback processing
    */
   disabledFallback?: boolean;
+
+  /**
+   * 处理策略（已统一为最小文本替换，AST重生成路径已移除）
+   */
+  // 已废弃：rewriteStrategy
 }
 
 export interface ExtractedString {

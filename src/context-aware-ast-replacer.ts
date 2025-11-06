@@ -73,6 +73,7 @@ export function collectContextAwareReplacementInfo(
 
   let modified = false;
   const changes: ChangeDetail[] = [];
+  // 使用本地 Map，暂不采用全局缓存（统一策略留待后续处理）
   const generatedKeysMap = new Map<string, string | number>();
   const requiredImports = new Set<string>();
   const contextCache = new Map<NodePath<t.Node>, ContextInfo>();

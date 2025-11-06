@@ -29,8 +29,27 @@ export function createTranslationCall(
     args.push(interpolations);
   }
 
+  // 支持成员调用（如 this.$t 或 i18n.t）与标识符调用
+  let callee: t.Expression;
+  if (effectiveMethodName.includes(".")) {
+    const parts = effectiveMethodName.split(".");
+    const [first, ...rest] = parts;
+    let objectExpr: t.Expression =
+      first === "this" ? t.thisExpression() : t.identifier(first);
+    for (const p of rest) {
+      objectExpr = t.memberExpression(
+        objectExpr,
+        // 这里使用标识符属性访问（如 .t / .$t）
+        t.identifier(p)
+      );
+    }
+    callee = objectExpr as t.MemberExpression;
+  } else {
+    callee = t.identifier(effectiveMethodName);
+  }
+
   // Create and return the call expression node
-  return t.callExpression(t.identifier(effectiveMethodName), args);
+  return t.callExpression(callee, args);
 }
 
 /**

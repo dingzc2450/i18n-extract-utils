@@ -31,28 +31,27 @@ export default {
 }
 </script>
     `;
-    
+
     const tempFile = createTempFile(code);
     tempFiles.push(tempFile);
-    
+
     const result = transformCode(tempFile, {
       i18nConfig: {
         framework: "vue",
         i18nImport: {
           name: "t",
           importName: "useI18n",
-          source: "vue-i18n"
-        }
-      }
+          source: "vue-i18n",
+        },
+      },
     });
-    
 
     // 基本检查
     expect(result.extractedStrings.length).toBe(2);
     expect(result.code).toContain('import { useI18n } from "vue-i18n"');
-    expect(result.code).toContain('{{ t(');
+    expect(result.code).toContain("{{ t(");
     // expect(result.code).toContain('const { t } = useI18n()'); // 暂时注释这个断言
-    
+
     // 清理
     fs.unlinkSync(tempFile);
   });
@@ -70,28 +69,61 @@ import { ref } from 'vue'
 const message = ref('___消息___')
 </script>
     `;
-    
+
     const tempFile = createTempFile(code);
     tempFiles.push(tempFile);
-    
+
     const result = transformCode(tempFile, {
       i18nConfig: {
         framework: "vue",
         i18nImport: {
-          name: "t", 
+          name: "t",
           importName: "useI18n",
-          source: "vue-i18n"
-        }
-      }
+          source: "vue-i18n",
+        },
+      },
     });
-    
+
     // 基本检查
     expect(result.extractedStrings.length).toBe(2);
     expect(result.code).toContain('import { useI18n } from "vue-i18n"');
-    expect(result.code).toContain('{{ t(');
-    expect(result.code).toContain('const { t } = useI18n()');
-    
+    expect(result.code).toContain("{{ t(");
+    expect(result.code).toContain("const { t } = useI18n()");
+
     // 清理
+    fs.unlinkSync(tempFile);
+  });
+
+  test("template and script duplicate value yields single generated key", () => {
+    const code = `
+<template>
+  <div>{{ ___Hello___ }}</div>
+</template>
+
+<script setup>
+const a = "___Hello___";
+</script>
+    `;
+
+    const tempFile = createTempFile(code);
+    tempFiles.push(tempFile);
+
+    const result = transformCode(tempFile, {
+      i18nConfig: {
+        framework: "vue",
+        i18nImport: { name: "t", importName: "useI18n", source: "vue-i18n" },
+      },
+    });
+
+    expect(result.extractedStrings.length).toBe(1);
+    const item = result.extractedStrings[0];
+    expect(item.value).toBe("Hello");
+
+    const keyStr = String(item.key);
+    const occurrences = (result.code.match(new RegExp(keyStr, "g")) || [])
+      .length;
+    expect(occurrences).toBeGreaterThanOrEqual(2);
+
     fs.unlinkSync(tempFile);
   });
 });
