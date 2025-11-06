@@ -82,6 +82,11 @@ describe("Vue AST 模板解析（仅在编译器可用时运行）", () => {
     );
     // 静态属性转为绑定表达式
     expect(result.code).toMatch(/:placeholder="t\(['"][^'"]+['"]\)"/);
+
+    // 组装后不应在标签内产生额外空行
+    expect(result.code).not.toMatch(/<template>\r?\n\r?\n/);
+    expect(result.code).not.toMatch(/<script(?:\s+setup)?>\r?\n\r?\n/);
+    expect(result.code).not.toMatch(/\r?\n\r?\n<\/template>/);
   });
 
   test("插值中三元表达式内的字符串替换为 t 调用", () => {
@@ -137,5 +142,73 @@ export default { name: 'C' }
 
     // 期望整体模板字面量被替换为单个 t('...') 调用
     expect(result.code).toMatch(/\{\{\s*t\(['"][^'"]+['"]\)\s*\}\}/);
+  });
+
+  test("script setup 中字符串替换并且 <script> 内部无多余空行", () => {
+    const code = [
+      "<template>",
+      "  <div>OK</div>",
+      "</template>",
+      "",
+      "<script setup>",
+      "const msg = '___你好___'",
+      "console.log(msg)",
+      "</script>",
+      "",
+    ].join("\n");
+
+    const file = createTempFile(code, "vue");
+    const result = transformCode(file, {
+      vueTemplateMode: "ast",
+      i18nConfig: {
+        framework: "vue",
+        i18nImport: { name: "t", importName: "useI18n", source: "vue-i18n" },
+      },
+    });
+
+    // 注入 import 与 useI18n 并在顶层拿到 t
+    expect(result.code).toMatch(
+      /import\s*{\s*useI18n\s*}\s*from\s*["']vue-i18n["']/
+    );
+    expect(result.code).toMatch(/const\s*{\s*t\s*}\s*=\s*useI18n\(\)\s*;/);
+    // 字符串被替换为 t('...')
+    expect(result.code).toMatch(/const\s+msg\s*=\s*t\(['"][^'"]+['"]\)/);
+    // <script> 内部不应该出现额外空行
+    expect(result.code).not.toMatch(/<script\s+setup>\r?\n\r?\n/);
+    expect(result.code).not.toMatch(/\r?\n\r?\n<\/script>/);
+  });
+
+  test("style 重组不引入多余空行且内容保持", () => {
+    const code = [
+      "<template>",
+      '  <div class="button">___按钮___</div>',
+      "</template>",
+      "",
+      "<script setup>",
+      "// empty",
+      "</script>",
+      "",
+      "<style>",
+      ".button { color: red; }",
+      "</style>",
+      "",
+    ].join("\n");
+
+    const file = createTempFile(code, "vue");
+    const result = transformCode(file, {
+      vueTemplateMode: "ast",
+      i18nConfig: {
+        framework: "vue",
+        i18nImport: { name: "t", importName: "useI18n", source: "vue-i18n" },
+      },
+    });
+
+    // 保证 style 标签内部没有多余的首尾空行
+    expect(result.code).not.toMatch(/<style>\r?\n\r?\n/);
+    expect(result.code).not.toMatch(/\r?\n\r?\n<\/style>/);
+    // 保持样式内容
+    expect(result.code).toMatch(
+      /<style>\s*\n?\.button\s*\{\s*color:\s*red;\s*}\s*\n?<\/style>/
+    );
   });
 });

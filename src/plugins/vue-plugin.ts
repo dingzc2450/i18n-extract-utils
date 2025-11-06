@@ -2007,19 +2007,41 @@ export class VuePlugin implements FrameworkPlugin {
     let result = "";
 
     if (vueFile.template) {
-      result += `<template>\n${vueFile.template}\n</template>\n\n`;
+      const inner = this.stripOuterNewlines(vueFile.template);
+      result += `<template>\n${inner}\n</template>\n\n`;
     }
 
     if (vueFile.script) {
       const scriptTag = vueFile.isSetupScript ? "<script setup>" : "<script>";
-      result += `${scriptTag}\n${vueFile.script}\n</script>\n\n`;
+      const inner = this.stripOuterNewlines(vueFile.script);
+      result += `${scriptTag}\n${inner}\n</script>\n\n`;
     }
 
     if (vueFile.style) {
-      result += `<style>\n${vueFile.style}\n</style>\n`;
+      const inner = this.stripOuterNewlines(vueFile.style);
+      result += `<style>\n${inner}\n</style>\n`;
     }
 
     return result.trim();
+  }
+
+  /**
+   * 移除section内部首尾多余的单个换行（支持 \n 与 \r\n），避免在重组装时产生额外空行
+   */
+  private stripOuterNewlines(content: string): string {
+    let out = content;
+    if (out.startsWith("\r\n")) {
+      out = out.slice(2);
+    } else if (out.startsWith("\n")) {
+      out = out.slice(1);
+    }
+
+    if (out.endsWith("\r\n")) {
+      out = out.slice(0, -2);
+    } else if (out.endsWith("\n")) {
+      out = out.slice(0, -1);
+    }
+    return out;
   }
 
   /**
