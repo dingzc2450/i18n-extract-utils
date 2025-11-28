@@ -97,7 +97,112 @@ export class StringReplacer {
         `Invalid position: start=${start}, end=${end}, codeLength=${code.length}`
       );
     }
-    return code.slice(0, start) + replacement + code.slice(end);
+
+    const before = code.slice(0, start);
+    const after = code.slice(end);
+    // Trailing line comments inside expressions (e.g. within function arguments)
+    // can break syntax like `ref(t(...) // comment);`. We detect that case and
+    // move the comment to a safer spot after surrounding punctuation.
+    const commentInfo = this.extractTrailingLineComment(replacement);
+    if (!commentInfo) {
+      return before + replacement + after;
+    }
+
+    const { codeWithoutComment, lineComment } = commentInfo;
+    const combinedWithoutComment = before + codeWithoutComment + after;
+    const insertionStart = before.length + codeWithoutComment.length;
+    const placement = this.findLineCommentPlacement(
+      combinedWithoutComment,
+      insertionStart
+    );
+
+    if (!placement) {
+      return before + replacement + after;
+    }
+
+    const { position, needsNewline } = placement;
+    const upcomingChar = combinedWithoutComment[position] ?? "";
+    const commentInsertion =
+      " " +
+      lineComment +
+      (needsNewline && upcomingChar !== "\n" && upcomingChar !== "\r"
+        ? "\n"
+        : "");
+
+    return (
+      combinedWithoutComment.slice(0, position) +
+      commentInsertion +
+      combinedWithoutComment.slice(position)
+    );
+  }
+
+  private static extractTrailingLineComment(
+    replacement: string
+  ): { codeWithoutComment: string; lineComment: string } | null {
+    const match = replacement.match(/^(.*?)(\s*\/\/[^\r\n]*)(\s*)$/s);
+    if (!match) {
+      return null;
+    }
+
+    const [, beforeComment, commentPart] = match;
+
+    if (commentPart.includes("\n") || commentPart.includes("\r")) {
+      return null;
+    }
+
+    return {
+      codeWithoutComment: beforeComment.replace(/\s+$/, ""),
+      lineComment: commentPart.trimStart(),
+    };
+  }
+
+  private static findLineCommentPlacement(
+    code: string,
+    startIndex: number
+  ): { position: number; needsNewline: boolean } | null {
+    let index = startIndex;
+    const length = code.length;
+
+    while (index < length) {
+      const char = code[index];
+
+      if (char === " " || char === "\t") {
+        index++;
+        continue;
+      }
+
+      if (char === ")" || char === "]" || char === "}") {
+        index++;
+        continue;
+      }
+
+      if (char === ";") {
+        index++;
+        continue;
+      }
+
+      if (char === "\n" || char === "\r") {
+        return { position: index, needsNewline: false };
+      }
+
+      if (char === ",") {
+        let insertPos = index + 1;
+        while (
+          insertPos < length &&
+          (code[insertPos] === " " || code[insertPos] === "\t")
+        ) {
+          insertPos++;
+        }
+
+        const nextChar = code[insertPos];
+        const needsNewline = !["\n", "\r"].includes(nextChar ?? "");
+        return { position: insertPos, needsNewline };
+      }
+
+      return null;
+    }
+
+    return { position: length, needsNewline: false };
   }
 
   /**

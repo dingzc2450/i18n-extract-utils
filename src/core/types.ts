@@ -7,6 +7,7 @@ import type {
   UsedExistingKey,
   ChangeDetail,
   Framework,
+  ExistingValueToKeyMapType,
 } from "../types";
 import type { I18nError } from "./error-handler";
 import type { NormalizedTransformOptions } from "./config-normalizer";
@@ -33,6 +34,14 @@ export interface FrameworkPlugin {
   preProcess?(code: string, options: NormalizedTransformOptions): string;
 
   /**
+   * 将代码拆分为一个或多个可复用的片段，交由核心管线处理。
+   * 返回空值表示使用默认的单次处理流程。
+   */
+  prepareSegments?(
+    args: PrepareSegmentsArgs
+  ): FrameworkSegmentsPlan | undefined | null;
+
+  /**
    * 获取需要的导入和hook调用
    */
   getRequiredImportsAndHooks?(
@@ -53,6 +62,16 @@ export interface FrameworkPlugin {
   ): string;
 
   /**
+   * 在片段处理完成后，对片段结果进行汇总并生成最终代码。
+   * 仅在 prepareSegments 返回有效计划时调用。
+   */
+  applySegmentResults?(
+    plan: FrameworkSegmentsPlan,
+    outputs: SegmentProcessingOutput[],
+    args: ApplySegmentResultsArgs
+  ): ProcessingResult;
+
+  /**
    * 获取解析器配置
    */
   getParserConfig?(): ParserOptions;
@@ -71,6 +90,7 @@ export interface ProcessingContext {
   requiredImports?: Set<string>;
   detectedFramework?: string;
   result: ExtractionResult;
+  segment?: ProcessingSegment;
 }
 
 /**
@@ -141,4 +161,65 @@ export interface ProcessingResult {
    * 当前处理用到的框架
    */
   framework: Framework;
+}
+
+/**
+ * 深度可选类型，帮助描述片段对规范化配置的局部覆写。
+ */
+export type DeepPartial<T> = {
+  [K in keyof T]?: T[K] extends Record<string, unknown>
+    ? DeepPartial<T[K]>
+    : T[K];
+};
+
+/**
+ * 片段化处理参数
+ */
+export interface PrepareSegmentsArgs {
+  code: string;
+  filePath: string;
+  options: NormalizedTransformOptions;
+  existingValueToKeyMap?: ExistingValueToKeyMapType;
+}
+
+/**
+ * 描述一个待处理的片段
+ */
+export interface ProcessingSegment {
+  id: string;
+  code: string;
+  filePath?: string;
+  forceProcess?: boolean;
+  optionsOverride?: DeepPartial<NormalizedTransformOptions>;
+  skipPreProcess?: boolean;
+  skipPostProcess?: boolean;
+  meta?: Record<string, unknown>;
+  existingValueToKeyMap?: ExistingValueToKeyMapType;
+}
+
+/**
+ * 插件生成的片段处理计划
+ */
+export interface FrameworkSegmentsPlan {
+  segments: ProcessingSegment[];
+  pluginContext?: unknown;
+}
+
+/**
+ * 单个片段的处理输出
+ */
+export interface SegmentProcessingOutput {
+  segment: ProcessingSegment;
+  processingResult: ProcessingResult;
+  extractionResult: ExtractionResult;
+}
+
+/**
+ * 汇总片段结果时的参数
+ */
+export interface ApplySegmentResultsArgs {
+  originalCode: string;
+  filePath: string;
+  options: NormalizedTransformOptions;
+  existingValueToKeyMap?: ExistingValueToKeyMapType;
 }

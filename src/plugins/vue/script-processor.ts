@@ -31,6 +31,10 @@ export function processVueScript(
     templateNeedsHook?: boolean;
   }
 ): { code: string } {
+  if (process.env.DEBUG_VUE_SCRIPT) {
+    console.log("processVueScript isSetup:", isSetup);
+    console.log("processVueScript input:\n", script);
+  }
   if (!script) return { code: script };
 
   try {
@@ -84,8 +88,6 @@ export function processVueScript(
     // setup + 语句级注释
     const beforeScriptExtractedCount = extractedStrings.length;
     if (isSetup && appendExtractedComment) {
-      const callExpressionMap = new Map<t.CallExpression, string>();
-
       traverse(ast, {
         StringLiteral(path) {
           const { value } = path.node;
@@ -122,46 +124,40 @@ export function processVueScript(
               t.stringLiteral(String(key)),
             ]);
 
-            callExpressionMap.set(callExpr, extractedValue);
+            const statement = path.getStatementParent();
+
             path.replaceWith(callExpr);
             path.skip();
+
+            if (statement) {
+              if (!statement.node.trailingComments) {
+                statement.node.trailingComments = [];
+              }
+              if (extractedCommentType === "line") {
+                statement.node.trailingComments.push({
+                  type: "CommentLine",
+                  value: ` ${extractedValue} `,
+                } as t.CommentLine);
+              } else {
+                statement.node.trailingComments.push({
+                  type: "CommentBlock",
+                  value: ` ${extractedValue} `,
+                } as t.CommentBlock);
+              }
+
+              statement.node.loc = null;
+              delete (statement.node as unknown as { start?: number }).start;
+              delete (statement.node as unknown as { end?: number }).end;
+            } else {
+              attachExtractedCommentToNode(
+                callExpr,
+                extractedValue,
+                extractedCommentType ?? "block"
+              );
+            }
           }
         },
       });
-
-      if (callExpressionMap.size > 0) {
-        traverse(ast, {
-          CallExpression(path) {
-            if (callExpressionMap.has(path.node)) {
-              const extractedValue = callExpressionMap.get(path.node)!;
-              const statement = path.findParent(p => p.isStatement());
-
-              if (statement) {
-                if (!statement.node.trailingComments) {
-                  statement.node.trailingComments = [];
-                }
-                if (extractedCommentType === "line") {
-                  statement.node.trailingComments.push({
-                    type: "CommentLine",
-                    value: ` ${extractedValue} `,
-                  } as t.CommentLine);
-                } else {
-                  statement.node.trailingComments.push({
-                    type: "CommentBlock",
-                    value: ` ${extractedValue} `,
-                  } as t.CommentBlock);
-                }
-              } else {
-                attachExtractedCommentToNode(
-                  path.node,
-                  extractedValue,
-                  extractedCommentType
-                );
-              }
-            }
-          },
-        });
-      }
     } else {
       processScriptStrings(
         ast,

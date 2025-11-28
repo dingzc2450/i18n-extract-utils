@@ -72,7 +72,11 @@ export class SmartImportManager {
 
     // 当用户指定 noImport 时，返回标识以指示上层不进行 import 注入
     if (config.noImport) {
-      const callName = config.globalFunction || config.name || "t";
+      const baseCall = config.globalFunction || config.name || "t";
+      const callName =
+        config.vueOverrides?.useThisInScript && !baseCall.includes(".")
+          ? `this.${baseCall.replace(/^this\./, "")}`
+          : baseCall;
       return {
         importStatement: "",
         callName,
@@ -145,11 +149,15 @@ export class SmartImportManager {
 
     // 对于非组件场景，我们尝试直接导入翻译函数而不是 Hook
     const translationMethod = config.name || "t";
+    const callName =
+      config.vueOverrides?.useThisInScript && !translationMethod.includes(".")
+        ? `this.${translationMethod.replace(/^this\./, "")}`
+        : translationMethod;
     const source = config.source || "react-i18next";
 
     return {
       importStatement: `import { ${translationMethod} } from '${source}';`,
-      callName: translationMethod,
+      callName,
       needsHook: false,
     };
   }

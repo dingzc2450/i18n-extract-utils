@@ -27,6 +27,10 @@ import type {
   ProcessingResult,
   ExtractionResult,
   ImportChange,
+  FrameworkSegmentsPlan,
+  ProcessingSegment,
+  SegmentProcessingOutput,
+  DeepPartial,
 } from "./types";
 import { ProcessingMode } from "./types";
 import type {
@@ -77,32 +81,151 @@ export class CoreProcessor {
     options: TransformOptions,
     existingValueToKeyMap?: ExistingValueToKeyMapType
   ): ProcessingResult {
-    // 规范化配置，确保一致性
     const normalizedOptions = this.normalizeConfig(options, code, filePath);
-
-    // 1. 确定处理模式 - 默认使用上下文感知模式
-    const mode = this.determineProcessingMode(normalizedOptions);
-
-    // 2. 选择合适的插件
     const plugin = this.selectPlugin(code, filePath, normalizedOptions);
 
-    // 快速检查代码中是否包含疑似待翻译的内容
-    if (!this.hasTranslatableContent(code, normalizedOptions)) {
-      // 如果没有疑似待翻译内容，直接返回原代码
-      return {
-        code: code,
+    const plan = plugin.prepareSegments
+      ? plugin.prepareSegments({
+          code,
+          filePath,
+          options: normalizedOptions,
+          existingValueToKeyMap,
+        })
+      : undefined;
+
+    if (plan) {
+      return this.processSegmentPlan(
+        plan,
+        plugin,
+        normalizedOptions,
+        code,
+        filePath,
+        existingValueToKeyMap
+      );
+    }
+
+    const pipelineOutput = this.runSinglePipeline({
+      code,
+      filePath,
+      plugin,
+      normalizedOptions,
+      existingValueToKeyMap,
+    });
+
+    return pipelineOutput.processingResult;
+  }
+
+  private processSegmentPlan(
+    plan: FrameworkSegmentsPlan,
+    plugin: FrameworkPlugin,
+    normalizedOptions: NormalizedTransformOptions,
+    originalCode: string,
+    filePath: string,
+    existingValueToKeyMap?: ExistingValueToKeyMapType
+  ): ProcessingResult {
+    const outputs: SegmentProcessingOutput[] = [];
+    const sharedMap: ExistingValueToKeyMapType | undefined =
+      existingValueToKeyMap ?? new Map();
+    for (const segment of plan.segments) {
+      const segmentOptions = this.applyOptionsOverride(
+        normalizedOptions,
+        segment.optionsOverride
+      );
+      const mapForSegment = segment.existingValueToKeyMap ?? sharedMap;
+      const pipelineOutput = this.runSinglePipeline({
+        code: segment.code,
+        filePath: segment.filePath || filePath,
+        plugin,
+        normalizedOptions: segmentOptions,
+        existingValueToKeyMap: mapForSegment,
+        forceProcess: segment.forceProcess,
+        skipPreProcess: segment.skipPreProcess,
+        skipPostProcess: segment.skipPostProcess,
+        segment,
+      });
+
+      outputs.push({
+        segment,
+        processingResult: pipelineOutput.processingResult,
+        extractionResult: pipelineOutput.extractionResult,
+      });
+    }
+
+    if (plugin.applySegmentResults) {
+      return plugin.applySegmentResults(plan, outputs, {
+        originalCode,
+        filePath,
+        options: normalizedOptions,
+        existingValueToKeyMap: sharedMap,
+      });
+    }
+
+    if (outputs.length === 1) {
+      return outputs[0].processingResult;
+    }
+
+    throw new Error(
+      "Segmented processing requires applySegmentResults implementation on the plugin."
+    );
+  }
+
+  private runSinglePipeline(args: {
+    code: string;
+    filePath: string;
+    plugin: FrameworkPlugin;
+    normalizedOptions: NormalizedTransformOptions;
+    existingValueToKeyMap?: ExistingValueToKeyMapType;
+    forceProcess?: boolean;
+    skipPreProcess?: boolean;
+    skipPostProcess?: boolean;
+    segment?: ProcessingSegment;
+  }): {
+    processingResult: ProcessingResult;
+    extractionResult: ExtractionResult;
+  } {
+    const {
+      code,
+      filePath,
+      plugin,
+      normalizedOptions,
+      existingValueToKeyMap,
+      forceProcess = false,
+      skipPreProcess = false,
+      skipPostProcess = false,
+      segment,
+    } = args;
+
+    const mode = this.determineProcessingMode(normalizedOptions);
+
+    if (
+      !forceProcess &&
+      !this.hasTranslatableContent(code, normalizedOptions)
+    ) {
+      const emptyResult: ExtractionResult = {
         extractedStrings: [],
         usedExistingKeysList: [],
         changes: [],
-        framework: normalizedOptions.normalizedI18nConfig.framework,
+        modified: false,
+        requiredImports: new Set<string>(),
+      };
+
+      return {
+        processingResult: {
+          code,
+          extractedStrings: [],
+          usedExistingKeysList: [],
+          changes: [],
+          framework: normalizedOptions.normalizedI18nConfig.framework,
+        },
+        extractionResult: emptyResult,
       };
     }
-    // 3. 预处理
-    const processedCode = plugin.preProcess
-      ? plugin.preProcess(code, normalizedOptions)
-      : code;
 
-    // 4. 解析AST
+    const processedCode =
+      skipPreProcess || !plugin.preProcess
+        ? code
+        : plugin.preProcess(code, normalizedOptions);
+
     const parserConfig = this.getParserConfig(
       plugin,
       filePath,
@@ -110,13 +233,12 @@ export class CoreProcessor {
     );
     const ast = parse(processedCode, parserConfig);
 
-    // 5. 初始化智能导入管理器
     this.importManager.init(
       normalizedOptions.normalizedI18nConfig.i18nImport,
       normalizedOptions.normalizedI18nConfig.nonReactConfig
     );
-    //  提取和替换
-    const result = this.extractAndReplace(
+
+    const extractionResult = this.extractAndReplace(
       ast,
       processedCode,
       mode,
@@ -125,34 +247,24 @@ export class CoreProcessor {
       filePath
     );
 
-    //  如果没有修改，直接返回
-    if (!result.modified || result.changes.length === 0) {
-      return {
-        code: processedCode,
-        extractedStrings: result.extractedStrings,
-        usedExistingKeysList: result.usedExistingKeysList,
-        changes: result.changes,
-        framework: normalizedOptions.normalizedI18nConfig.framework,
-      };
-    }
+    let modifiedCode =
+      extractionResult.changes.length > 0
+        ? StringReplacer.applyChanges(processedCode, extractionResult.changes)
+        : processedCode;
 
-    //  应用字符串替换
-    let modifiedCode = StringReplacer.applyChanges(
-      processedCode,
-      result.changes
-    );
-
-    //  后处理 - 添加导入、hooks等
     const context: ProcessingContext = {
       filePath,
       originalCode: code,
-      hasModifications: true,
-      result,
-      requiredImports: result.requiredImports,
+      hasModifications:
+        extractionResult.modified ||
+        extractionResult.changes.length > 0 ||
+        forceProcess,
+      result: extractionResult,
+      requiredImports: extractionResult.requiredImports,
       detectedFramework: plugin.name,
+      segment,
     };
 
-    // 统一处理导入和hook调用
     modifiedCode = this.processImportsAndHooks(
       modifiedCode,
       normalizedOptions,
@@ -160,8 +272,7 @@ export class CoreProcessor {
       plugin
     );
 
-    // 插件特定的后处理（可选）
-    if (plugin.postProcess) {
+    if (!skipPostProcess && plugin.postProcess) {
       modifiedCode = plugin.postProcess(
         modifiedCode,
         normalizedOptions,
@@ -170,12 +281,82 @@ export class CoreProcessor {
     }
 
     return {
-      code: modifiedCode,
-      extractedStrings: result.extractedStrings,
-      usedExistingKeysList: result.usedExistingKeysList,
-      changes: result.changes,
-      framework: normalizedOptions.normalizedI18nConfig.framework,
+      processingResult: {
+        code: modifiedCode,
+        extractedStrings: extractionResult.extractedStrings,
+        usedExistingKeysList: extractionResult.usedExistingKeysList,
+        changes: extractionResult.changes,
+        framework: normalizedOptions.normalizedI18nConfig.framework,
+      },
+      extractionResult,
     };
+  }
+
+  private applyOptionsOverride(
+    base: NormalizedTransformOptions,
+    override?: DeepPartial<NormalizedTransformOptions>
+  ): NormalizedTransformOptions {
+    if (!override) {
+      return base;
+    }
+
+    const cloned = this.cloneNormalizedOptions(base);
+    this.assignDeep(
+      cloned as unknown as Record<string, unknown>,
+      override as unknown as Record<string, unknown>
+    );
+    return cloned;
+  }
+
+  private cloneNormalizedOptions(
+    options: NormalizedTransformOptions
+  ): NormalizedTransformOptions {
+    return {
+      ...options,
+      importConflict: { ...options.importConflict },
+      parserOptions: {
+        ...options.parserOptions,
+        plugins: [...options.parserOptions.plugins],
+      },
+      normalizedI18nConfig: {
+        ...options.normalizedI18nConfig,
+        i18nImport: {
+          ...options.normalizedI18nConfig.i18nImport,
+          vueOverrides: options.normalizedI18nConfig.i18nImport.vueOverrides
+            ? { ...options.normalizedI18nConfig.i18nImport.vueOverrides }
+            : options.normalizedI18nConfig.i18nImport.vueOverrides,
+        },
+        nonReactConfig: options.normalizedI18nConfig.nonReactConfig
+          ? { ...options.normalizedI18nConfig.nonReactConfig }
+          : options.normalizedI18nConfig.nonReactConfig,
+      },
+    };
+  }
+
+  private assignDeep(
+    target: Record<string, unknown>,
+    source: Record<string, unknown>
+  ): void {
+    for (const key of Object.keys(source)) {
+      const value = source[key];
+      if (value === undefined) continue;
+
+      const current = target[key];
+      if (this.isPlainObject(current) && this.isPlainObject(value)) {
+        this.assignDeep(
+          current as Record<string, unknown>,
+          value as Record<string, unknown>
+        );
+      } else if (Array.isArray(value)) {
+        target[key] = [...value];
+      } else {
+        target[key] = value;
+      }
+    }
+  }
+
+  private isPlainObject(value: unknown): value is Record<string, unknown> {
+    return value !== null && typeof value === "object" && !Array.isArray(value);
   }
 
   /**
