@@ -1,6 +1,6 @@
 {
   "name": "i18n-extract-utils",
-  "version": "0.11.1",
+  "version": "0.11.2",
   "description": "React/Vue i18n extraction and transformation utility",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -45,11 +45,11 @@
     "@babel/parser": "^7.23.0",
     "@babel/traverse": "^7.23.0",
     "@babel/types": "^7.23.0",
-    "commander": "^11.1.0",
     "glob": "^10.3.10"
   },
   "optionalDependencies": {
     "@vue/compiler-sfc": "^3.5.21",
+    "commander": "^10.0.1",
     "vue-template-compiler": "^2.6.0"
   },
   "devDependencies": {
@@ -68,7 +68,7 @@
     "vitest": "^3.2.4"
   },
   "engines": {
-    "node": ">=14.16"
+    "node": ">=14.17"
   },
   "packageManager": "pnpm@10.10.0+sha512.d615db246fe70f25dcfea6d8d73dee782ce23e2245e3c4f6f888249fb568149318637dca73c2c5c8ef2a4ca0d5657fb9567188bfab47f566d1ee6ce987815c39"
 }
