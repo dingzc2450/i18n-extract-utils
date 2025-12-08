@@ -1,6 +1,6 @@
 {
   "name": "i18n-extract-utils",
-  "version": "0.11.3",
+  "version": "0.11.4",
   "description": "React/Vue i18n extraction and transformation utility",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -45,7 +45,7 @@
     "@babel/parser": "^7.23.0",
     "@babel/traverse": "^7.23.0",
     "@babel/types": "^7.23.0",
-    "glob": "^10.3.10"
+    "glob": "10.5.0"
   },
   "optionalDependencies": {},
   "peerDependencies": {
@@ -74,7 +74,7 @@
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.4",
     "prettier": "^3.6.2",
-    "rimraf": "^6.0.1",
+    "rimraf": "^6.1.2",
     "ts-node": "^10.9.1",
     "typescript": "^5.3.2",
     "vitest": "^3.2.4"
