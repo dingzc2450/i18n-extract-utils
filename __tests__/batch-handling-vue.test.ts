@@ -323,6 +323,7 @@ export default {
 <script>
 export default {
   // 缺少闭合大括号
+  const a = ___错误___
 `;
 
     fs.writeFileSync(path.join(tempDir, "invalid.vue"), invalidContent);
