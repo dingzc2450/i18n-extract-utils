@@ -45,12 +45,24 @@
     "@babel/parser": "^7.23.0",
     "@babel/traverse": "^7.23.0",
     "@babel/types": "^7.23.0",
-    "commander": "^11.1.0",
-    "glob": "^10.3.10"
+    "glob": "10.5.0"
   },
-  "optionalDependencies": {
-    "@vue/compiler-sfc": "^3.5.21",
+  "optionalDependencies": {},
+  "peerDependencies": {
+    "@vue/compiler-sfc": "^3.0.0",
+    "commander": "^9.0.0 || ^10.0.0",
     "vue-template-compiler": "^2.6.0"
+  },
+  "peerDependenciesMeta": {
+    "@vue/compiler-sfc": {
+      "optional": true
+    },
+    "commander": {
+      "optional": true
+    },
+    "vue-template-compiler": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@types/babel__generator": "^7.27.0",
@@ -62,13 +74,13 @@
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.4",
     "prettier": "^3.6.2",
-    "rimraf": "^6.0.1",
+    "rimraf": "^6.1.2",
     "ts-node": "^10.9.1",
     "typescript": "^5.3.2",
     "vitest": "^3.2.4"
   },
   "engines": {
-    "node": ">=14.16"
+    "node": ">=14.17"
   },
   "packageManager": "pnpm@10.10.0+sha512.d615db246fe70f25dcfea6d8d73dee782ce23e2245e3c4f6f888249fb568149318637dca73c2c5c8ef2a4ca0d5657fb9567188bfab47f566d1ee6ce987815c39"
 }
