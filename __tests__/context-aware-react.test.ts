@@ -153,9 +153,9 @@ function processData() {
       });
 
       expect(result.code).toContain("import t from 'my-i18n-lib';");
-      expect(result.code).toContain('t("Processing data") // Processing data');
+      expect(result.code).toContain('t("Processing data"); // Processing data');
       expect(result.code).toContain(
-        't("Failed to process") // Failed to process'
+        't("Failed to process"); // Failed to process'
       );
     });
 
@@ -275,9 +275,9 @@ function UserComponent() {
       expect(result.code).toContain("import { t } from 'i18n-utils';");
 
       expect(result.code).toContain(
-        't("Failed to load user data") // Failed to load user data'
+        't("Failed to load user data"); // Failed to load user data'
       );
-      expect(result.code).toContain('t("Invalid user") // Invalid user');
+      expect(result.code).toContain('t("Invalid user"); // Invalid user');
       expect(result.code).toContain('t("User Component") // User Component');
     });
   });

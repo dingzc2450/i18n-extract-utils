@@ -17,7 +17,7 @@ function createTempFile(content: string, extension: string = "ts"): string {
 // Clean up temp files
 const tempFiles: string[] = [];
 afterEach(() => {
-  tempFiles.forEach((file) => {
+  tempFiles.forEach(file => {
     if (fs.existsSync(file)) {
       try {
         fs.unlinkSync(file);
@@ -48,29 +48,38 @@ export const config = {
       tempFiles.push(tempFile);
 
       const result = transformCodeFromFile(tempFile, {
-        pattern: '___(.*?)___',
+        pattern: "___(.*?)___",
         i18nConfig: {
-          framework: 'react',
+          framework: "react",
           i18nImport: {
-            name: 't',
-            importName: 'useTranslation',
-            source: 'react-i18next'
-          }
+            name: "t",
+            importName: "useTranslation",
+            source: "react-i18next",
+          },
         },
         appendExtractedComment: true,
-        extractedCommentType: 'block'
+        extractedCommentType: "block",
       });
 
       // 验证注释被正确添加
       expect(result.code).toContain('t("Hello") /* Hello */');
-      expect(result.code).toContain('t("Welcome to our app") /* Welcome to our app */');
+      expect(result.code).toContain(
+        't("Welcome to our app") /* Welcome to our app */'
+      );
       expect(result.code).toContain('t("App Title") /* App Title */');
-      expect(result.code).toContain('t("This is our application") /* This is our application */');
-      
+      expect(result.code).toContain(
+        't("This is our application") /* This is our application */'
+      );
+
       // 验证提取的字符串
       expect(result.extractedStrings).toHaveLength(4);
       expect(result.extractedStrings.map(s => s.value)).toEqual(
-        expect.arrayContaining(['Hello', 'Welcome to our app', 'App Title', 'This is our application'])
+        expect.arrayContaining([
+          "Hello",
+          "Welcome to our app",
+          "App Title",
+          "This is our application",
+        ])
       );
     });
 
@@ -84,21 +93,21 @@ export const config = {
       tempFiles.push(tempFile);
 
       const result = transformCodeFromFile(tempFile, {
-        pattern: '___(.*?)___',
+        pattern: "___(.*?)___",
         i18nConfig: {
-          framework: 'react',
+          framework: "react",
           i18nImport: {
-            name: 't',
-            importName: 'useTranslation',
-            source: 'react-i18next'
-          }
+            name: "t",
+            importName: "useTranslation",
+            source: "react-i18next",
+          },
         },
         appendExtractedComment: true,
-        extractedCommentType: 'line'
+        extractedCommentType: "line",
       });
 
       // 验证行注释被正确添加
-      expect(result.code).toContain('t("Processing") // Processing');
+      expect(result.code).toContain('t("Processing"); // Processing');
       expect(result.extractedStrings).toHaveLength(1);
     });
   });
@@ -122,25 +131,31 @@ const messages = {
       tempFiles.push(tempFile);
 
       const result = transformCodeFromFile(tempFile, {
-        pattern: '___(.*?)___',
+        pattern: "___(.*?)___",
         i18nConfig: {
-          framework: 'react',
+          framework: "react",
           i18nImport: {
-            name: 't',
-            importName: 'useTranslation',
-            source: 'react-i18next'
-          }
+            name: "t",
+            importName: "useTranslation",
+            source: "react-i18next",
+          },
         },
         appendExtractedComment: true,
-        extractedCommentType: 'block'
+        extractedCommentType: "block",
       });
 
       // 验证注释被正确添加
-      expect(result.code).toContain('t("Value is required") /* Value is required */');
+      expect(result.code).toContain(
+        't("Value is required") /* Value is required */'
+      );
       expect(result.code).toContain('t("Valid input") /* Valid input */');
-      expect(result.code).toContain('t("Something went wrong") /* Something went wrong */');
-      expect(result.code).toContain('t("Operation completed") /* Operation completed */');
-      
+      expect(result.code).toContain(
+        't("Something went wrong") /* Something went wrong */'
+      );
+      expect(result.code).toContain(
+        't("Operation completed") /* Operation completed */'
+      );
+
       // 验证提取的字符串
       expect(result.extractedStrings).toHaveLength(4);
     });
@@ -154,21 +169,21 @@ const messages = {
       tempFiles.push(tempFile);
 
       const result = transformCodeFromFile(tempFile, {
-        pattern: '___(.*?)___',
+        pattern: "___(.*?)___",
         i18nConfig: {
-          framework: 'react',
+          framework: "react",
           i18nImport: {
-            name: 't',
-            importName: 'useTranslation',
-            source: 'react-i18next'
-          }
+            name: "t",
+            importName: "useTranslation",
+            source: "react-i18next",
+          },
         },
         appendExtractedComment: true,
-        extractedCommentType: 'line'
+        extractedCommentType: "line",
       });
 
       // 验证行注释被正确添加
-      expect(result.code).toContain('t("Default message") // Default message');
+      expect(result.code).toContain('t("Default message"); // Default message');
       expect(result.extractedStrings).toHaveLength(1);
     });
   });
@@ -181,22 +196,22 @@ const messages = {
       tempFiles.push(tempFile);
 
       const result = transformCodeFromFile(tempFile, {
-        pattern: '___(.*?)___',
+        pattern: "___(.*?)___",
         i18nConfig: {
-          framework: 'react',
+          framework: "react",
           i18nImport: {
-            name: 't',
-            importName: 'useTranslation',
-            source: 'react-i18next'
-          }
+            name: "t",
+            importName: "useTranslation",
+            source: "react-i18next",
+          },
         },
-        appendExtractedComment: false
+        appendExtractedComment: false,
       });
 
       // 验证没有注释
       expect(result.code).toContain('t("No comment test")');
-      expect(result.code).not.toContain('/* No comment test */');
-      expect(result.code).not.toContain('// No comment test');
+      expect(result.code).not.toContain("/* No comment test */");
+      expect(result.code).not.toContain("// No comment test");
     });
 
     test("should not add comments when appendExtractedComment is undefined", () => {
@@ -206,22 +221,22 @@ const messages = {
       tempFiles.push(tempFile);
 
       const result = transformCodeFromFile(tempFile, {
-        pattern: '___(.*?)___',
+        pattern: "___(.*?)___",
         i18nConfig: {
-          framework: 'react',
+          framework: "react",
           i18nImport: {
-            name: 't',
-            importName: 'useTranslation',
-            source: 'react-i18next'
-          }
-        }
+            name: "t",
+            importName: "useTranslation",
+            source: "react-i18next",
+          },
+        },
         // appendExtractedComment 未设置
       });
 
       // 验证没有注释
       expect(result.code).toContain('t("Undefined comment test")');
-      expect(result.code).not.toContain('/* Undefined comment test */');
-      expect(result.code).not.toContain('// Undefined comment test');
+      expect(result.code).not.toContain("/* Undefined comment test */");
+      expect(result.code).not.toContain("// Undefined comment test");
     });
   });
 
@@ -235,22 +250,26 @@ const messages = {
       tempFiles.push(tempFile);
 
       const result = transformCodeFromFile(tempFile, {
-        pattern: '___(.*?)___',
+        pattern: "___(.*?)___",
         i18nConfig: {
-          framework: 'react',
+          framework: "react",
           i18nImport: {
-            name: 't',
-            importName: 'useTranslation',
-            source: 'react-i18next'
-          }
+            name: "t",
+            importName: "useTranslation",
+            source: "react-i18next",
+          },
         },
         appendExtractedComment: true,
-        extractedCommentType: 'block'
+        extractedCommentType: "block",
       });
 
-      expect(result.code).toContain('t("Hello {arg1}, you have {arg2} items", { arg1: name, arg2: count }) /* Hello {arg1}, you have {arg2} items */');
+      expect(result.code).toContain(
+        't("Hello {arg1}, you have {arg2} items", { arg1: name, arg2: count }) /* Hello {arg1}, you have {arg2} items */'
+      );
       expect(result.extractedStrings).toHaveLength(1);
-      expect(result.extractedStrings[0].value).toBe('Hello {arg1}, you have {arg2} items');
+      expect(result.extractedStrings[0].value).toBe(
+        "Hello {arg1}, you have {arg2} items"
+      );
     });
 
     test("should handle nested object properties with comments", () => {
@@ -272,26 +291,30 @@ const messages = {
       tempFiles.push(tempFile);
 
       const result = transformCodeFromFile(tempFile, {
-        pattern: '___(.*?)___',
+        pattern: "___(.*?)___",
         i18nConfig: {
-          framework: 'react',
+          framework: "react",
           i18nImport: {
-            name: 't',
-            importName: 'useTranslation',
-            source: 'react-i18next'
-          }
+            name: "t",
+            importName: "useTranslation",
+            source: "react-i18next",
+          },
         },
         appendExtractedComment: true,
-        extractedCommentType: 'line'
+        extractedCommentType: "line",
       });
 
       // 验证所有字符串都有行注释
-      expect(result.code).toContain('t("Save") // Save');
-      expect(result.code).toContain('t("Cancel") // Cancel');
+      expect(result.code).toContain('t("Save"), // Save');
+      expect(result.code).toContain('t("Cancel"), // Cancel');
       expect(result.code).toContain('t("Delete") // Delete');
-      expect(result.code).toContain('t("Operation successful") // Operation successful');
-      expect(result.code).toContain('t("Operation failed") // Operation failed');
-      
+      expect(result.code).toContain(
+        't("Operation successful"), // Operation successful'
+      );
+      expect(result.code).toContain(
+        't("Operation failed") // Operation failed'
+      );
+
       expect(result.extractedStrings).toHaveLength(5);
     });
   });
@@ -304,17 +327,17 @@ const messages = {
       tempFiles.push(tempFile);
 
       const result = transformCodeFromFile(tempFile, {
-        pattern: '___(.*?)___',
+        pattern: "___(.*?)___",
         i18nConfig: {
-          framework: 'react',
+          framework: "react",
           i18nImport: {
-            name: 't',
-            importName: 'useTranslation',
-            source: 'react-i18next'
-          }
+            name: "t",
+            importName: "useTranslation",
+            source: "react-i18next",
+          },
         },
         appendExtractedComment: true,
-        extractedCommentType: 'block'
+        extractedCommentType: "block",
       });
 
       // 验证原始转换函数也支持注释

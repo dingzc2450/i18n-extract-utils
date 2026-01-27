@@ -17,7 +17,7 @@ function createTempFile(content: string, extension: string = "ts"): string {
 // Clean up temp files
 const tempFiles: string[] = [];
 afterEach(() => {
-  tempFiles.forEach((file) => {
+  tempFiles.forEach(file => {
     if (fs.existsSync(file)) {
       try {
         fs.unlinkSync(file);
@@ -48,17 +48,17 @@ function displayMessage() {
 
     // 测试块注释
     const blockResult = transformCode(tempFile, {
-      pattern: '___(.*?)___',
+      pattern: "___(.*?)___",
       i18nConfig: {
-        framework: 'react',
+        framework: "react",
         i18nImport: {
-          name: 't',
-          importName: 'useTranslation',
-          source: 'react-i18next'
-        }
+          name: "t",
+          importName: "useTranslation",
+          source: "react-i18next",
+        },
       },
       appendExtractedComment: true,
-      extractedCommentType: 'block'
+      extractedCommentType: "block",
     });
 
     expect(blockResult.code).toContain('t("Hello World") /* Hello World */');
@@ -68,23 +68,25 @@ function displayMessage() {
 
     // 测试行注释
     const lineResult = transformCode(tempFile, {
-      pattern: '___(.*?)___',
+      pattern: "___(.*?)___",
       i18nConfig: {
-        framework: 'react',
+        framework: "react",
         i18nImport: {
-          name: 't',
-          importName: 'useTranslation', 
-          source: 'react-i18next'
-        }
+          name: "t",
+          importName: "useTranslation",
+          source: "react-i18next",
+        },
       },
       appendExtractedComment: true,
-      extractedCommentType: 'line'
+      extractedCommentType: "line",
     });
 
-    expect(lineResult.code).toContain('t("Hello World") // Hello World');
+    expect(lineResult.code).toContain('t("Hello World"), // Hello World');
     expect(lineResult.code).toContain('t("Goodbye") // Goodbye');
-    expect(lineResult.code).toContain('t("Processing") // Processing');
-    expect(lineResult.code).toContain('t("Success") // Success');
+    expect(lineResult.code).toContain(
+      'console.log(t("Processing")); // Processing'
+    );
+    expect(lineResult.code).toContain('t("Success"); // Success');
   });
 
   test("Validates .ts files with TypeScript features", () => {
@@ -116,17 +118,17 @@ enum Status {
     tempFiles.push(tempFile);
 
     const result = transformCode(tempFile, {
-      pattern: '___(.*?)___',
+      pattern: "___(.*?)___",
       i18nConfig: {
-        framework: 'react',
+        framework: "react",
         i18nImport: {
-          name: 't',
-          importName: 'useTranslation',
-          source: 'react-i18next'
-        }
+          name: "t",
+          importName: "useTranslation",
+          source: "react-i18next",
+        },
       },
       appendExtractedComment: true,
-      extractedCommentType: 'block'
+      extractedCommentType: "block",
     });
 
     expect(result.code).toContain('t("Default Message") /* Default Message */');
@@ -134,7 +136,6 @@ enum Status {
     expect(result.code).toContain('t("Welcome") /* Welcome */');
     expect(result.code).toContain('t("Loading") /* Loading */');
     expect(result.code).toContain('t("Error Occurred") /* Error Occurred */');
-
   });
 
   test("Validates template literals with complex expressions", () => {
@@ -150,20 +151,24 @@ function createNotification(user: string, count: number, type: string) {
     tempFiles.push(tempFile);
 
     const result = transformCode(tempFile, {
-      pattern: '___(.*?)___',
+      pattern: "___(.*?)___",
       i18nConfig: {
-        framework: 'react',
+        framework: "react",
         i18nImport: {
-          name: 't',
-          importName: 'useTranslation',
-          source: 'react-i18next'
-        }
+          name: "t",
+          importName: "useTranslation",
+          source: "react-i18next",
+        },
       },
       appendExtractedComment: true,
-      extractedCommentType: 'line'
+      extractedCommentType: "line",
     });
 
-    expect(result.code).toContain('t("Hello {arg1}, you have {arg2} notifications", { arg1: user, arg2: count }) // Hello {arg1}, you have {arg2} notifications');
-    expect(result.code).toContain('t("{arg1}: {arg2} items remaining", { arg1: type, arg2: count }) // {arg1}: {arg2} items remaining');
+    expect(result.code).toContain(
+      't("Hello {arg1}, you have {arg2} notifications", { arg1: user, arg2: count }); // Hello {arg1}, you have {arg2} notifications'
+    );
+    expect(result.code).toContain(
+      't("{arg1}: {arg2} items remaining", { arg1: type, arg2: count }); // {arg1}: {arg2} items remaining'
+    );
   });
 });
