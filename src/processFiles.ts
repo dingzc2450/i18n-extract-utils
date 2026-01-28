@@ -6,7 +6,7 @@ import { getVueCompilerManager } from "./plugins/vue/compiler-manager";
 
 import fs from "fs";
 import path from "path";
-import { glob } from "glob";
+import fg from "fast-glob";
 import type {
   ExistingValueToKeyMapType,
   ExistingValueValueType,
@@ -338,7 +338,7 @@ export async function processFiles(
       ? pattern.map(i => i.replace(/\\/g, "/"))
       : pattern.replace(/\\/g, "/");
 
-    const filePaths = await glob(normalizedPattern);
+    const filePaths = await fg(normalizedPattern, { onlyFiles: true });
     console.log(`Found ${filePaths.length} files to process.`);
 
     const allExtractedStrings: ExtractedString[] = [];
