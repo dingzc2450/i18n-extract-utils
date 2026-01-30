@@ -13,6 +13,9 @@ import { Framework } from "../types";
 
 import type { NormalizedTransformOptions } from "../core";
 import type { ParserOptions } from "@babel/parser";
+import type { ReactAdapter } from "../core/framework-adapters/react-adapter";
+import { createReactAdapter } from "../core/framework-adapters/react-adapter";
+import { ImportType } from "../core/framework-adapters/types";
 
 /**
  * React 插件实现
@@ -20,6 +23,23 @@ import type { ParserOptions } from "@babel/parser";
 export class ReactPlugin implements FrameworkPlugin {
   name = "react";
   static readonly defaultTranslationMethod = "t";
+
+  /** 缓存的适配器实例 */
+  private adapterCache: WeakMap<NormalizedTransformOptions, ReactAdapter> =
+    new WeakMap();
+
+  /**
+   * 获取或创建 ReactAdapter 实例
+   */
+  private getAdapter(options: NormalizedTransformOptions): ReactAdapter {
+    let adapter = this.adapterCache.get(options);
+    if (!adapter) {
+      adapter = createReactAdapter(options);
+      this.adapterCache.set(options, adapter);
+    }
+    return adapter;
+  }
+
   /**
    * 检测是否应该应用React插件
    */
@@ -51,18 +71,23 @@ export class ReactPlugin implements FrameworkPlugin {
     imports: ImportRequirement[];
     hooks: HookRequirement[];
   } {
-    // 如果用户不希望自动插入导入，直接返回空
-    if (options.normalizedI18nConfig.i18nImport.noImport) {
+    // 使用适配器获取导入策略
+    const adapter = this.getAdapter(options);
+    const importPolicy = adapter.getImportPolicy();
+
+    // 如果策略表明不需要导入，直接返回空
+    if (importPolicy.type === ImportType.NONE) {
       return { imports: [], hooks: [] };
     }
+
     // 检查是否有非React配置，如果有，则回退到上下文感知逻辑
     if (options.normalizedI18nConfig?.nonReactConfig) {
       return { imports: [], hooks: [] }; // 让上下文感知逻辑处理
     }
 
-    const hookName = this.getHookName(options);
-    const hookSource = this.getHookSource(options);
-    const translationMethod = this.getTranslationMethod(options);
+    const hookName = adapter.getHookName();
+    const hookSource = adapter.getHookSource();
+    const translationMethod = adapter.getTranslationMethodName();
 
     const imports: ImportRequirement[] = [
       {
@@ -72,20 +97,20 @@ export class ReactPlugin implements FrameworkPlugin {
       },
     ];
 
-    const hooks: HookRequirement[] = [
-      {
-        hookName,
-        variableName:
-          translationMethod === "default"
-            ? ReactPlugin.defaultTranslationMethod
-            : translationMethod,
-        isDestructured: translationMethod !== "default",
-        callExpression: this.generateHookCallExpression(
-          hookName,
-          translationMethod
-        ),
-      },
-    ];
+    const hooks: HookRequirement[] =
+      importPolicy.type === ImportType.HOOK
+        ? [
+            {
+              hookName,
+              variableName:
+                translationMethod === "default"
+                  ? ReactPlugin.defaultTranslationMethod
+                  : translationMethod,
+              isDestructured: translationMethod !== "default",
+              callExpression: adapter.generateHookCallExpression(),
+            },
+          ]
+        : [];
 
     return { imports, hooks };
   }
@@ -95,40 +120,5 @@ export class ReactPlugin implements FrameworkPlugin {
    */
   postProcess(code: string): string {
     return code;
-  }
-
-  /**
-   * 获取Hook名称
-   */
-  private getHookName(options: NormalizedTransformOptions): string {
-    return options.normalizedI18nConfig.i18nImport.importName;
-  }
-
-  /**
-   * 获取Hook来源
-   */
-  private getHookSource(options: NormalizedTransformOptions): string {
-    return options.normalizedI18nConfig.i18nImport.source;
-  }
-
-  /**
-   * 获取翻译方法名称
-   */
-  private getTranslationMethod(options: NormalizedTransformOptions): string {
-    return options.normalizedI18nConfig.i18nImport.name;
-  }
-
-  /**
-   * 生成Hook调用表达式
-   */
-  private generateHookCallExpression(
-    hookName: string,
-    translationMethod: string
-  ): string {
-    if (translationMethod === "default") {
-      return `const ${ReactPlugin.defaultTranslationMethod} = ${hookName}();`;
-    } else {
-      return `const { ${translationMethod} } = ${hookName}();`;
-    }
   }
 }

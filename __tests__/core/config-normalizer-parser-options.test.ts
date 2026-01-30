@@ -131,10 +131,10 @@ describe("Config Normalizer - ParserOptions", () => {
         "typescript",
         "jsx",
         "decorators-legacy",
-        "optional-chaining",
-        "nullish-coalescing-operator",
-        "class-properties",
-        "private-methods",
+        "optionalChaining",
+        "nullishCoalescingOperator",
+        "classProperties",
+        "classPrivateMethods",
       ];
 
       const customParserOptions: CustomParserOptions = {
@@ -173,7 +173,7 @@ describe("Config Normalizer - ParserOptions", () => {
     });
 
     test("should maintain immutability of input options", () => {
-      const originalPlugins = ["typescript", "jsx"];
+      const originalPlugins = ["typescript", "jsx"] as ["typescript", "jsx"];
       const customParserOptions: CustomParserOptions = {
         plugins: originalPlugins,
       };

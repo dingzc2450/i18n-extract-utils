@@ -10,19 +10,53 @@ import { StringReplacer } from "../string-replacer";
 import { SmartImportManager } from "../smart-import-manager";
 import { collectContextAwareReplacementInfo } from "../context-aware-ast-replacer";
 import { parse } from "@babel/parser";
+import type {
+  FrameworkAdapter as NewFrameworkAdapter,
+  AdapterContext,
+} from "./framework-adapters/types";
 
 /**
  * 框架适配器接口（精简版占位）
  * 负责：
  * - 构造国际化调用表达式文本（如 t('key') / this.$t('key')）
  * - 决定是否需要导入与上下文注入（导入/Hook）
+ * @deprecated 使用 FrameworkAdapter from './framework-adapters/types' 代替
  */
 export interface FrameworkAdapter {
   readonly name: string;
 }
 
+/**
+ * 适配器类型可以是旧版或新版
+ */
+type AnyFrameworkAdapter = FrameworkAdapter | NewFrameworkAdapter;
+
+/**
+ * 检测适配器是否是新版适配器
+ */
+function isNewAdapter(
+  adapter: AnyFrameworkAdapter
+): adapter is NewFrameworkAdapter {
+  return "getCallStrategy" in adapter && "getImportPolicy" in adapter;
+}
+
 export class CoreAstTransformer {
-  constructor(private adapter: FrameworkAdapter) {}
+  constructor(private adapter: AnyFrameworkAdapter) {}
+
+  /**
+   * 获取适配器上下文
+   */
+  private createAdapterContext(
+    code: string,
+    filePath: string,
+    options: NormalizedTransformOptions
+  ): AdapterContext {
+    return {
+      code,
+      filePath,
+      options,
+    };
+  }
 
   /**
    * 统一 AST + 文本最小替换的入口（占位版本）

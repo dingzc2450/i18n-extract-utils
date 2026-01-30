@@ -32,6 +32,13 @@ import {
 import { parseVueFile, assembleVueFile } from "./vue/sfc";
 import { processVueTemplate } from "./vue/template-processor";
 import { getVueCompilerManager } from "./vue/compiler-manager";
+import type { VueAdapter } from "../core/framework-adapters/vue-adapter";
+import {
+  createVueAdapter,
+  VueContextType,
+} from "../core/framework-adapters/vue-adapter";
+import type { AdapterContext } from "../core/framework-adapters/types";
+import { ImportType } from "../core/framework-adapters/types";
 
 const VUE_SCRIPT_SEGMENT_ID = "vue-sfc-script";
 
@@ -64,6 +71,40 @@ interface VueSegmentMeta {
 export class VuePlugin implements FrameworkPlugin {
   name = "vue";
 
+  /** 缓存的适配器实例 */
+  private adapterCache: WeakMap<NormalizedTransformOptions, VueAdapter> =
+    new WeakMap();
+
+  /**
+   * 获取或创建 VueAdapter 实例
+   */
+  private getAdapter(options: NormalizedTransformOptions): VueAdapter {
+    let adapter = this.adapterCache.get(options);
+    if (!adapter) {
+      adapter = createVueAdapter(options);
+      this.adapterCache.set(options, adapter);
+    }
+    return adapter;
+  }
+
+  /**
+   * 创建适配器上下文
+   */
+  private createAdapterContext(
+    code: string,
+    filePath: string,
+    options: NormalizedTransformOptions,
+    extra?: Partial<AdapterContext>
+  ): AdapterContext {
+    return {
+      code,
+      filePath,
+      options,
+      isVueComponent: true,
+      ...extra,
+    };
+  }
+
   shouldApply(
     _code: string,
     _filePath: string,
@@ -89,23 +130,16 @@ export class VuePlugin implements FrameworkPlugin {
   }: PrepareSegmentsArgs): FrameworkSegmentsPlan | undefined {
     const i18nImport = options.normalizedI18nConfig.i18nImport;
     const noImport = i18nImport.noImport === true;
-    const vueOverrides = i18nImport.vueOverrides || {};
 
-    const translationMethodForTemplate =
-      vueOverrides.templateFunction ||
-      (noImport ? i18nImport.globalFunction || "$t" : i18nImport.name);
+    // 使用适配器获取翻译方法
+    const adapter = this.getAdapter(options);
+    const adapterContext = this.createAdapterContext(code, filePath, options);
+    const translationMethodForTemplate = adapter.getTemplateTranslationMethod();
+    const translationMethodForScript =
+     
+      adapter.getScriptTranslationMethod(adapterContext);
+    const useThisInScript = adapter.isUsingThisInScript();
 
-    let translationMethodForScript =
-      vueOverrides.scriptFunction ||
-      (noImport
-        ? i18nImport.globalFunction || i18nImport.name
-        : i18nImport.name);
-
-    const useThisInScript = vueOverrides.useThisInScript === true;
-    if (useThisInScript) {
-      const baseName = translationMethodForScript.replace(/^this\./, "");
-      translationMethodForScript = `this.${baseName}`;
-    }
     const scriptI18nOverride = {
       ...i18nImport,
       name: translationMethodForScript,
@@ -191,18 +225,24 @@ export class VuePlugin implements FrameworkPlugin {
     options: NormalizedTransformOptions,
     context: ProcessingContext
   ): { imports: ImportRequirement[]; hooks: HookRequirement[] } {
-    const i18nImport = options.normalizedI18nConfig.i18nImport;
-    if (i18nImport.noImport) {
-      return { imports: [], hooks: [] };
-    }
-
     const segmentMeta = context.segment?.meta as VueSegmentMeta | undefined;
-    if (segmentMeta?.useThisInScript) {
-      return { imports: [], hooks: [] };
-    }
+    const segmentCode = context.segment?.code || "";
 
-    const translationMethod = i18nImport.name;
-    if (!translationMethod || translationMethod.includes(".")) {
+    // 使用适配器判断导入策略
+    const adapter = this.getAdapter(options);
+    const adapterContext = this.createAdapterContext(
+      segmentCode,
+      context.segment?.filePath || "",
+      options,
+      {
+        isScriptSetup: segmentMeta?.isSetupScript,
+        isOptionsAPI: segmentMeta?.useThisInScript,
+      }
+    );
+    const importPolicy = adapter.getImportPolicy(adapterContext);
+
+    // 如果策略表明不需要导入，直接返回空
+    if (importPolicy.type === ImportType.NONE) {
       return { imports: [], hooks: [] };
     }
 
@@ -214,22 +254,33 @@ export class VuePlugin implements FrameworkPlugin {
       return { imports: [], hooks: [] };
     }
 
-    const imports: ImportRequirement[] = [
-      {
-        source: i18nImport.source,
-        specifiers: [{ name: i18nImport.importName }],
-        isDefault: false,
-      },
-    ];
+    // 使用适配器策略获取导入语句和Hook
+    const importStatement = importPolicy.getImportStatement();
+    const hookStatement = importPolicy.getHookStatement();
+    const i18nImport = options.normalizedI18nConfig.i18nImport;
+    const translationMethod = i18nImport.name;
 
-    const hooks: HookRequirement[] = [
-      {
-        hookName: i18nImport.importName,
-        variableName: translationMethod,
-        isDestructured: true,
-        callExpression: `const { ${translationMethod} } = ${i18nImport.importName}();`,
-      },
-    ];
+    const imports: ImportRequirement[] = importStatement
+      ? [
+          {
+            source: i18nImport.source,
+            specifiers: [{ name: i18nImport.importName }],
+            isDefault: false,
+          },
+        ]
+      : [];
+
+    const hooks: HookRequirement[] =
+      importPolicy.type === ImportType.HOOK && hookStatement
+        ? [
+            {
+              hookName: i18nImport.importName,
+              variableName: translationMethod,
+              isDestructured: true,
+              callExpression: hookStatement,
+            },
+          ]
+        : [];
 
     return { imports, hooks };
   }

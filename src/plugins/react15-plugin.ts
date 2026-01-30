@@ -11,6 +11,9 @@ import type {
 import type { NormalizedTransformOptions } from "../core/config-normalizer";
 import type { ParserOptions } from "@babel/parser";
 import { Framework } from "../types";
+import type { React15Adapter } from "../core/framework-adapters/react-adapter";
+import { createReact15Adapter } from "../core/framework-adapters/react-adapter";
+import { ImportType } from "../core/framework-adapters/types";
 
 /**
  * React 15 插件实现
@@ -18,6 +21,22 @@ import { Framework } from "../types";
  */
 export class React15Plugin implements FrameworkPlugin {
   name = "react15";
+
+  /** 缓存的适配器实例 */
+  private adapterCache: WeakMap<NormalizedTransformOptions, React15Adapter> =
+    new WeakMap();
+
+  /**
+   * 获取或创建 React15Adapter 实例
+   */
+  private getAdapter(options: NormalizedTransformOptions): React15Adapter {
+    let adapter = this.adapterCache.get(options);
+    if (!adapter) {
+      adapter = createReact15Adapter(options);
+      this.adapterCache.set(options, adapter);
+    }
+    return adapter;
+  }
 
   /**
    * 检测是否应该应用React15插件
@@ -48,21 +67,18 @@ export class React15Plugin implements FrameworkPlugin {
     imports: ImportRequirement[];
     hooks: HookRequirement[];
   } {
-    // 如果用户不希望自动插入导入，直接返回空
-    if (options.normalizedI18nConfig.i18nImport.noImport) {
+    // 使用适配器获取导入策略
+    const adapter = this.getAdapter(options);
+    const importPolicy = adapter.getImportPolicy();
+
+    // 如果策略表明不需要导入，直接返回空
+    if (importPolicy.type === ImportType.NONE) {
       return { imports: [], hooks: [] };
     }
-    // React15始终使用"i18n"作为默认导入源，除非测试中明确指定了其他源
-    // 这里不使用options.i18nConfig?.i18nImport?.source以避免从规范化配置中获取错误的默认值
-    let importSource = "i18n";
 
-    // 只有在明确指定了不同源时才覆盖默认的"i18n"
-    const explicitSource = options.normalizedI18nConfig.i18nImport.source;
-    if (explicitSource && explicitSource !== "react-i18next") {
-      importSource = explicitSource;
-    }
-
-    const functionName = this.getFunctionName(options);
+    // 使用适配器获取导入源和函数名
+    const importSource = adapter.getImportSource();
+    const functionName = adapter.getTranslationMethodName();
 
     const imports: ImportRequirement[] = [
       {
@@ -83,12 +99,5 @@ export class React15Plugin implements FrameworkPlugin {
    */
   postProcess(code: string): string {
     return code;
-  }
-
-  /**
-   * 获取翻译函数名 (React15使用的函数名)
-   */
-  private getFunctionName(options: NormalizedTransformOptions): string {
-    return options.normalizedI18nConfig.i18nImport.name;
   }
 }
